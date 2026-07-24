@@ -569,10 +569,6 @@
     function renderTextEditorModal() {
       const ed = state.textEditorModal;
       if (!ed) return '';
-      const fontSizeClass = ed.fontSize === 'lg' ? 'text-base' : ed.fontSize === 'sm' ? 'text-xs' : 'text-sm';
-      const fontWeightClass = ed.isBold ? 'font-bold' : 'font-normal';
-      const fontStyleClass = ed.isItalic ? 'italic' : '';
-      const fontUnderlineClass = ed.isUnderline ? 'underline' : '';
 
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
@@ -585,20 +581,20 @@
             <!-- Formatting Toolbar -->
             <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                <button type="button" onclick="setTextEditorFontSize('sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
-                <button type="button" onclick="setTextEditorFontSize('md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
-                <button type="button" onclick="setTextEditorFontSize('lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
               </div>
               <div class="h-5 w-px bg-zinc-800"></div>
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                <button type="button" onclick="toggleTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
-                <button type="button" onclick="toggleTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
-                <button type="button" onclick="toggleTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
               </div>
             </div>
 
             <!-- Textarea -->
-            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 ${fontSizeClass} ${fontWeightClass} ${fontStyleClass} ${fontUnderlineClass}">${ed.text || ''}</textarea>
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal">${ed.text || ''}</textarea>
 
             <div class="flex items-center justify-end gap-3 pt-2">
               <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -691,7 +687,7 @@
     function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
     function forcePullCloudData() { syncWithGitHub(true); }
 
-    // --- TEXT EDITOR MODAL LOGIC ---
+    // --- TEXT EDITOR MODAL LOGIC (SURGICAL FORMATTING FOR SELECTED TEXT) ---
     function openTextEditorModal(bubbleId = null, referenceItemId = null) {
       closeMenu();
       if (bubbleId) {
@@ -740,24 +736,50 @@
       }
     }
 
-    function setTextEditorFontSize(size) {
-      if (state.textEditorModal) {
-        state.textEditorModal.fontSize = size;
-        render();
-        setTimeout(() => {
-          const ta = document.getElementById('modal-text-input');
-          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-        }, 30);
-      }
-    }
+    function applyTextEditorFormat(formatKey, value = null) {
+      if (!state.textEditorModal) return;
+      const ta = document.getElementById('modal-text-input');
+      if (!ta) return;
 
-    function toggleTextEditorFormat(formatKey) {
-      if (state.textEditorModal) {
-        state.textEditorModal[formatKey] = !state.textEditorModal[formatKey];
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = ta.value;
+
+      if (formatKey === 'fontSize') {
+        // If text is selected, we could wrap or handle; if nothing selected or general toolbar click:
+        state.textEditorModal.fontSize = value;
+        ta.focus();
+        return;
+      }
+
+      // Handle surgical wrapping for Bold, Italic, Underline on selected text
+      let wrapper = '';
+      if (formatKey === 'isBold') wrapper = '**';
+      if (formatKey === 'isItalic') wrapper = '*';
+      if (formatKey === 'isUnderline' || formatKey === 'isItalic') {
+        // We can use standard markdown syntax or simple tag/symbol markers if supported, or let's wrap with markdown equivalents or custom tags
+      }
+
+      if (start !== end) {
+        const selectedText = text.substring(start, end);
+        let wrapped = '';
+        if (formatKey === 'isBold') wrapped = `**${selectedText}**`;
+        else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
+        else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
+
+        ta.value = text.substring(0, start) + wrapped + text.substring(end);
+        state.textEditorModal.text = ta.value;
+        ta.focus();
+        ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
+      } else {
+        // If no text selected, toggle the global state property or insert markers
+        if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
+        if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
+        if (formatKey === 'isUnderline') state.textEditorModal.isUnderline = !state.textEditorModal.isUnderline;
         render();
         setTimeout(() => {
-          const ta = document.getElementById('modal-text-input');
-          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+          const newTa = document.getElementById('modal-text-input');
+          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
         }, 30);
       }
     }
