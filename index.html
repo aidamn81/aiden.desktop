@@ -232,6 +232,7 @@
             padding: 6px 12px;
             border-radius: 8px;
             display: flex;
+            align-items: center;
             gap: 8px;
             z-index: 2000;
             box-shadow: 0 4px 15px rgba(0,0,0,0.4);
@@ -304,7 +305,7 @@
             top: 0;
             left: 0;
             width: 100vw;
-            height: 100vw;
+            height: 100vh;
             background: rgba(0,0,0,0.7);
             display: none;
             align-items: center;
@@ -383,22 +384,31 @@
 
         <!-- Formatting Bar -->
         <div id="formatting-bar">
+            <select id="text-size-select" class="btn" style="padding: 4px;">
+                <option value="1">10px</option>
+                <option value="2">13px</option>
+                <option value="3" selected>16px</option>
+                <option value="4">18px</option>
+                <option value="5">24px</option>
+                <option value="6">32px</option>
+                <option value="7">48px</option>
+            </select>
             <button class="btn" data-command="bold"><b>B</b></button>
             <button class="btn" data-command="italic"><i>I</i></button>
             <button class="btn" data-command="underline"><u>U</u></button>
-            <button class="btn" data-command="strikeThrough"><s>S</s></button>
-            <input type="color" id="text-color-picker" value="#e0e0e0" style="background:none; border:none; width:30px; height:30px; cursor:pointer;">
+            <input type="color" id="text-color-picker" value="#e0e0e0" style="background:none; border:none; width:30px; height:30px; cursor:pointer;" title="Text Color">
         </div>
     </div>
 
     <!-- Context Menu -->
     <div id="context-menu">
+        <div class="context-menu-item" id="ctx-edit-text" style="display:none;">Edit Text</div>
         <div class="context-menu-item" id="ctx-resize-orig">Resize to Original</div>
         <div class="context-menu-item" id="ctx-change-img">Change Image</div>
         <div class="context-menu-item" id="ctx-rename">Rename</div>
         <div class="context-menu-item" id="ctx-move">Move to Folder</div>
         <div class="context-divider"></div>
-        <div class="context-menu-item" id="ctx-delete" style="color: #ff5555;">Delete</div>
+        <div class="context-menu-item" id="ctx-delete" style="color: #ff5555;">Delete with confirmation</div>
     </div>
 
     <!-- Modal Dialog -->
@@ -449,6 +459,7 @@
                 startX = e.clientX - panX;
                 startY = e.clientY - panY;
                 contextMenu.style.display = 'none';
+                formattingBar.classList.remove('visible');
             }
         });
 
@@ -503,6 +514,8 @@
         document.getElementById('btn-recentre').addEventListener('click', recentre);
 
         // Factory / Item Creator
+        let longPressTimer = null;
+
         function createItem(options) {
             const el = document.createElement('div');
             el.className = 'item';
@@ -550,7 +563,6 @@
                     formattingBar.classList.add('visible');
                 });
                 content.addEventListener('blur', (e) => {
-                    // Hide only if focus leaves formatting bar and bubble
                     setTimeout(() => {
                         if (!formattingBar.contains(document.activeElement) && !content.contains(document.activeElement)) {
                             formattingBar.classList.remove('visible');
@@ -559,7 +571,6 @@
                 });
             } else if (options.type === 'folder') {
                 content.className += ' folder-grid';
-                // Add sample items or sub-notes
                 (options.folderItems || []).forEach(fItem => {
                     const fDiv = document.createElement('div');
                     fDiv.className = 'folder-item';
@@ -591,6 +602,16 @@
                 contextMenu.style.display = 'none';
             });
 
+            // Long press support for touch/delete capability
+            el.addEventListener('touchstart', (e) => {
+                longPressTimer = setTimeout(() => {
+                    openContextMenu(e.touches[0], el, options);
+                }, 600);
+            });
+            el.addEventListener('touchend', () => {
+                clearTimeout(longPressTimer);
+            });
+
             resizeHandle.addEventListener('mousedown', (e) => {
                 e.stopPropagation();
                 isResizing = true;
@@ -609,7 +630,6 @@
                     let newX = startLeft + dx;
                     let newY = startTop + dy;
                     
-                    // Soft snap to 40px grid
                     if (gridVisible) {
                         newX = Math.round(newX / 40) * 40;
                         newY = Math.round(newY / 40) * 40;
@@ -643,6 +663,13 @@
         // Context Menu Implementation
         function openContextMenu(e, element, options) {
             selectedItemForContext = { element, options };
+            const editTextBtn = document.getElementById('ctx-edit-text');
+            if (options.type === 'bubble') {
+                editTextBtn.style.display = 'flex';
+            } else {
+                editTextBtn.style.display = 'none';
+            }
+
             contextMenu.style.left = e.clientX + 'px';
             contextMenu.style.top = e.clientY + 'px';
             contextMenu.style.display = 'flex';
@@ -652,7 +679,17 @@
             contextMenu.style.display = 'none';
         });
 
-        // Context Menu Actions (Preserving required options)
+        // Context Menu Actions
+        document.getElementById('ctx-edit-text').addEventListener('click', () => {
+            if (selectedItemForContext && selectedItemForContext.options.type === 'bubble') {
+                const bubbleContent = selectedItemForContext.element.querySelector('.text-bubble');
+                if (bubbleContent) {
+                    bubbleContent.focus();
+                    formattingBar.classList.add('visible');
+                }
+            }
+        });
+
         document.getElementById('ctx-resize-orig').addEventListener('click', () => {
             if (selectedItemForContext) {
                 selectedItemForContext.element.style.width = '300px';
@@ -694,12 +731,16 @@
             }
         });
 
-        // Formatting Bar Action (Fixed to target only selected text)
-        formattingBar.querySelectorAll('button').forEach(btn => {
+        // Formatting Bar Action (Targeting selection natively via document.execCommand)
+        formattingBar.querySelectorAll('button[data-command]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const command = btn.getAttribute('data-command');
                 document.execCommand(command, false, null);
             });
+        });
+
+        document.getElementById('text-size-select').addEventListener('change', (e) => {
+            document.execCommand('fontSize', false, e.target.value);
         });
 
         document.getElementById('text-color-picker').addEventListener('input', (e) => {
@@ -736,7 +777,12 @@
         });
 
         document.getElementById('btn-add-bubble').addEventListener('click', () => {
-            createItem({ type: 'bubble', title: 'Note Bubble', x: 2500 - panX/scale, y: 2400 - panY/scale, text: 'Selected formatting test note...' });
+            const bubble = createItem({ type: 'bubble', title: 'Note Bubble', x: 2500 - panX/scale, y: 2400 - panY/scale, text: 'Type your notes here...' });
+            const bubbleContent = bubble.querySelector('.text-bubble');
+            if(bubbleContent) {
+                bubbleContent.focus();
+                formattingBar.classList.add('visible');
+            }
         });
 
         document.getElementById('btn-add-folder').addEventListener('click', () => {
@@ -765,7 +811,7 @@
         });
 
         // Initialize Default Workspace Items
-        createItem({ type: 'bubble', title: 'Welcome Archive', x: 2350, y: 2350, text: 'Welcome to the Gothic Archive. Select any text here and apply formatting using the bottom bar!' });
+        createItem({ type: 'bubble', title: 'Welcome Archive', x: 2350, y: 2350, text: 'Welcome to the Gothic Archive. Select text and format it precisely!' });
         createItem({ type: 'relic', title: 'Dark Portrait', x: 2700, y: 2350, imgSrc: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500' });
         createItem({ type: 'folder', title: 'Vault Folders', x: 2350, y: 2650, folderItems: ['Curiosities', 'Grimoire', 'Artifacts'] });
 
