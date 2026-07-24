@@ -76,7 +76,7 @@
       targetFolderCoverId: null,
       quickViewFileId: null,
       showUploadModal: false,
-      editingBubbleId: null
+      textEditorModal: null // { id, text, fontSize, isBold, isItalic, isUnderline, isNew, referenceItemId }
     };
 
     const uid = () => Math.random().toString(36).substring(2, 9);
@@ -421,6 +421,7 @@
 
         ${state.showUploadModal ? renderUploadModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
+        ${state.textEditorModal ? renderTextEditorModal() : ''}
       `;
 
       if (window.lucide) window.lucide.createIcons();
@@ -446,7 +447,6 @@
       const bubble = isBubble(item);
       const isMenuOpen = state.activeMenuId === item.id;
       const isSelected = state.selectedIds.includes(item.id);
-      const isEditingThisBubble = state.editingBubbleId === item.id;
 
       if (bubble) {
         const fontSizeClass = item.fontSize === 'lg' ? 'text-base' : item.fontSize === 'sm' ? 'text-[10px]' : 'text-[11px]';
@@ -457,11 +457,7 @@
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              ${isEditingThisBubble ? `
-                <textarea id="bubble-textarea-${item.id}" onblur="saveBubbleInlineText(event, '${item.id}')" onkeydown="handleBubbleKeydown(event, '${item.id}')" onclick="event.stopPropagation()" class="w-full bg-transparent text-white resize-none outline-none focus:ring-0 ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}" style="min-height: 50px;">${item.text || ''}</textarea>
-              ` : `
-                <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
-              `}
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
               ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-45 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -518,8 +514,7 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-zinc-950/98 border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="editTextBubble('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text</button>
-            <button type="button" onclick="formatTextBubble('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Format Text</button>
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
             <div class="h-px bg-zinc-800 my-1"></div>
@@ -538,7 +533,7 @@
             <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
           ` : `
             <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
-            <button type="button" onclick="openAddTextBubbleModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
+            <button type="button" onclick="openTextEditorModal(null, '${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
             <button type="button" onclick="copySingleFileClipboard('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Copy to Clipboard</button>
             <button type="button" onclick="shareFile('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="share" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> iOS Share</button>
             <button type="button" onclick="triggerChangeImage('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change Image</button>
@@ -562,10 +557,53 @@
             <div class="flex flex-col gap-2.5 mt-2">
               <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
               <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
-              <button onclick="openAddTextBubbleModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
+              <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
               <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
             </div>
             <button onclick="closeUploadModal()" class="text-xs text-zinc-500 hover:text-zinc-300 mt-2 font-medium">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return '';
+      const fontSizeClass = ed.fontSize === 'lg' ? 'text-base' : ed.fontSize === 'sm' ? 'text-xs' : 'text-sm';
+      const fontWeightClass = ed.isBold ? 'font-bold' : 'font-normal';
+      const fontStyleClass = ed.isItalic ? 'italic' : '';
+      const fontUnderlineClass = ed.isUnderline ? 'underline' : '';
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 class="text-sm font-bold text-white">${ed.isNew ? 'New Text Bubble' : 'Edit Text Bubble'}</h3>
+              <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            
+            <!-- Formatting Toolbar -->
+            <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="setTextEditorFontSize('sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="setTextEditorFontSize('md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
+                <button type="button" onclick="setTextEditorFontSize('lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="toggleTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                <button type="button" onclick="toggleTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                <button type="button" onclick="toggleTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
+              </div>
+            </div>
+
+            <!-- Textarea -->
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 ${fontSizeClass} ${fontWeightClass} ${fontStyleClass} ${fontUnderlineClass}">${ed.text || ''}</textarea>
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveTextEditorModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Bubble</button>
+            </div>
           </div>
         </div>
       `;
@@ -631,7 +669,7 @@
         return;
       }
       if (isFolderItem) navigateTo(id); 
-      else if (isBubbleItem) editTextBubble(id);
+      else if (isBubbleItem) openTextEditorModal(id);
       else openQuickView(id);
     }
 
@@ -652,6 +690,150 @@
     }
     function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
     function forcePullCloudData() { syncWithGitHub(true); }
+
+    // --- TEXT EDITOR MODAL LOGIC ---
+    function openTextEditorModal(bubbleId = null, referenceItemId = null) {
+      closeMenu();
+      if (bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === bubbleId);
+        if (bubble) {
+          state.textEditorModal = {
+            id: bubble.id,
+            text: bubble.text || '',
+            fontSize: bubble.fontSize || 'md',
+            isBold: !!bubble.isBold,
+            isItalic: !!bubble.isItalic,
+            isUnderline: !!bubble.isUnderline,
+            isNew: false
+          };
+        }
+      } else {
+        state.textEditorModal = {
+          id: null,
+          text: '',
+          fontSize: 'md',
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          isNew: true,
+          referenceItemId: referenceItemId
+        };
+      }
+      render();
+      setTimeout(() => {
+        const ta = document.getElementById('modal-text-input');
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+      }, 50);
+    }
+
+    function closeTextEditorModal() {
+      state.textEditorModal = null;
+      render();
+    }
+
+    function updateTextEditorContent(val) {
+      if (state.textEditorModal) {
+        state.textEditorModal.text = val;
+      }
+    }
+
+    function setTextEditorFontSize(size) {
+      if (state.textEditorModal) {
+        state.textEditorModal.fontSize = size;
+        render();
+        setTimeout(() => {
+          const ta = document.getElementById('modal-text-input');
+          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        }, 30);
+      }
+    }
+
+    function toggleTextEditorFormat(formatKey) {
+      if (state.textEditorModal) {
+        state.textEditorModal[formatKey] = !state.textEditorModal[formatKey];
+        render();
+        setTimeout(() => {
+          const ta = document.getElementById('modal-text-input');
+          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        }, 30);
+      }
+    }
+
+    async function saveTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+      const textVal = ed.text.trim();
+      if (!textVal) {
+        alert('Please enter some text for the bubble.');
+        return;
+      }
+
+      const lines = textVal.split('\n').length + Math.floor(textVal.length / 22);
+      const dynamicHeight = Math.max(80, lines * 22);
+
+      if (ed.isNew) {
+        let allExisting = [
+          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+          ...state.files.filter(f => f.parentId === state.currentFolderId),
+          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+        ];
+
+        let posX = 20, posY = 20;
+        if (ed.referenceItemId) {
+          const refItem = allExisting.find(i => i.id === ed.referenceItemId);
+          if (refItem && refItem.x !== undefined && refItem.y !== undefined) {
+            posX = refItem.x + (refItem.width || 140) + 24;
+            posY = refItem.y;
+          }
+        } else if (allExisting.length > 0) {
+          const lastItem = allExisting[allExisting.length - 1];
+          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+          const lastW = lastItem.width || 140;
+          
+          posX = lastX + lastW + 24;
+          posY = lastY;
+          if (posX > 1000) {
+            posX = 20;
+            posY = lastY + 160;
+          }
+        }
+
+        const bubble = {
+          id: uid(),
+          isBubble: true,
+          text: textVal,
+          parentId: state.currentFolderId,
+          x: posX,
+          y: posY,
+          width: 140,
+          height: dynamicHeight,
+          fontSize: ed.fontSize,
+          isBold: ed.isBold,
+          isItalic: ed.isItalic,
+          isUnderline: ed.isUnderline
+        };
+        state.textBubbles.push(bubble);
+        await saveTextBubble(bubble);
+      } else {
+        const bubble = state.textBubbles.find(b => b.id === ed.id);
+        if (bubble) {
+          bubble.text = textVal;
+          bubble.height = dynamicHeight;
+          bubble.fontSize = ed.fontSize;
+          bubble.isBold = ed.isBold;
+          bubble.isItalic = ed.isItalic;
+          bubble.isUnderline = ed.isUnderline;
+          await saveTextBubble(bubble);
+        }
+      }
+
+      state.textEditorModal = null;
+      render();
+    }
 
     async function bulkDelete() {
       if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
@@ -799,125 +981,6 @@
           closeMenu();
           render();
         }
-      }
-    }
-
-    async function editTextBubble(id) {
-      state.editingBubbleId = id;
-      closeMenu();
-      render();
-      setTimeout(() => {
-        const ta = document.getElementById(`bubble-textarea-${id}`);
-        if (ta) {
-          ta.focus();
-          ta.setSelectionRange(ta.value.length, ta.value.length);
-        }
-      }, 50);
-    }
-
-    async function saveBubbleInlineText(e, id) {
-      const val = e.target.value;
-      const bubble = state.textBubbles.find(b => b.id === id);
-      if (bubble) {
-        bubble.text = val.trim();
-        const lines = bubble.text.split('\n').length + Math.floor(bubble.text.length / 22);
-        bubble.height = Math.max(80, lines * 22);
-        await saveTextBubble(bubble);
-      }
-      state.editingBubbleId = null;
-      render();
-    }
-
-    function handleBubbleKeydown(e, id) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        e.target.blur();
-      }
-    }
-
-    async function formatTextBubble(id) {
-      const bubble = state.textBubbles.find(b => b.id === id);
-      if (bubble) {
-        const sizeChoice = prompt('Choose text size:\n1. Small (sm)\n2. Normal (md)\n3. Large (lg)', bubble.fontSize || 'md');
-        let fontSize = 'md';
-        if (sizeChoice === '1' || sizeChoice?.toLowerCase() === 'sm') fontSize = 'sm';
-        else if (sizeChoice === '3' || sizeChoice?.toLowerCase() === 'lg') fontSize = 'lg';
-
-        const boldChoice = confirm('Make text BOLD?');
-        const italicChoice = confirm('Make text ITALIC?');
-        const underlineChoice = confirm('Make text UNDERLINED?');
-
-        bubble.fontSize = fontSize;
-        bubble.isBold = boldChoice;
-        bubble.isItalic = italicChoice;
-        bubble.isUnderline = underlineChoice;
-
-        await saveTextBubble(bubble);
-        closeMenu();
-        render();
-      }
-    }
-
-    async function openAddTextBubbleModal(referenceItemId = null) {
-      const text = prompt('Enter text for the text bubble:', 'Note text...');
-      if (text && text.trim() !== '') {
-        const sizeChoice = prompt('Choose text size:\n1. Small (sm)\n2. Normal (md)\n3. Large (lg)', 'md');
-        let fontSize = 'md';
-        if (sizeChoice === '1' || sizeChoice?.toLowerCase() === 'sm') fontSize = 'sm';
-        else if (sizeChoice === '3' || sizeChoice?.toLowerCase() === 'lg') fontSize = 'lg';
-
-        const boldChoice = confirm('Make text BOLD?');
-        const italicChoice = confirm('Make text ITALIC?');
-        const underlineChoice = confirm('Make text UNDERLINED?');
-
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-
-        let posX = 20, posY = 20;
-        if (referenceItemId) {
-          const refItem = allExisting.find(i => i.id === referenceItemId);
-          if (refItem && refItem.x !== undefined && refItem.y !== undefined) {
-            posX = refItem.x + (refItem.width || 140) + 24;
-            posY = refItem.y;
-          }
-        } else if (allExisting.length > 0) {
-          const lastItem = allExisting[allExisting.length - 1];
-          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-          const lastW = lastItem.width || 140;
-          
-          posX = lastX + lastW + 24;
-          posY = lastY;
-          if (posX > 1000) {
-            posX = 20;
-            posY = lastY + 160;
-          }
-        }
-
-        const lines = text.trim().split('\n').length + Math.floor(text.trim().length / 22);
-        const dynamicHeight = Math.max(80, lines * 22);
-
-        const bubble = {
-          id: uid(),
-          isBubble: true,
-          text: text.trim(),
-          parentId: state.currentFolderId,
-          x: posX,
-          y: posY,
-          width: 140,
-          height: dynamicHeight,
-          fontSize: fontSize,
-          isBold: boldChoice,
-          isItalic: italicChoice,
-          isUnderline: underlineChoice
-        };
-        state.textBubbles.push(bubble);
-        await saveTextBubble(bubble);
-        closeMenu();
-        render();
       }
     }
 
