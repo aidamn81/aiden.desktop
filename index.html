@@ -374,14 +374,10 @@
               <i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
               <span>Pull Cloud</span>
             </button>
-          </div>
-
-          <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
-            <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
-            ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
-          </div>
-
-          <div class="flex items-center gap-1.5 shrink-0">
+            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0 border-l border-zinc-800">
+              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
+              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
+            </div>
             ${state.selectMode ? `
               <button onclick="toggleSelectAll()" class="px-2.5 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1 shadow-sm shrink-0">
                 <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-3.5 h-3.5"></i>
@@ -432,7 +428,7 @@
     }
 
     function getFileIcon(type, name) {
-      if (type.startsWith('video/')) return 'video';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm')) return 'video';
       if (type.startsWith('audio/')) return 'music';
       if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
       if (type.startsWith('text/') || name.endsWith('.txt')) return 'file-text';
@@ -452,10 +448,15 @@
       const isSelected = state.selectedIds.includes(item.id);
 
       if (bubble) {
+        const fontSizeClass = item.fontSize === 'lg' ? 'text-base' : item.fontSize === 'sm' ? 'text-[10px]' : 'text-[11px]';
+        const fontWeightStyle = item.isBold ? 'font-bold' : 'font-medium';
+        const fontStyleStyle = item.isItalic ? 'italic' : '';
+        const fontUnderlineStyle = item.isUnderline ? 'underline' : '';
+
         return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="text-[11px] text-zinc-200 font-medium overflow-hidden leading-tight select-none pointer-events-none">${item.text || 'Empty bubble'}</div>
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
               ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-45 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -479,6 +480,7 @@
       } else {
         const type = item.fileType || '';
         const isImage = type.startsWith('image/');
+        const isVideo = type.startsWith('video/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm');
         const imgSrc = item.dataUrl || item.thumbnailData;
         const icon = getFileIcon(type, item.name);
 
@@ -489,7 +491,7 @@
                 ${isImage && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
-                    ${type.startsWith('video/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
+                    ${isVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
                     ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
                     ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
                     ${type.startsWith('text/') || item.name.endsWith('.txt') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">TXT</span>' : ''}
@@ -512,6 +514,7 @@
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-zinc-950/98 border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
             <button type="button" onclick="editTextBubble('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text</button>
+            <button type="button" onclick="formatTextBubble('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Format Text</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
             <div class="h-px bg-zinc-800 my-1"></div>
@@ -566,9 +569,10 @@
     function renderQuickViewContent(file) {
       const type = file.fileType || '';
       const mediaUrl = file.blobUrl || file.dataUrl;
+      const isVideo = type.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm');
       
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (type.startsWith('video/')) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
@@ -682,7 +686,7 @@
         if (file) {
           const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
           delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/')) await getOrCreateBlobUrl(newFile);
+          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) await getOrCreateBlobUrl(newFile);
           state.files.push(newFile);
           await saveFile(newFile);
         }
@@ -725,7 +729,7 @@
 
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
       delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/')) {
+      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) {
         await getOrCreateBlobUrl(newFile);
       }
       state.files.push(newFile);
@@ -773,7 +777,7 @@
         const item = state.files.find(f => f.id === state.targetChangeImageId);
         if (item) {
           item.dataUrl = base64;
-          if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+          if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
           await saveFile(item);
           render();
         }
@@ -799,6 +803,8 @@
         const newText = prompt('Edit text bubble content:', bubble.text);
         if (newText !== null) {
           bubble.text = newText.trim();
+          const lines = bubble.text.split('\n').length + Math.floor(bubble.text.length / 22);
+          bubble.height = Math.max(80, lines * 22);
           await saveTextBubble(bubble);
           closeMenu();
           render();
@@ -806,17 +812,71 @@
       }
     }
 
+    async function formatTextBubble(id) {
+      const bubble = state.textBubbles.find(b => b.id === id);
+      if (bubble) {
+        const sizeChoice = prompt('Choose text size:\n1. Small (sm)\n2. Normal (md)\n3. Large (lg)', bubble.fontSize || 'md');
+        let fontSize = 'md';
+        if (sizeChoice === '1' || sizeChoice?.toLowerCase() === 'sm') fontSize = 'sm';
+        else if (sizeChoice === '3' || sizeChoice?.toLowerCase() === 'lg') fontSize = 'lg';
+
+        const boldChoice = confirm('Make text BOLD?');
+        const italicChoice = confirm('Make text ITALIC?');
+        const underlineChoice = confirm('Make text UNDERLINED?');
+
+        bubble.fontSize = fontSize;
+        bubble.isBold = boldChoice;
+        bubble.isItalic = italicChoice;
+        bubble.isUnderline = underlineChoice;
+
+        await saveTextBubble(bubble);
+        closeMenu();
+        render();
+      }
+    }
+
     async function openAddTextBubbleModal(referenceItemId = null) {
       const text = prompt('Enter text for the text bubble:', 'Note text...');
       if (text && text.trim() !== '') {
+        const sizeChoice = prompt('Choose text size:\n1. Small (sm)\n2. Normal (md)\n3. Large (lg)', 'md');
+        let fontSize = 'md';
+        if (sizeChoice === '1' || sizeChoice?.toLowerCase() === 'sm') fontSize = 'sm';
+        else if (sizeChoice === '3' || sizeChoice?.toLowerCase() === 'lg') fontSize = 'lg';
+
+        const boldChoice = confirm('Make text BOLD?');
+        const italicChoice = confirm('Make text ITALIC?');
+        const underlineChoice = confirm('Make text UNDERLINED?');
+
+        let allExisting = [
+          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+          ...state.files.filter(f => f.parentId === state.currentFolderId),
+          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+        ];
+
         let posX = 20, posY = 20;
         if (referenceItemId) {
-          const refItem = [...state.folders, ...state.files, ...state.textBubbles].find(i => i.id === referenceItemId);
+          const refItem = allExisting.find(i => i.id === referenceItemId);
           if (refItem && refItem.x !== undefined && refItem.y !== undefined) {
-            posX = refItem.x + (refItem.width || 112) + 24;
+            posX = refItem.x + (refItem.width || 140) + 24;
             posY = refItem.y;
           }
+        } else if (allExisting.length > 0) {
+          const lastItem = allExisting[allExisting.length - 1];
+          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+          const lastW = lastItem.width || 140;
+          
+          posX = lastX + lastW + 24;
+          posY = lastY;
+          if (posX > 1000) {
+            posX = 20;
+            posY = lastY + 160;
+          }
         }
+
+        const lines = text.trim().split('\n').length + Math.floor(text.trim().length / 22);
+        const dynamicHeight = Math.max(80, lines * 22);
+
         const bubble = {
           id: uid(),
           isBubble: true,
@@ -825,7 +885,11 @@
           x: posX,
           y: posY,
           width: 140,
-          height: 80
+          height: dynamicHeight,
+          fontSize: fontSize,
+          isBold: boldChoice,
+          isItalic: italicChoice,
+          isUnderline: underlineChoice
         };
         state.textBubbles.push(bubble);
         await saveTextBubble(bubble);
@@ -867,7 +931,7 @@
       const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
       if (item) {
         item.width = isFolder(item) ? 96 : isBubble(item) ? 140 : 112;
-        item.height = isFolder(item) ? 96 : isBubble(item) ? 80 : 144;
+        item.height = isFolder(item) ? 96 : isBubble(item) ? (Math.max(80, (item.text?.split('\n').length || 1) * 22)) : 144;
         if (isFolder(item)) await saveFolder(item); 
         else if (isBubble(item)) await saveTextBubble(item);
         else await saveFile(item);
@@ -894,7 +958,28 @@
     function openNewFolderModal() {
       const name = prompt('Folder Name:', 'New Folder');
       if (name && name.trim() !== '') {
-        const folder = { id: uid(), name: name.trim(), parentId: state.currentFolderId, width: 96, height: 96 };
+        let allExisting = [
+          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+          ...state.files.filter(f => f.parentId === state.currentFolderId),
+          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+        ];
+
+        let targetX = 20, targetY = 20;
+        if (allExisting.length > 0) {
+          const lastItem = allExisting[allExisting.length - 1];
+          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+          const lastW = lastItem.width || 96;
+          
+          targetX = lastX + lastW + 24;
+          targetY = lastY;
+          if (targetX > 1000) {
+            targetX = 20;
+            targetY = lastY + 160;
+          }
+        }
+
+        const folder = { id: uid(), name: name.trim(), parentId: state.currentFolderId, x: targetX, y: targetY, width: 96, height: 96 };
         state.folders.push(folder);
         saveFolder(folder);
         render();
@@ -922,18 +1007,12 @@
     function getMimeType(file) {
       if (file.type && file.type !== '') return file.type;
       const ext = file.name.split('.').pop().toLowerCase();
-      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'pdf': 'application/pdf', 'txt': 'text/plain'};
+      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'pdf': 'application/pdf', 'txt': 'text/plain'};
       return mimeMap[ext] || 'application/octet-stream';
     }
 
     async function handleFileImport(files) {
       const fileList = Array.from(files);
-      const allExisting = [
-        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-        ...state.files.filter(f => f.parentId === state.currentFolderId),
-        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-      ];
-
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
         let dataUrl = await fileToBase64(file);
@@ -941,12 +1020,18 @@
         let inferredType = getMimeType(file);
         let blobUrl = '';
 
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/')) blobUrl = URL.createObjectURL(file);
-        else if (inferredType.startsWith('text/') || file.name.endsWith('.txt')) {
+        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
+          blobUrl = URL.createObjectURL(file);
+        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt')) {
           try { textContent = await fileToText(file); } catch (e) {}
         }
 
-        // Calculate a non-overlapping position next to existing items
+        let allExisting = [
+          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+          ...state.files.filter(f => f.parentId === state.currentFolderId),
+          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+        ];
+
         let targetX = 20;
         let targetY = 20;
         if (allExisting.length > 0) {
@@ -979,7 +1064,6 @@
         };
 
         state.files.push(item);
-        allExisting.push(item);
         await saveFile(item);
       }
       render();
