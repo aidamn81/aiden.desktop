@@ -432,7 +432,7 @@
     }
 
     function getFileIcon(type, name) {
-      if (type.startsWith('video/')) return 'video';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm')) return 'video';
       if (type.startsWith('audio/')) return 'music';
       if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
       if (type.startsWith('text/') || name.endsWith('.txt')) return 'file-text';
@@ -479,6 +479,7 @@
       } else {
         const type = item.fileType || '';
         const isImage = type.startsWith('image/');
+        const isVideo = type.startsWith('video/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm');
         const imgSrc = item.dataUrl || item.thumbnailData;
         const icon = getFileIcon(type, item.name);
 
@@ -489,7 +490,7 @@
                 ${isImage && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
-                    ${type.startsWith('video/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
+                    ${isVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
                     ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
                     ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
                     ${type.startsWith('text/') || item.name.endsWith('.txt') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">TXT</span>' : ''}
@@ -566,9 +567,10 @@
     function renderQuickViewContent(file) {
       const type = file.fileType || '';
       const mediaUrl = file.blobUrl || file.dataUrl;
+      const isVideo = type.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm');
       
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (type.startsWith('video/')) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
@@ -682,7 +684,7 @@
         if (file) {
           const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
           delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/')) await getOrCreateBlobUrl(newFile);
+          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) await getOrCreateBlobUrl(newFile);
           state.files.push(newFile);
           await saveFile(newFile);
         }
@@ -725,7 +727,7 @@
 
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
       delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/')) {
+      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) {
         await getOrCreateBlobUrl(newFile);
       }
       state.files.push(newFile);
@@ -773,7 +775,7 @@
         const item = state.files.find(f => f.id === state.targetChangeImageId);
         if (item) {
           item.dataUrl = base64;
-          if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+          if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
           await saveFile(item);
           render();
         }
@@ -799,7 +801,6 @@
         const newText = prompt('Edit text bubble content:', bubble.text);
         if (newText !== null) {
           bubble.text = newText.trim();
-          // Auto-adjust height based on length estimate if needed
           const lines = bubble.text.split('\n').length + Math.floor(bubble.text.length / 22);
           bubble.height = Math.max(80, lines * 22);
           await saveTextBubble(bubble);
@@ -968,7 +969,7 @@
     function getMimeType(file) {
       if (file.type && file.type !== '') return file.type;
       const ext = file.name.split('.').pop().toLowerCase();
-      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'pdf': 'application/pdf', 'txt': 'text/plain'};
+      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'pdf': 'application/pdf', 'txt': 'text/plain'};
       return mimeMap[ext] || 'application/octet-stream';
     }
 
@@ -981,8 +982,9 @@
         let inferredType = getMimeType(file);
         let blobUrl = '';
 
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/')) blobUrl = URL.createObjectURL(file);
-        else if (inferredType.startsWith('text/') || file.name.endsWith('.txt')) {
+        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
+          blobUrl = URL.createObjectURL(file);
+        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt')) {
           try { textContent = await fileToText(file); } catch (e) {}
         }
 
