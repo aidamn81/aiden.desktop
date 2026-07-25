@@ -356,28 +356,30 @@
       app.innerHTML = `
         <header class="shrink-0 z-35 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
-              <i data-lucide="menu" class="w-5 h-5"></i>
-            </button>
-            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
-              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
-              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+              </button>
+              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.selectMode ? 'Cancel' : 'Select'}
+              </button>
+              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
+              </button>
             </div>
           </div>
 
           <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
+              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
+              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
+            </div>
             ${state.selectMode ? `
               <button onclick="toggleSelectAll()" class="px-2.5 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1 shadow-sm shrink-0">
                 <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-3.5 h-3.5"></i>
                 ${allChildrenSelected ? 'Deselect All' : 'Select All'}
               </button>
             ` : ''}
-            <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-              ${state.selectMode ? 'Cancel' : 'Select'}
-            </button>
-            <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-              ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
-            </button>
           </div>
 
           ${state.hamburgerMenuOpen ? `
