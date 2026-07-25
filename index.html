@@ -52,6 +52,7 @@
   <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
   <input id="change-image-input" type="file" accept="image/*" class="hidden" />
   <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
+  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
 
   <script>
     // --- CONFIG & STATE ---
@@ -77,9 +78,10 @@
       targetFolderCoverId: null,
       quickViewFileId: null,
       showUploadModal: false,
-      textEditorModal: null, // { id, text, fontSize, isBold, isItalic, isUnderline, isNew, referenceItemId }
+      textEditorModal: null, 
       linkModal: false,
-      appModal: false
+      appModal: false,
+      appModalThumbData: null
     };
 
     const uid = () => Math.random().toString(36).substring(2, 9);
@@ -188,7 +190,7 @@
       }
     }
 
-    // --- TOKEN & GITHUB SYNC (WITH CHUNKING TO PREVENT 500 ERRORS) ---
+    // --- TOKEN & GITHUB SYNC ---
     function resetToken() {
       const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
       if (token !== null) {
@@ -511,14 +513,14 @@
         const isVideo = type.startsWith('video/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm');
         const isLink = type === 'link';
         const isApp = type === 'app' || type === 'ios-app';
-        const imgSrc = item.dataUrl || item.thumbnailData;
+        const imgSrc = item.thumbnailData || item.dataUrl;
         const icon = getFileIcon(type, item.name);
 
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
               <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                ${isImage && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                ${(isImage || (isApp && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
                     ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
@@ -629,6 +631,15 @@
             <div class="flex flex-col gap-3 mt-2">
               <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              
+              <!-- Thumbnail upload section -->
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
+                <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.appModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.appModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.appModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
             </div>
             <div class="flex items-center gap-2 mt-2">
               <button onclick="closeAppModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -638,6 +649,14 @@
         </div>
       `;
     }
+
+    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.appModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
 
     function openLinkModal() {
       state.linkModal = true;
@@ -655,6 +674,7 @@
 
     function openAppModal() {
       state.appModal = true;
+      state.appModalThumbData = null;
       render();
       setTimeout(() => {
         const input = document.getElementById('app-scheme-input');
@@ -664,6 +684,7 @@
 
     function closeAppModal() {
       state.appModal = false;
+      state.appModalThumbData = null;
       render();
     }
 
@@ -770,6 +791,7 @@
         fileType: 'ios-app',
         size: 0,
         dataUrl: scheme,
+        thumbnailData: state.appModalThumbData || null,
         parentId: state.currentFolderId,
         x: targetX,
         y: targetY,
@@ -795,7 +817,6 @@
               <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
             
-            <!-- Formatting Toolbar -->
             <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
                 <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
@@ -810,7 +831,6 @@
               </div>
             </div>
 
-            <!-- Textarea -->
             <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal">${ed.text || ''}</textarea>
 
             <div class="flex items-center justify-end gap-3 pt-2">
@@ -995,7 +1015,6 @@
 
     function forcePullCloudData() { syncWithGitHub(true); }
 
-    // --- TEXT EDITOR MODAL LOGIC (SURGICAL FORMATTING FOR SELECTED TEXT) ---
     function openTextEditorModal(bubbleId = null, referenceItemId = null) {
       closeMenu();
       closeHamburgerMenu();
@@ -1059,10 +1078,6 @@
         ta.focus();
         return;
       }
-
-      let wrapper = '';
-      if (formatKey === 'isBold') wrapper = '**';
-      if (formatKey === 'isItalic') wrapper = '*';
 
       if (start !== end) {
         const selectedText = text.substring(start, end);
@@ -1301,8 +1316,12 @@
         const base64 = await fileToBase64(file);
         const item = state.files.find(f => f.id === state.targetChangeImageId);
         if (item) {
-          item.dataUrl = base64;
-          if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+          if (item.fileType === 'ios-app') {
+            item.thumbnailData = base64;
+          } else {
+            item.dataUrl = base64;
+            if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+          }
           await saveFile(item);
           render();
         }
