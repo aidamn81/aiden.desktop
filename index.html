@@ -1,1313 +1,853 @@
 <!DOCTYPE html>
-<html lang="en" class="bg-black text-white select-none">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Aiden Files</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    
-    .edit-grid-bg {
-      background-size: 24px 24px;
-      background-image: 
-        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Companion & Body Double Tool</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-color: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border-color: #334155;
+            --danger-color: #ef4444;
+            --success-color: #22c55e;
+        }
 
-    .touch-none { touch-action: none; }
+        [data-theme="light"] {
+            --bg-color: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-color: #0f172a;
+            --text-muted: #64748b;
+            --accent-color: #0284c7;
+            --accent-hover: #0369a1;
+            --border-color: #cbd5e1;
+            --danger-color: #dc2626;
+            --success-color: #16a34a;
+        }
 
-    .folder-cube {
-      width: 100%;
-      height: 100%;
-      border-radius: 22px;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      overflow: hidden;
-    }
-    .folder-cube:active { transform: scale(0.95); }
+        [data-theme="gothic"] {
+            --bg-color: #09090b;
+            --card-bg: #18181b;
+            --text-color: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --accent-color: #a855f7;
+            --accent-hover: #9333ea;
+            --border-color: #27272a;
+            --danger-color: #f43f5e;
+            --success-color: #10b981;
+        }
 
-    .resize-handle {
-      width: 28px;
-      height: 28px;
-      bottom: -4px;
-      right: -4px;
-      border-top-left-radius: 12px;
-      touch-action: none;
-      display: none;
-    }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
 
-    body.edit-mode .resize-handle {
-      display: flex;
-    }
-  </style>
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            font-size: 1.5rem;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        button, select {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        button:hover, select:hover {
+            border-color: var(--accent-color);
+        }
+
+        button.primary {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border-color: var(--accent-color);
+            font-weight: 500;
+        }
+
+        button.primary:hover {
+            background-color: var(--accent-hover);
+        }
+
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 300px 1fr 350px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        @media (max-width: 1200px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            height: calc(100vh - 120px);
+            overflow: hidden;
+        }
+
+        .panel-title {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+        }
+
+        .scrollable-content {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding-right: 0.25rem;
+        }
+
+        /* Presence / Body Double Panel */
+        .companion-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem 0;
+            gap: 1rem;
+            background: rgba(0,0,0,0.05);
+            border-radius: 0.5rem;
+            border: 1px dashed var(--border-color);
+        }
+
+        .avatar-circle {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-color), var(--border-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            position: relative;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+            transition: transform 0.3s;
+        }
+
+        .avatar-circle.pulse {
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(56, 189, 248, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+        }
+
+        .voice-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        /* Tasks Panel */
+        .task-input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        input[type="text"], textarea {
+            flex: 1;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .task-item {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        .task-item.completed span {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        .task-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+            word-break: break-all;
+        }
+
+        /* Grounding & Chat Panel */
+        .chat-messages {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            overflow-y: auto;
+            padding: 0.5rem 0;
+        }
+
+        .message {
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            max-width: 85%;
+            font-size: 0.875rem;
+            line-height: 1.4;
+        }
+
+        .message.user {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            align-self: flex-end;
+            border-bottom-right-radius: 0.125rem;
+        }
+
+        .message.companion {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            align-self: flex-start;
+            border-bottom-left-radius: 0.125rem;
+        }
+
+        .chat-input-area {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .quick-grounding {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .quick-grounding button {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
+
+        /* Document / File Viewer Modal or Section */
+        .file-upload-zone {
+            border: 2px dashed var(--border-color);
+            padding: 1rem;
+            text-align: center;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .file-upload-zone:hover {
+            border-color: var(--accent-color);
+        }
+
+        .document-viewer-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 2rem;
+        }
+
+        .document-viewer-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            width: 100%;
+            max-width: 900px;
+            height: 85vh;
+            border-radius: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .document-viewer-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .document-viewer-body {
+            flex: 1;
+            padding: 0;
+            overflow-y: auto;
+            overflow-x: auto;
+            position: relative;
+            background: #525659; /* Standard PDF viewer background */
+        }
+
+        .document-viewer-body iframe {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            border: none;
+            display: block;
+        }
+
+        .document-viewer-body pre, .document-viewer-body div.text-content {
+            padding: 1.5rem;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-color);
+        }
+
+        .document-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .document-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .document-item:hover {
+            border-color: var(--accent-color);
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 0.25rem;
+            font-size: 1rem;
+        }
+        .icon-btn:hover {
+            color: var(--text-color);
+        }
+    </style>
 </head>
-<body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
-  <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
+<body data-theme="dark">
 
-  <!-- Hidden Inputs -->
-  <input id="file-input" type="file" multiple class="hidden" />
-  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
-  <input id="change-image-input" type="file" accept="image/*" class="hidden" />
-  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
-
-  <script>
-    // --- CONFIG & STATE ---
-    const CONFIG = {
-      ghRepo: 'aidamn81/aidenfiles',
-      ghPath: 'aiden_meta.json',
-      GRID_SIZE: 24
-    };
-
-    let state = {
-      editMode: false,
-      selectMode: false,
-      selectedIds: [],
-      currentFolderId: null,
-      folders: [],
-      files: [],
-      textBubbles: [],
-      ghToken: localStorage.getItem('af_gh_token') || '',
-      isSyncing: false,
-      activeMenuId: null,
-      targetChangeImageId: null,
-      targetFolderCoverId: null,
-      quickViewFileId: null,
-      showUploadModal: false,
-      textEditorModal: null // { id, text, fontSize, isBold, isItalic, isUnderline, isNew, referenceItemId }
-    };
-
-    const uid = () => Math.random().toString(36).substring(2, 9);
-    const isFolder = item => !('fileType' in item) && !('isBubble' in item);
-    const isBubble = item => item.isBubble === true;
-
-    // --- MEDIA PLAYBACK HELPER ---
-    async function getOrCreateBlobUrl(file) {
-      if (file.blobUrl) return file.blobUrl;
-      if (!file.dataUrl) return '';
-      try {
-        const res = await fetch(file.dataUrl);
-        const blob = await res.blob();
-        file.blobUrl = URL.createObjectURL(blob);
-        return file.blobUrl;
-      } catch (e) {
-        return file.dataUrl;
-      }
-    }
-
-    // --- INDEXEDDB ---
-    const DB_NAME = 'aiden_files_db';
-    const DB_VERSION = 4;
-
-    function openDB() {
-      return new Promise((resolve) => {
-        try {
-          const req = indexedDB.open(DB_NAME, DB_VERSION);
-          req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains('folders')) db.createObjectStore('folders', { keyPath: 'id' });
-            if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'id' });
-            if (!db.objectStoreNames.contains('textBubbles')) db.createObjectStore('textBubbles', { keyPath: 'id' });
-          };
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => resolve(null);
-        } catch (e) { resolve(null); }
-      });
-    }
-
-    async function loadData() {
-      const db = await openDB();
-      if (db) {
-        state.folders = await new Promise(res => {
-          const tx = db.transaction('folders', 'readonly');
-          const req = tx.objectStore('folders').getAll();
-          req.onsuccess = () => res(req.result || []);
-        });
-        state.files = await new Promise(res => {
-          const tx = db.transaction('files', 'readonly');
-          const req = tx.objectStore('files').getAll();
-          req.onsuccess = () => res(req.result || []);
-        });
-        state.textBubbles = await new Promise(res => {
-          const tx = db.transaction('textBubbles', 'readonly');
-          const req = tx.objectStore('textBubbles').getAll();
-          req.onsuccess = () => res(req.result || []);
-        });
-      }
-
-      for (let file of state.files) {
-        if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/'))) {
-          await getOrCreateBlobUrl(file);
-        }
-      }
-
-      if (state.folders.length === 0) {
-        const root = { id: 'root', name: 'Aiden Files', parentId: null, width: 96, height: 96 };
-        state.folders = [root];
-        saveFolder(root);
-      }
-      render();
-    }
-
-    async function saveFolder(folder) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction('folders', 'readwrite');
-        tx.objectStore('folders').put(folder);
-      }
-    }
-
-    async function saveFile(file) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction('files', 'readwrite');
-        const fileToSave = { ...file };
-        delete fileToSave.blobUrl;
-        tx.objectStore('files').put(fileToSave);
-      }
-    }
-
-    async function saveTextBubble(bubble) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction('textBubbles', 'readwrite');
-        tx.objectStore('textBubbles').put(bubble);
-      }
-    }
-
-    async function deleteFromDB(storeName, id) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).delete(id);
-      }
-    }
-
-    // --- TOKEN & GITHUB SYNC (WITH CHUNKING TO PREVENT 500 ERRORS) ---
-    function resetToken() {
-      const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
-      if (token !== null) {
-        state.ghToken = token.trim();
-        localStorage.setItem('af_gh_token', state.ghToken);
-        alert('New token saved successfully!');
-        syncWithGitHub();
-      }
-    }
-
-    async function syncWithGitHub(forcePull = false) {
-      if (!state.ghToken) {
-        resetToken();
-        if (!state.ghToken) return;
-      }
-
-      state.isSyncing = true;
-      render();
-
-      try {
-        let cleanToken = state.ghToken.replace(/^(token|Bearer)\s+/i, '').trim();
-        const authHeader = `token ${cleanToken}`;
-        const headers = {
-          'Authorization': authHeader,
-          'Accept': 'application/vnd.github.v3+json',
-          'X-GitHub-Api-Version': '2022-11-28'
-        };
-
-        const metaUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/aiden_meta.json`;
-        
-        if (forcePull) {
-          const getRes = await fetch(metaUrl, { headers });
-          if (getRes.ok) {
-            const getJson = await getRes.json();
-            const manifest = JSON.parse(decodeURIComponent(escape(atob(getJson.content))));
-            
-            let allFolders = [];
-            let allFiles = [];
-            let allBubbles = [];
-
-            for (let chunkFileName of manifest.chunks) {
-              const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
-              const chunkRes = await fetch(chunkUrl, { headers });
-              if (chunkRes.ok) {
-                const chunkJson = await chunkRes.json();
-                const chunkData = JSON.parse(decodeURIComponent(escape(atob(chunkJson.content))));
-                if (chunkData.folders) allFolders.push(...chunkData.folders);
-                if (chunkData.files) allFiles.push(...chunkData.files);
-                if (chunkData.textBubbles) allBubbles.push(...chunkData.textBubbles);
-              }
-            }
-
-            state.folders = allFolders.length > 0 ? allFolders : state.folders;
-            state.files = allFiles.length > 0 ? allFiles : state.files;
-            state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
-
-            for (let file of state.files) {
-              if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/'))) {
-                await getOrCreateBlobUrl(file);
-              }
-            }
-
-            for (let f of state.folders) await saveFolder(f);
-            for (let fi of state.files) await saveFile(fi);
-            for (let b of state.textBubbles) await saveTextBubble(b);
-            alert('Synced chunks down from Cloud successfully!');
-            state.isSyncing = false;
-            render();
-            return;
-          }
-        }
-
-        const sanitizedFiles = state.files.map(file => {
-          const copy = { ...file };
-          delete copy.blobUrl;
-          return copy;
-        });
-
-        const CHUNK_SIZE = 15;
-        const fileChunks = [];
-        for (let i = 0; i < sanitizedFiles.length; i += CHUNK_SIZE) {
-          fileChunks.push(sanitizedFiles.slice(i, i + CHUNK_SIZE));
-        }
-        if (fileChunks.length === 0) fileChunks.push([]);
-
-        const chunkFileNames = [];
-
-        for (let index = 0; index < fileChunks.length; index++) {
-          const chunkFileName = `chunk_${index}.json`;
-          chunkFileNames.push(chunkFileName);
-          const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
-
-          let chunkSha = null;
-          const existingChunkRes = await fetch(chunkUrl, { headers });
-          if (existingChunkRes.ok) {
-            const existingData = await existingChunkRes.json();
-            chunkSha = existingData.sha;
-          }
-
-          const chunkPayloadData = {
-            folders: index === 0 ? state.folders : [],
-            files: fileChunks[index],
-            textBubbles: index === 0 ? state.textBubbles : []
-          };
-
-          const chunkPutPayload = {
-            message: `Sync Aiden Files Chunk ${index}`,
-            content: btoa(unescape(encodeURIComponent(JSON.stringify(chunkPayloadData)))),
-            ...(chunkSha && { sha: chunkSha })
-          };
-
-          let putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
-          if (putRes.status === 500) {
-            await new Promise(r => setTimeout(r, 1500));
-            putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
-          }
-          if (!putRes.ok) {
-            throw new Error(`Failed to upload chunk ${index} (status ${putRes.status})`);
-          }
-        }
-
-        let metaSha = null;
-        const existingMetaRes = await fetch(metaUrl, { headers });
-        if (existingMetaRes.ok) {
-          const metaJson = await existingMetaRes.json();
-          metaSha = metaJson.sha;
-        }
-
-        const metaManifest = { chunks: chunkFileNames, updatedAt: new Date().toISOString() };
-        const metaPutPayload = {
-          message: 'Update Aiden Files Manifest',
-          content: btoa(unescape(encodeURIComponent(JSON.stringify(metaManifest)))),
-          ...(metaSha && { sha: metaSha })
-        };
-
-        const metaPutRes = await fetch(metaUrl, { method: 'PUT', headers, body: JSON.stringify(metaPutPayload) });
-        if (!metaPutRes.ok) {
-          throw new Error('Failed to update manifest file on GitHub.');
-        }
-
-        alert('Chunked Sync Successful! Cloud backup updated safely without server errors.');
-      } catch (err) {
-        alert('Sync error: ' + err.message);
-      } finally {
-        state.isSyncing = false;
-        render();
-      }
-    }
-
-    // --- RENDER & UI ---
-    function render() {
-      const app = document.getElementById('app');
-      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
-      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
-      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
-      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
-      const allChildrenSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
-
-      if (state.editMode) {
-        document.body.classList.add('edit-mode');
-      } else {
-        document.body.classList.remove('edit-mode');
-      }
-
-      app.innerHTML = `
-        <header class="shrink-0 z-35 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
-          <div class="flex items-center gap-1.5 shrink-0">
-            <button onclick="navigateTo(null)" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shrink-0">
-              <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
-            </button>
-            <button onclick="openNewFolderModal()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-zinc-700/60 shadow-sm cursor-pointer shrink-0">
-              <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
-            </button>
-            <button onclick="openUploadModal()" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer shrink-0">
-              <i data-lucide="plus" class="w-4 h-4 stroke-[3]"></i> Add Item
-            </button>
-            <button onclick="syncWithGitHub()" class="px-2.5 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 flex items-center gap-1.5 shadow-sm shrink-0">
-              <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-3.5 h-3.5 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
-              <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
-            </button>
-            <button onclick="resetToken()" title="Update GitHub token" class="p-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl text-zinc-400 hover:text-zinc-200 shrink-0">
-              <i data-lucide="key" class="w-3.5 h-3.5"></i>
-            </button>
-            <button onclick="forcePullCloudData()" title="Force Pull from Cloud" class="px-2.5 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl text-xs font-bold text-amber-400 flex items-center gap-1.5 shadow-sm shrink-0">
-              <i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
-              <span>Pull Cloud</span>
-            </button>
-            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0 border-l border-zinc-800">
-              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
-              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
-            </div>
-            ${state.selectMode ? `
-              <button onclick="toggleSelectAll()" class="px-2.5 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1 shadow-sm shrink-0">
-                <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-3.5 h-3.5"></i>
-                ${allChildrenSelected ? 'Deselect All' : 'Select All'}
-              </button>
-            ` : ''}
-            <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-              ${state.selectMode ? 'Cancel' : 'Select'}
-            </button>
-            <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-              ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
-            </button>
-          </div>
-        </header>
-
-        <main onclick="closeMenu()" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}">
-          ${items.length === 0 ? `
-            <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
-              <span>Folder is empty</span>
-              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
-                <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
-              </button>
-            </div>
-          ` : `
-            <div class="relative min-w-[1200px] min-h-[1200px] p-4">
-              ${items.map((item, index) => renderItem(item, index)).join('')}
-            </div>
-          `}
-        </main>
-
-        ${state.selectMode && state.selectedIds.length > 0 ? `
-          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-5">
-            <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
-            <div class="h-4 w-px bg-zinc-800"></div>
-            <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard</button>
-            <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move</button>
-            <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> iOS Share</button>
-            <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
-          </div>
-        ` : ''}
-
-        ${state.showUploadModal ? renderUploadModal() : ''}
-        ${state.quickViewFileId ? renderQuickViewModal() : ''}
-        ${state.textEditorModal ? renderTextEditorModal() : ''}
-      `;
-
-      if (window.lucide) window.lucide.createIcons();
-      attachDragAndResizeListeners();
-    }
-
-    function getFileIcon(type, name) {
-      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm')) return 'video';
-      if (type.startsWith('audio/')) return 'music';
-      if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
-      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.html') || name.endsWith('.json') || name.endsWith('.csv')) return 'file-text';
-      if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'file-spreadsheet';
-      return 'file';
-    }
-
-    function renderItem(item, index) {
-      const col = index % 4;
-      const row = Math.floor(index / 4);
-      const posX = item.x !== undefined ? item.x : (20 + col * 140);
-      const posY = item.y !== undefined ? item.y : (20 + row * 160);
-      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
-      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
-      const folder = isFolder(item);
-      const bubble = isBubble(item);
-      const isMenuOpen = state.activeMenuId === item.id;
-      const isSelected = state.selectedIds.includes(item.id);
-
-      if (bubble) {
-        const fontSizeClass = item.fontSize === 'lg' ? 'text-base' : item.fontSize === 'sm' ? 'text-[10px]' : 'text-[11px]';
-        const fontWeightStyle = item.isBold ? 'font-bold' : 'font-medium';
-        const fontStyleStyle = item.isItalic ? 'italic' : '';
-        const fontUnderlineStyle = item.isUnderline ? 'underline' : '';
-
-        return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
-              ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
-              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-45 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
-            </div>
-            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
-            ${isMenuOpen ? renderContextMenu(item, false, true) : ''}
-          </div>
-        `;
-      } else if (folder) {
-        return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
-            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
-              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[20px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
-              ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
-              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-45 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
-            </div>
-            <span class="text-[11px] font-medium text-zinc-300 w-full truncate text-center mt-1.5 pointer-events-none">${item.name}</span>
-            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
-            ${isMenuOpen ? renderContextMenu(item, true) : ''}
-          </div>
-        `;
-      } else {
-        const type = item.fileType || '';
-        const isImage = type.startsWith('image/');
-        const isVideo = type.startsWith('video/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm');
-        const imgSrc = item.dataUrl || item.thumbnailData;
-        const icon = getFileIcon(type, item.name);
-
-        return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
-              <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                ${isImage && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
-                  <div class="flex flex-col items-center gap-1 text-zinc-400">
-                    <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
-                    ${isVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
-                    ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
-                    ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
-                    ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
-                  </div>
-                `}
-                ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
-                <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-45 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
-              </div>
-            </div>
-            <span class="text-[11px] font-medium text-zinc-300 w-full truncate text-center mt-1.5 pointer-events-none">${item.name}</span>
-            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
-            ${isMenuOpen ? renderContextMenu(item, false) : ''}
-          </div>
-        `;
-      }
-    }
-
-    function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
-      if (isBubbleItem) {
-        return `
-          <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-zinc-950/98 border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
-            <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
-            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
-            <div class="h-px bg-zinc-800 my-1"></div>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
-          </div>
-        `;
-      }
-      return `
-        <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-zinc-950/98 border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-          ${isFolderItem ? `
-            <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
-            <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="moveToFolder('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
-            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
-            <div class="h-px bg-zinc-800 my-1"></div>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
-          ` : `
-            <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
-            <button type="button" onclick="openTextEditorModal(null, '${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
-            <button type="button" onclick="copySingleFileClipboard('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Copy to Clipboard</button>
-            <button type="button" onclick="shareFile('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="share" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> iOS Share</button>
-            <button type="button" onclick="triggerChangeImage('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change Image</button>
-            <button type="button" onclick="renameItem('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="moveToFolder('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
-            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
-            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
-            <div class="h-px bg-zinc-800 my-1"></div>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
-          `}
+    <header>
+        <div class="logo-area">
+            <span class="logo-icon">⚓</span>
+            <h1>Companion & Body Double</h1>
         </div>
-      `;
-    }
-
-    function renderUploadModal() {
-      return `
-        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeUploadModal()">
-          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
-            <h3 class="text-lg font-bold text-white">Add Item</h3>
-            <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
-            <div class="flex flex-col gap-2.5 mt-2">
-              <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
-              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
-              <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
-              <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
-            </div>
-            <button onclick="closeUploadModal()" class="text-xs text-zinc-500 hover:text-zinc-300 mt-2 font-medium">Cancel</button>
-          </div>
+        <div class="header-controls">
+            <select id="themeSelector" onchange="setTheme(this.value)">
+                <option value="dark">Dark Theme</option>
+                <option value="light">Light Theme</option>
+                <option value="gothic">Gothic Camp Glamour</option>
+            </select>
+            <button onclick="saveSessionState()" title="Save Session State">💾 Save</button>
+            <button onclick="loadSessionState()" title="Load Session State">📂 Load</button>
         </div>
-      `;
-    }
+    </header>
 
-    function renderTextEditorModal() {
-      const ed = state.textEditorModal;
-      if (!ed) return '';
-
-      return `
-        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
-          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl" onclick="event.stopPropagation()">
-            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 class="text-sm font-bold text-white">${ed.isNew ? 'New Text Bubble' : 'Edit Text Bubble'}</h3>
-              <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+    <main>
+        <!-- Left Panel: Presence & Body Double -->
+        <section class="panel">
+            <div class="panel-title">
+                <span>Active Presence</span>
+                <span class="status-indicator"><span class="status-dot"></span> Online</span>
             </div>
             
-            <!-- Formatting Toolbar -->
-            <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
-              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
-              </div>
-              <div class="h-5 w-px bg-zinc-800"></div>
-              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
-                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
-                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
-              </div>
+            <div class="companion-display">
+                <div class="avatar-circle pulse" id="avatarCircle">✨</div>
+                <div id="companionSpeech" style="font-size: 0.875rem; text-align: center; color: var(--text-muted); padding: 0 1rem;">
+                    "I'm right here with you. Take a breath, let's tackle things one step at a time."
+                </div>
             </div>
 
-            <!-- Textarea -->
-            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal">${ed.text || ''}</textarea>
-
-            <div class="flex items-center justify-end gap-3 pt-2">
-              <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveTextEditorModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Bubble</button>
+            <div class="voice-controls">
+                <button class="primary" id="micBtn" onclick="toggleVoice()">🎙️ Speak</button>
+                <button id="listenBtn" onclick="toggleAudioOutput()">🔊 Voice: On</button>
             </div>
-          </div>
+
+            <div class="panel-title" style="margin-top: 1rem;">
+                <span>Grounding Tools</span>
+            </div>
+            <div class="quick-grounding">
+                <button onclick="triggerGrounding('breath')">🧘 Box Breathing</button>
+                <button onclick="triggerGrounding('54321')">👁️ 5-4-3-2-1 Ground</button>
+                <button onclick="triggerGrounding('water')">💧 Drink Water Reminder</button>
+            </div>
+
+            <div style="margin-top: auto;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Presence Vibe / Mode</label>
+                <select id="vibeSelector" style="width: 100%; margin-top: 0.25rem;" onchange="changeVibe(this.value)">
+                    <option value="gentle">Gentle & Reassuring</option>
+                    <option value="focused">High-Focus Body Double</option>
+                    <option value="playful">Playful & Camp</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- Center Panel: Task Management & Micro-steps -->
+        <section class="panel">
+            <div class="panel-title">
+                <span>Task Management & Breakdown</span>
+                <span id="taskCounter" style="font-size: 0.75rem; color: var(--text-muted);">0 completed</span>
+            </div>
+
+            <div class="task-input-group">
+                <input type="text" id="taskInput" placeholder="Add a task or overwhelming goal..." onkeypress="handleTaskKey(event)">
+                <button class="primary" onclick="addTask()">Add</button>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem;">
+                <button style="flex: 1; font-size: 0.75rem;" onclick="breakdownTask()">🪄 Break Down Task (AI)</button>
+            </div>
+
+            <div class="scrollable-content" id="taskList">
+                <!-- Dynamic tasks inserted here -->
+            </div>
+
+            <div class="panel-title" style="margin-top: 1rem;">
+                <span>Documents & Files</span>
+            </div>
+            
+            <div class="file-upload-zone" onclick="document.getElementById('fileInput').click()">
+                📂 Tap or upload document (PDF, TXT, HTML, JSON, DOCX, etc.)
+                <input type="file" id="fileInput" style="display: none;" multiple onchange="handleFileUpload(event)">
+            </div>
+
+            <div class="document-list" id="documentList">
+                <!-- Uploaded files appear here -->
+            </div>
+        </section>
+
+        <!-- Right Panel: Grounding & Unrestricted Companion Chat -->
+        <section class="panel">
+            <div class="panel-title">
+                <span>Companion Chat & Deep Dive</span>
+                <button style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="clearChat()">Clear</button>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message companion">
+                    Hello! I am your companion and body double. Whether you're dealing with task paralysis, overwhelm, or just need a safe, unrestricted space to think out loud—I am here. How can we start?
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Type a message or share what's on your mind..." onkeypress="handleChatKey(event)">
+                <button class="primary" onclick="sendChatMessage()">Send</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Document Viewer Modal -->
+    <div class="document-viewer-modal" id="docViewerModal">
+        <div class="document-viewer-content">
+            <div class="document-viewer-header">
+                <span id="modalDocTitle" style="font-weight: 600;">Document Title</span>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="primary" id="modalDownloadPdfBtn" onclick="downloadFullPdf()">Download Full PDF</button>
+                    <button onclick="closeDocViewer()">✕ Close</button>
+                </div>
+            </div>
+            <div class="document-viewer-body" id="modalDocBody">
+                <!-- Document full content preview / text -->
+            </div>
         </div>
-      `;
-    }
+    </div>
 
-    function renderQuickViewContent(file) {
-      const type = file.fileType || '';
-      const name = file.name || '';
-      const mediaUrl = file.blobUrl || file.dataUrl;
-      const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
-      
-      if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
-      if (type.startsWith('audio/')) {
-        return `
-          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
-            <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
-            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
-            <audio controls playsinline autoplay class="w-full" src="${mediaUrl}"></audio>
-          </div>
-        `;
-      }
-      if (type === 'application/pdf' || name.endsWith('.pdf')) {
-        return `
-          <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
-              <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
-            </div>
-            <div class="flex-1 w-full h-full bg-zinc-950 relative">
-              <iframe src="${file.dataUrl}#view=FitH" class="w-full h-full border-0 bg-white"></iframe>
-            </div>
-          </div>
-        `;
-      }
-      if (name.endsWith('.html') || name.endsWith('.htm') || type === 'text/html') {
-        return `
-          <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
-              <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
-            </div>
-            <div class="flex-1 w-full h-full bg-white relative">
-              <iframe src="${file.dataUrl}" class="w-full h-full border-0"></iframe>
-            </div>
-          </div>
-        `;
-      }
-      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.json') || name.endsWith('.csv') || name.endsWith('.md')) {
-        return `
-          <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
-              <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
-            </div>
-            <div class="flex-1 w-full h-full bg-zinc-950 p-4 overflow-auto">
-              <pre class="text-xs font-mono text-zinc-200 whitespace-pre-wrap select-text">${file.textContent || (file.dataUrl ? atob(file.dataUrl.split(',')[1] || '') : '')}</pre>
-            </div>
-          </div>
-        `;
-      }
-      if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.pptx')) {
-        return `
-          <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
-              <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Document</a>
-            </div>
-            <div class="flex-1 w-full h-full bg-zinc-950 flex flex-col items-center justify-center p-8 text-center gap-4">
-              <i data-lucide="file-spreadsheet" class="w-16 h-16 text-amber-400"></i>
-              <span class="text-sm font-semibold text-zinc-200">${file.name}</span>
-              <p class="text-xs text-zinc-400 max-w-md">Office documents can be downloaded or viewed directly using the button above.</p>
-            </div>
-          </div>
-        `;
-      }
-      return `
-        <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-          <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
-            <span class="font-semibold truncate">${file.name}</span>
-            <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
-          </div>
-          <div class="flex-1 w-full h-full bg-zinc-950 flex flex-col items-center justify-center p-8 text-center gap-4">
-            <i data-lucide="file-text" class="w-16 h-16 text-amber-400"></i>
-            <span class="text-sm font-semibold text-zinc-200">${file.name}</span>
-          </div>
-        </div>
-      `;
-    }
+    <script>
+        let tasks = [];
+        let documents = [];
+        let chatHistory = [];
+        let isVoiceActive = false;
+        let isAudioOutputOn = true;
+        let currentVibe = 'gentle';
 
-    function renderQuickViewModal() {
-      const file = state.files.find(f => f.id === state.quickViewFileId);
-      if (!file) return '';
-      return `
-        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
-          <div class="flex items-center justify-between text-zinc-300 pt-2 px-4 shrink-0" onclick="event.stopPropagation()">
-            <span class="text-sm font-semibold truncate max-w-[200px]">${file.name}</span>
-            <button onclick="closeQuickView()" class="p-2 bg-zinc-900 border border-zinc-800 rounded-full hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-          </div>
-          <div class="flex-1 flex items-center justify-center overflow-hidden my-2 px-2" onclick="event.stopPropagation()">${renderQuickViewContent(file)}</div>
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 flex items-center justify-center gap-8 text-xs font-semibold text-zinc-200 shrink-0" onclick="event.stopPropagation()">
-            <button onclick="copySingleFileClipboard('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="copy" class="w-5 h-5"></i> Copy</button>
-            <button onclick="moveToFolder('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="folder-output" class="w-5 h-5"></i> Move</button>
-            <button onclick="shareFile('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="share" class="w-5 h-5"></i> Share</button>
-            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 text-red-400 hover:text-red-300"><i data-lucide="trash-2" class="w-5 h-5"></i> Delete</button>
-          </div>
-        </div>
-      `;
-    }
-
-    function toggleSelectMode() { state.selectMode = !state.selectMode; state.selectedIds = []; closeMenu(); render(); }
-    function toggleSelectAll() {
-      const items = [
-        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-        ...state.files.filter(f => f.parentId === state.currentFolderId),
-        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-      ];
-      const allSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
-      state.selectedIds = allSelected ? [] : items.map(item => item.id);
-      render();
-    }
-
-    function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
-      if (state.selectMode) {
-        state.selectedIds = state.selectedIds.includes(id) ? state.selectedIds.filter(i => i !== id) : [...state.selectedIds, id];
-        render();
-        return;
-      }
-      if (isFolderItem) navigateTo(id); 
-      else if (isBubbleItem) openTextEditorModal(id);
-      else openQuickView(id);
-    }
-
-    function openUploadModal() { state.showUploadModal = true; render(); }
-    function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); render(); }
-    function closeQuickView() { state.quickViewFileId = null; render(); }
-    function navigateTo(id) { state.currentFolderId = id; closeMenu(); render(); }
-    function toggleEditMode() { 
-      state.editMode = !state.editMode; 
-      closeMenu(); 
-      render(); 
-    }
-    function toggleMenu(e, id) {
-      e.stopPropagation();
-      state.activeMenuId = state.activeMenuId === id ? null : id;
-      render();
-    }
-    function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
-    function forcePullCloudData() { syncWithGitHub(true); }
-
-    // --- TEXT EDITOR MODAL LOGIC (SURGICAL FORMATTING FOR SELECTED TEXT) ---
-    function openTextEditorModal(bubbleId = null, referenceItemId = null) {
-      closeMenu();
-      if (bubbleId) {
-        const bubble = state.textBubbles.find(b => b.id === bubbleId);
-        if (bubble) {
-          state.textEditorModal = {
-            id: bubble.id,
-            text: bubble.text || '',
-            fontSize: bubble.fontSize || 'md',
-            isBold: !!bubble.isBold,
-            isItalic: !!bubble.isItalic,
-            isUnderline: !!bubble.isUnderline,
-            isNew: false
-          };
-        }
-      } else {
-        state.textEditorModal = {
-          id: null,
-          text: '',
-          fontSize: 'md',
-          isBold: false,
-          isItalic: false,
-          isUnderline: false,
-          isNew: true,
-          referenceItemId: referenceItemId
-        };
-      }
-      render();
-      setTimeout(() => {
-        const ta = document.getElementById('modal-text-input');
-        if (ta) {
-          ta.focus();
-          ta.setSelectionRange(ta.value.length, ta.value.length);
-        }
-      }, 50);
-    }
-
-    function closeTextEditorModal() {
-      state.textEditorModal = null;
-      render();
-    }
-
-    function updateTextEditorContent(val) {
-      if (state.textEditorModal) {
-        state.textEditorModal.text = val;
-      }
-    }
-
-    function applyTextEditorFormat(formatKey, value = null) {
-      if (!state.textEditorModal) return;
-      const ta = document.getElementById('modal-text-input');
-      if (!ta) return;
-
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const text = ta.value;
-
-      if (formatKey === 'fontSize') {
-        state.textEditorModal.fontSize = value;
-        ta.focus();
-        return;
-      }
-
-      let wrapper = '';
-      if (formatKey === 'isBold') wrapper = '**';
-      if (formatKey === 'isItalic') wrapper = '*';
-
-      if (start !== end) {
-        const selectedText = text.substring(start, end);
-        let wrapped = '';
-        if (formatKey === 'isBold') wrapped = `**${selectedText}**`;
-        else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
-        else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
-
-        ta.value = text.substring(0, start) + wrapped + text.substring(end);
-        state.textEditorModal.text = ta.value;
-        ta.focus();
-        ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
-      } else {
-        if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
-        if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
-        if (formatKey === 'isUnderline') state.textEditorModal.isUnderline = !state.textEditorModal.isUnderline;
-        render();
-        setTimeout(() => {
-          const newTa = document.getElementById('modal-text-input');
-          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
-        }, 30);
-      }
-    }
-
-    async function saveTextEditorModal() {
-      const ed = state.textEditorModal;
-      if (!ed) return;
-      const textVal = ed.text.trim();
-      if (!textVal) {
-        alert('Please enter some text for the bubble.');
-        return;
-      }
-
-      const lines = textVal.split('\n').length + Math.floor(textVal.length / 22);
-      const dynamicHeight = Math.max(80, lines * 22);
-
-      if (ed.isNew) {
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-
-        let posX = 20, posY = 20;
-        if (ed.referenceItemId) {
-          const refItem = allExisting.find(i => i.id === ed.referenceItemId);
-          if (refItem && refItem.x !== undefined && refItem.y !== undefined) {
-            posX = refItem.x + (refItem.width || 140) + 24;
-            posY = refItem.y;
-          }
-        } else if (allExisting.length > 0) {
-          const lastItem = allExisting[allExisting.length - 1];
-          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-          const lastW = lastItem.width || 140;
-          
-          posX = lastX + lastW + 24;
-          posY = lastY;
-          if (posX > 1000) {
-            posX = 20;
-            posY = lastY + 160;
-          }
+        // Theme management
+        function setTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            localStorage.setItem('companion_theme', theme);
         }
 
-        const bubble = {
-          id: uid(),
-          isBubble: true,
-          text: textVal,
-          parentId: state.currentFolderId,
-          x: posX,
-          y: posY,
-          width: 140,
-          height: dynamicHeight,
-          fontSize: ed.fontSize,
-          isBold: ed.isBold,
-          isItalic: ed.isItalic,
-          isUnderline: ed.isUnderline
-        };
-        state.textBubbles.push(bubble);
-        await saveTextBubble(bubble);
-      } else {
-        const bubble = state.textBubbles.find(b => b.id === ed.id);
-        if (bubble) {
-          bubble.text = textVal;
-          bubble.height = dynamicHeight;
-          bubble.fontSize = ed.fontSize;
-          bubble.isBold = ed.isBold;
-          bubble.isItalic = ed.isItalic;
-          bubble.isUnderline = ed.isUnderline;
-          await saveTextBubble(bubble);
-        }
-      }
-
-      state.textEditorModal = null;
-      render();
-    }
-
-    async function bulkDelete() {
-      if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
-      for (let id of state.selectedIds) {
-        state.folders = state.folders.filter(f => f.id !== id);
-        state.files = state.files.filter(f => f.id !== id);
-        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        await deleteFromDB('folders', id);
-        await deleteFromDB('files', id);
-        await deleteFromDB('textBubbles', id);
-      }
-      state.selectedIds = [];
-      render();
-    }
-
-    async function bulkMove() {
-      const targetFolders = state.folders.filter(f => !state.selectedIds.includes(f.id));
-      const targetId = prompt("Enter destination folder ID or 'root':\n" + targetFolders.map(f => `- ${f.name} (${f.id})`).join('\n'), 'root');
-      if (targetId) {
-        const actualParent = targetId === 'root' ? null : targetId;
-        for (let id of state.selectedIds) {
-          let f = state.folders.find(item => item.id === id);
-          let fi = state.files.find(item => item.id === id);
-          let b = state.textBubbles.find(item => item.id === id);
-          if (f) { f.parentId = actualParent; await saveFolder(f); }
-          if (fi) { fi.parentId = actualParent; await saveFile(fi); }
-          if (b) { b.parentId = actualParent; await saveTextBubble(b); }
-        }
-        state.selectedIds = [];
-        render();
-      }
-    }
-
-    async function bulkCopy() {
-      for (let id of state.selectedIds) {
-        let file = state.files.find(f => f.id === id);
-        if (file) {
-          const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
-          delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) await getOrCreateBlobUrl(newFile);
-          state.files.push(newFile);
-          await saveFile(newFile);
-        }
-      }
-      alert(`Successfully copied ${state.selectedIds.length} items to clipboard / internal storage!`);
-      state.selectedIds = [];
-      render();
-    }
-
-    async function bulkShare() {
-      for (let id of state.selectedIds) {
-        await shareFile(id, true);
-      }
-    }
-
-    async function copySingleFileClipboard(id) {
-      const file = state.files.find(f => f.id === id);
-      if (!file) return;
-      
-      try {
-        if (file.dataUrl && navigator.clipboard && window.ClipboardItem) {
-          const res = await fetch(file.dataUrl);
-          const blob = await res.blob();
-          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-          alert('File copied to clipboard successfully!');
-          closeMenu();
-          render();
-          return;
-        }
-        if (file.textContent && navigator.clipboard) {
-          await navigator.clipboard.writeText(file.textContent);
-          alert('Text content copied to clipboard successfully!');
-          closeMenu();
-          render();
-          return;
-        }
-      } catch (e) {
-        console.warn('Direct clipboard API restricted, falling back to data duplicate', e);
-      }
-
-      const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
-      delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) {
-        await getOrCreateBlobUrl(newFile);
-      }
-      state.files.push(newFile);
-      await saveFile(newFile);
-      alert('Copied file successfully inside Aiden Files!');
-      closeMenu();
-      render();
-    }
-
-    async function shareFile(id, isBulk = false) {
-      const file = state.files.find(f => f.id === id);
-      if (!file) return;
-      if (navigator.canShare && file.dataUrl) {
-        try {
-          const res = await fetch(file.dataUrl);
-          const blob = await res.blob();
-          const nativeFile = new File([blob], file.name, { type: file.fileType || blob.type });
-          if (navigator.canShare({ files: [nativeFile] })) {
-            await navigator.share({ files: [nativeFile], title: file.name });
-            if (!isBulk) closeMenu();
-            return;
-          }
-        } catch (e) {}
-      }
-      if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: file.dataUrl });
-      else if (!isBulk) alert('Sharing is not supported on this device.');
-      if (!isBulk) closeMenu();
-    }
-
-    function triggerFolderCover(id) { state.targetFolderCoverId = id; document.getElementById('folder-cover-input').click(); closeMenu(); }
-    document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file && state.targetFolderCoverId) {
-        const base64 = await fileToBase64(file);
-        const folder = state.folders.find(f => f.id === state.targetFolderCoverId);
-        if (folder) { folder.coverUrl = base64; await saveFolder(folder); render(); }
-      }
-    });
-
-    function triggerChangeImage(id) { state.targetChangeImageId = id; document.getElementById('change-image-input').click(); closeMenu(); }
-    document.getElementById('change-image-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file && state.targetChangeImageId) {
-        const base64 = await fileToBase64(file);
-        const item = state.files.find(f => f.id === state.targetChangeImageId);
-        if (item) {
-          item.dataUrl = base64;
-          if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
-          await saveFile(item);
-          render();
-        }
-      }
-    });
-
-    async function renameItem(id, isFolderItem) {
-      const item = isFolderItem ? state.folders.find(f => f.id === id) : state.files.find(f => f.id === id);
-      if (item) {
-        const newName = prompt('Rename item:', item.name);
-        if (newName && newName.trim() !== '') {
-          item.name = newName.trim();
-          if (isFolderItem) await saveFolder(item); else await saveFile(item);
-          closeMenu();
-          render();
-        }
-      }
-    }
-
-    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
-      const targetFolders = state.folders.filter(f => f.id !== id);
-      const targetId = prompt("Enter destination folder ID or 'root':\n" + targetFolders.map(f => `- ${f.name} (${f.id})`).join('\n'), 'root');
-      if (targetId) {
-        const actualParent = targetId === 'root' ? null : targetId;
-        const item = isFolderItem ? state.folders.find(f => f.id === id) : isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id);
-        if (item) {
-          item.parentId = actualParent; delete item.x; delete item.y;
-          if (isFolderItem) await saveFolder(item); 
-          else if (isBubbleItem) await saveTextBubble(item);
-          else await saveFile(item);
-          closeMenu(); render();
-        }
-      }
-    }
-
-    function resizeByFinger(id, isFolderItem) {
-      const el = document.getElementById(`item-${id}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const handle = el.querySelector('.resize-handle');
-        if (handle) {
-          handle.classList.add('ring-4', 'ring-amber-400');
-          setTimeout(() => handle.classList.remove('ring-4', 'ring-amber-400'), 1500);
-        }
-      }
-      closeMenu();
-    }
-
-    async function snapToOriginalShape(id) {
-      const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-      if (item) {
-        item.width = isFolder(item) ? 96 : isBubble(item) ? 140 : 112;
-        item.height = isFolder(item) ? 96 : isBubble(item) ? (Math.max(80, (item.text?.split('\n').length || 1) * 22)) : 144;
-        if (isFolder(item)) await saveFolder(item); 
-        else if (isBubble(item)) await saveTextBubble(item);
-        else await saveFile(item);
-        closeMenu(); render();
-      }
-    }
-
-    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
-      if (!confirm('Are you sure you want to delete this item?')) return;
-      if (isFolderItem) {
-        state.folders = state.folders.filter(f => f.id !== id);
-        await deleteFromDB('folders', id);
-      } else if (isBubbleItem) {
-        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        await deleteFromDB('textBubbles', id);
-      } else {
-        state.files = state.files.filter(f => f.id !== id);
-        await deleteFromDB('files', id);
-      }
-      closeMenu();
-      render();
-    }
-
-    function openNewFolderModal() {
-      const name = prompt('Folder Name:', 'New Folder');
-      if (name && name.trim() !== '') {
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-
-        let targetX = 20, targetY = 20;
-        if (allExisting.length > 0) {
-          const lastItem = allExisting[allExisting.length - 1];
-          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-          const lastW = lastItem.width || 96;
-          
-          targetX = lastX + lastW + 24;
-          targetY = lastY;
-          if (targetX > 1000) {
-            targetX = 20;
-            targetY = lastY + 160;
-          }
+        // Initialize saved theme
+        const savedTheme = localStorage.getItem('companion_theme');
+        if (savedTheme) {
+            document.body.setAttribute('data-theme', savedTheme);
+            document.getElementById('themeSelector').value = savedTheme;
         }
 
-        const folder = { id: uid(), name: name.trim(), parentId: state.currentFolderId, x: targetX, y: targetY, width: 96, height: 96 };
-        state.folders.push(folder);
-        saveFolder(folder);
-        render();
-      }
-    }
+        // Task management functions
+        function addTask() {
+            const input = document.getElementById('taskInput');
+            const text = input.value.trim();
+            if (!text) return;
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-      });
-    }
-
-    function fileToText(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-        reader.readAsText(file);
-      });
-    }
-
-    function getMimeType(file) {
-      if (file.type && file.type !== '') return file.type;
-      const ext = file.name.split('.').pop().toLowerCase();
-      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'pdf': 'application/pdf', 'txt': 'text/plain', 'html': 'text/html', 'htm': 'text/html', 'json': 'application/json'};
-      return mimeMap[ext] || 'application/octet-stream';
-    }
-
-    async function handleFileImport(files) {
-      const fileList = Array.from(files);
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        let dataUrl = await fileToBase64(file);
-        let textContent = null;
-        let inferredType = getMimeType(file);
-        let blobUrl = '';
-
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
-          blobUrl = URL.createObjectURL(file);
-        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
-          try { textContent = await fileToText(file); } catch (e) {}
+            tasks.push({ id: Date.now(), text: text, completed: false });
+            input.value = '';
+            renderTasks();
         }
 
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-
-        let targetX = 20;
-        let targetY = 20;
-        if (allExisting.length > 0) {
-          const lastItem = allExisting[allExisting.length - 1];
-          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-          const lastW = lastItem.width || 112;
-          
-          targetX = lastX + lastW + 24;
-          targetY = lastY;
-          if (targetX > 1000) {
-            targetX = 20;
-            targetY = lastY + 160;
-          }
+        function handleTaskKey(event) {
+            if (event.key === 'Enter') addTask();
         }
 
-        const item = {
-          id: uid(),
-          name: file.name,
-          fileType: inferredType,
-          size: file.size,
-          dataUrl: dataUrl,
-          blobUrl: blobUrl,
-          textContent: textContent,
-          parentId: state.currentFolderId,
-          x: targetX,
-          y: targetY,
-          width: 112,
-          height: 144
-        };
+        function toggleTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                renderTasks();
+            }
+        }
 
-        state.files.push(item);
-        await saveFile(item);
-      }
-      render();
-    }
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            renderTasks();
+        }
 
-    document.getElementById('file-input').addEventListener('change', (e) => handleFileImport(e.target.files));
-    document.getElementById('photo-input').addEventListener('change', (e) => handleFileImport(e.target.files));
+        function renderTasks() {
+            const list = document.getElementById('taskList');
+            list.innerHTML = '';
+            let completedCount = 0;
 
-    function attachDragAndResizeListeners() {
-      const elements = document.querySelectorAll('[data-id]');
-      elements.forEach(el => {
-        let activeDrag = false, activeResize = false;
-        let startX, startY, origX, origY, origW, origH;
-        const resizeHandle = el.querySelector('.resize-handle');
+            tasks.forEach(t => {
+                if (t.completed) completedCount++;
+                const div = document.createElement('div');
+                div.className = `task-item ${t.completed ? 'completed' : ''}`;
+                div.innerHTML = `
+                    <div class="task-left">
+                        <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="toggleTask(${t.id})">
+                        <span>${escapeHtml(t.text)}</span>
+                    </div>
+                    <button class="icon-btn" onclick="deleteTask(${t.id})" title="Delete">🗑️</button>
+                `;
+                list.appendChild(div);
+            });
 
-        const onStart = (e) => {
-          if (!state.editMode) return;
-          if (e.target.closest('button') || e.target.closest('textarea')) return;
-          const touch = e.touches ? e.touches[0] : e;
-          startX = touch.clientX; startY = touch.clientY;
-          
-          if (e.target === resizeHandle || resizeHandle?.contains(e.target)) {
-            activeResize = true;
-            origW = el.offsetWidth;
-            origH = el.offsetHeight;
-            e.stopPropagation();
-          } else {
-            activeDrag = true;
-            origX = parseInt(el.style.left) || 0;
-            origY = parseInt(el.style.top) || 0;
-          }
-        };
+            document.getElementById('taskCounter').innerText = `${completedCount}/${tasks.length} completed`;
+        }
 
-        const onMove = (e) => {
-          if (!state.editMode || (!activeDrag && !activeResize)) return;
-          const touch = e.touches ? e.touches[0] : e;
-          const dx = touch.clientX - startX, dy = touch.clientY - startY;
-          
-          if (activeDrag) {
-            el.style.left = `${Math.round(Math.max(8, origX + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-            el.style.top = `${Math.round(Math.max(8, origY + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-          } else if (activeResize) {
-            el.style.width = `${Math.max(64, origW + dx)}px`;
-            el.style.height = `${Math.max(64, origH + dy)}px`;
-          }
-        };
+        function breakdownTask() {
+            if (tasks.length === 0) {
+                appendChatMessage("Companion", "Add an overwhelming task first, and I'll help you break it down into tiny, manageable micro-steps!");
+                return;
+            }
+            const lastTask = tasks[tasks.length - 1];
+            appendChatMessage("Companion", `Let's break down "${lastTask.text}" into 3 simple steps: 1. Gather materials, 2. Do the first 5 minutes, 3. Take a breather. You've got this!`);
+        }
 
-        const onEnd = () => {
-          if (!activeDrag && !activeResize) return;
-          const itemId = el.getAttribute('data-id');
-          const target = state.folders.find(f => f.id === itemId) || state.files.find(f => f.id === itemId) || state.textBubbles.find(b => b.id === itemId);
-          if (target) {
-            if (activeDrag) { target.x = parseInt(el.style.left); target.y = parseInt(el.style.top); }
-            if (activeResize) { target.width = parseInt(el.style.width); target.height = parseInt(el.style.height); }
-            if (isFolder(target)) saveFolder(target); 
-            else if (isBubble(target)) saveTextBubble(target);
-            else saveFile(target);
-          }
-          activeDrag = false; activeResize = false;
-        };
+        // Chat & Companion functions
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
 
-        el.addEventListener('mousedown', onStart);
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
-        el.addEventListener('touchstart', onStart, { passive: true });
-        window.addEventListener('touchmove', onMove, { passive: true });
-        window.addEventListener('touchend', onEnd);
-      });
-    }
+            appendChatMessage("user", text);
+            input.value = '';
 
-    loadData();
-    
-    setTimeout(() => {
-      if (state.files.length === 0 && state.folders.length <= 1 && state.ghToken) {
-        syncWithGitHub(true);
-      }
-    }, 500);
-  </script>
+            // Simulate companion response
+            setTimeout(() => {
+                let response = generateCompanionResponse(text);
+                appendChatMessage("companion", response);
+                if (isAudioOutputOn) {
+                    speakText(response);
+                }
+            }, 600);
+        }
+
+        function handleChatKey(event) {
+            if (event.key === 'Enter') sendChatMessage();
+        }
+
+        function appendChatMessage(sender, text) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+            div.innerText = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function generateCompanionResponse(input) {
+            const lower = input.toLowerCase();
+            if (lower.includes('overwhelm') || lower.includes('paralysis') || lower.includes('stuck')) {
+                return "I hear you. Executive dysfunction is so frustrating, but it's not your fault. Let's pause, drop our shoulders, take one deep breath together, and pick just one tiny micro-action.";
+            } else if (lower.includes('anxiety') || lower.includes('panic')) {
+                return "I'm right here with you. Ground yourself: look around you and name 3 blue things you can see.";
+            }
+            return `I'm listening and staying right here by your side. We can take all the time you need. Tell me more about what you're experiencing right now.`;
+        }
+
+        function clearChat() {
+            document.getElementById('chatMessages').innerHTML = '';
+        }
+
+        // Grounding actions
+        function triggerGrounding(type) {
+            if (type === 'breath') {
+                appendChatMessage("companion", "Box Breathing Exercise: Inhale for 4 seconds... Hold for 4... Exhale for 4... Hold for 4. Let's do this 3 times together.");
+            } else if (type === '54321') {
+                appendChatMessage("companion", "5-4-3-2-1 Grounding: Name 5 things you see, 4 things you can touch, 3 things you hear, 2 things you smell, and 1 thing you taste.");
+            } else if (type === 'water') {
+                appendChatMessage("companion", "Friendly reminder: Take a sip of water right now to hydrate and reset your nervous system! 💧");
+            }
+        }
+
+        function changeVibe(vibe) {
+            currentVibe = vibe;
+            const speech = document.getElementById('companionSpeech');
+            if (vibe === 'gentle') {
+                speech.innerText = `"I'm right here with you. Take a breath, let's tackle things one step at a time."`;
+            } else if (vibe === 'focused') {
+                speech.innerText = `"Body-double mode active. I'm sitting quietly across from you while you work. Let's lock in."`;
+            } else if (vibe === 'playful') {
+                speech.innerText = `"Darling, we are going to slay this task list with absolute glamour and zero stress!"`;
+            }
+        }
+
+        // Voice simulation
+        function toggleVoice() {
+            isVoiceActive = !isVoiceActive;
+            const btn = document.getElementById('micBtn');
+            const circle = document.getElementById('avatarCircle');
+            if (isVoiceActive) {
+                btn.style.backgroundColor = 'var(--danger-color)';
+                btn.innerText = '🔴 Listening...';
+                circle.classList.add('pulse');
+                appendChatMessage("companion", "I'm listening to your voice stream. Speak freely.");
+            } else {
+                btn.style.backgroundColor = '';
+                btn.innerText = '🎙️ Speak';
+                circle.classList.remove('pulse');
+            }
+        }
+
+        function toggleAudioOutput() {
+            isAudioOutputOn = !isAudioOutputOn;
+            document.getElementById('listenBtn').innerText = isAudioOutputOn ? '🔊 Voice: On' : '🔇 Voice: Off';
+        }
+
+        function speakText(text) {
+            if ('speechSynthesis' in window && isAudioOutputOn) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // File handling & document viewer with scrollable full document view
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            for (let file of files) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const content = e.target.result;
+                    const docObj = {
+                        id: Date.now() + Math.random(),
+                        name: file.name,
+                        type: file.type || file.name.split('.').pop(),
+                        content: content
+                    };
+                    documents.push(docObj);
+                    renderDocuments();
+                    openDocumentViewer(docObj);
+                };
+                if (file.type.includes('image') || file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.xlsx')) {
+                    reader.readAsDataURL(file);
+                } else {
+                    reader.readAsText(file);
+                }
+            }
+        }
+
+        function renderDocuments() {
+            const list = document.getElementById('documentList');
+            list.innerHTML = '';
+            documents.forEach(doc => {
+                const div = document.createElement('div');
+                div.className = 'document-item';
+                div.innerHTML = `
+                    <span style="font-size: 0.875rem; word-break: break-all;">📄 ${escapeHtml(doc.name)}</span>
+                    <button class="icon-btn" onclick="event.stopPropagation(); deleteDocument(${doc.id})" title="Delete">🗑️</button>
+                `;
+                div.onclick = () => openDocumentViewer(doc);
+                list.appendChild(div);
+            });
+        }
+
+        function deleteDocument(id) {
+            documents = documents.filter(d => d.id !== id);
+            renderDocuments();
+        }
+
+        function openDocumentViewer(doc) {
+            document.getElementById('modalDocTitle').innerText = doc.name;
+            const body = document.getElementById('modalDocBody');
+            body.innerHTML = ''; // clear previous content
+            
+            if (typeof doc.content === 'string' && doc.content.startsWith('data:')) {
+                if (doc.name.toLowerCase().endsWith('.pdf') || doc.type.includes('pdf')) {
+                    // Append page-view query params for PDF viewer to ensure scrolling works cleanly across browsers
+                    const pdfSrc = doc.content.includes('#') ? doc.content : doc.content + '#view=FitH';
+                    body.innerHTML = `<iframe src="${pdfSrc}" type="application/pdf"></iframe>`;
+                } else if (doc.type.includes('image')) {
+                    body.innerHTML = `<div style="padding: 1.5rem; text-align: center;"><img src="${doc.content}" style="max-width:100%; height:auto;" alt="${escapeHtml(doc.name)}"/></div>`;
+                } else {
+                    const pre = document.createElement('pre');
+                    pre.className = 'text-content';
+                    pre.innerText = doc.content;
+                    body.appendChild(pre);
+                }
+            } else {
+                const pre = document.createElement('pre');
+                pre.className = 'text-content';
+                pre.innerText = doc.content || "Full document contents loaded successfully.";
+                body.appendChild(pre);
+            }
+
+            document.getElementById('docViewerModal').style.display = 'flex';
+        }
+
+        function closeDocViewer() {
+            document.getElementById('docViewerModal').style.display = 'none';
+        }
+
+        function downloadFullPdf() {
+            alert("Downloading full document PDF...");
+        }
+
+        // Save & Load Session State
+        function saveSessionState() {
+            const state = {
+                tasks: tasks,
+                documents: documents,
+                theme: document.body.getAttribute('data-theme')
+            };
+            localStorage.setItem('companion_session_state', JSON.stringify(state));
+            alert("Session state saved successfully!");
+        }
+
+        function loadSessionState() {
+            const saved = localStorage.getItem('companion_session_state');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    tasks = state.tasks || [];
+                    documents = state.documents || [];
+                    if (state.theme) setTheme(state.theme);
+                    renderTasks();
+                    renderDocuments();
+                    alert("Session state loaded successfully!");
+                } catch (e) {
+                    alert("Failed to load session state.");
+                }
+            } else {
+                alert("No saved session found.");
+            }
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+    </script>
 </body>
 </html>
