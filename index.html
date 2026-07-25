@@ -72,6 +72,7 @@
       ghToken: localStorage.getItem('af_gh_token') || '',
       isSyncing: false,
       activeMenuId: null,
+      hamburgerMenuOpen: false,
       targetChangeImageId: null,
       targetFolderCoverId: null,
       quickViewFileId: null,
@@ -353,35 +354,18 @@
       }
 
       app.innerHTML = `
-        <header class="shrink-0 z-35 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
-          <div class="flex items-center gap-1.5 shrink-0">
-            <button onclick="navigateTo(null)" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shrink-0">
-              <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
+        <header class="shrink-0 z-35 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
+              <i data-lucide="menu" class="w-5 h-5"></i>
             </button>
-            <button onclick="openNewFolderModal()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-zinc-700/60 shadow-sm cursor-pointer shrink-0">
-              <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
-            </button>
-            <button onclick="openUploadModal()" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer shrink-0">
-              <i data-lucide="plus" class="w-4 h-4 stroke-[3]"></i> Add Item
-            </button>
-            <button onclick="openLinkModal()" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-zinc-700/60 shadow-sm cursor-pointer shrink-0">
-              <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
-            </button>
-            <button onclick="syncWithGitHub()" class="px-2.5 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 flex items-center gap-1.5 shadow-sm shrink-0">
-              <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-3.5 h-3.5 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
-              <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
-            </button>
-            <button onclick="resetToken()" title="Update GitHub token" class="p-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl text-zinc-400 hover:text-zinc-200 shrink-0">
-              <i data-lucide="key" class="w-3.5 h-3.5"></i>
-            </button>
-            <button onclick="forcePullCloudData()" title="Force Pull from Cloud" class="px-2.5 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl text-xs font-bold text-amber-400 flex items-center gap-1.5 shadow-sm shrink-0">
-              <i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
-              <span>Pull Cloud</span>
-            </button>
-            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0 border-l border-zinc-800">
+            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
               <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
               ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
             </div>
+          </div>
+
+          <div class="flex items-center gap-2">
             ${state.selectMode ? `
               <button onclick="toggleSelectAll()" class="px-2.5 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1 shadow-sm shrink-0">
                 <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-3.5 h-3.5"></i>
@@ -395,9 +379,37 @@
               ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
             </button>
           </div>
+
+          ${state.hamburgerMenuOpen ? `
+            <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-zinc-950/98 border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
+              <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
+              </button>
+              <button onclick="openNewFolderModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
+              </button>
+              <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
+              </button>
+              <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
+              </button>
+              <div class="h-px bg-zinc-800 my-1"></div>
+              <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
+                <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
+              </button>
+              <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
+              </button>
+              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
+              </button>
+            </div>
+          ` : ''}
         </header>
 
-        <main onclick="closeMenu()" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}">
+        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}">
           ${items.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
@@ -812,7 +824,7 @@
       `;
     }
 
-    function toggleSelectMode() { state.selectMode = !state.selectMode; state.selectedIds = []; closeMenu(); render(); }
+    function toggleSelectMode() { state.selectMode = !state.selectMode; state.selectedIds = []; closeMenu(); closeHamburgerMenu(); render(); }
     function toggleSelectAll() {
       const items = [
         ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
@@ -844,12 +856,13 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); render(); }
+    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function closeQuickView() { state.quickViewFileId = null; render(); }
-    function navigateTo(id) { state.currentFolderId = id; closeMenu(); render(); }
+    function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function toggleEditMode() { 
       state.editMode = !state.editMode; 
       closeMenu(); 
+      closeHamburgerMenu();
       render(); 
     }
     function toggleMenu(e, id) {
@@ -858,11 +871,25 @@
       render();
     }
     function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
+    
+    function toggleHamburgerMenu(e) {
+      e.stopPropagation();
+      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
+      render();
+    }
+    function closeHamburgerMenu() {
+      if (state.hamburgerMenuOpen) {
+        state.hamburgerMenuOpen = false;
+        render();
+      }
+    }
+
     function forcePullCloudData() { syncWithGitHub(true); }
 
     // --- TEXT EDITOR MODAL LOGIC (SURGICAL FORMATTING FOR SELECTED TEXT) ---
     function openTextEditorModal(bubbleId = null, referenceItemId = null) {
       closeMenu();
+      closeHamburgerMenu();
       if (bubbleId) {
         const bubble = state.textBubbles.find(b => b.id === bubbleId);
         if (bubble) {
