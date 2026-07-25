@@ -78,7 +78,8 @@
       quickViewFileId: null,
       showUploadModal: false,
       textEditorModal: null, // { id, text, fontSize, isBold, isItalic, isUnderline, isNew, referenceItemId }
-      linkModal: false
+      linkModal: false,
+      appModal: false
     };
 
     const uid = () => Math.random().toString(36).substring(2, 9);
@@ -396,6 +397,9 @@
               <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
               </button>
+              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
+              </button>
               <div class="h-px bg-zinc-800 my-1"></div>
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
                 <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
@@ -439,6 +443,7 @@
 
         ${state.showUploadModal ? renderUploadModal() : ''}
         ${state.linkModal ? renderLinkModal() : ''}
+        ${state.appModal ? renderAppModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
       `;
@@ -449,6 +454,7 @@
 
     function getFileIcon(type, name) {
       if (type === 'link' || name.startsWith('http')) return 'link';
+      if (type === 'app' || type === 'ios-app') return 'smartphone';
       if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm')) return 'video';
       if (type.startsWith('audio/')) return 'music';
       if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
@@ -504,6 +510,7 @@
         const isImage = type.startsWith('image/');
         const isVideo = type.startsWith('video/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm');
         const isLink = type === 'link';
+        const isApp = type === 'app' || type === 'ios-app';
         const imgSrc = item.dataUrl || item.thumbnailData;
         const icon = getFileIcon(type, item.name);
 
@@ -515,6 +522,7 @@
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
                     ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
+                    ${isApp ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">iOS App</span>' : ''}
                     ${isVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
                     ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
                     ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
@@ -583,6 +591,7 @@
               <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
               <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
+              <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
               <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
             </div>
@@ -611,6 +620,25 @@
       `;
     }
 
+    function renderAppModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAppModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add iOS Device App</h3>
+            <p class="text-xs text-zinc-400">Enter the custom iOS URL scheme or App Store deep link (e.g., <code class="text-amber-400">photos-redirect://</code> or <code class="text-amber-400">shortcuts://</code>).</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeAppModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveAppModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add App</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function openLinkModal() {
       state.linkModal = true;
       render();
@@ -622,6 +650,20 @@
 
     function closeLinkModal() {
       state.linkModal = false;
+      render();
+    }
+
+    function openAppModal() {
+      state.appModal = true;
+      render();
+      setTimeout(() => {
+        const input = document.getElementById('app-scheme-input');
+        if (input) input.focus();
+      }, 50);
+    }
+
+    function closeAppModal() {
+      state.appModal = false;
       render();
     }
 
@@ -687,6 +729,60 @@
       render();
     }
 
+    async function saveAppModal() {
+      const schemeInput = document.getElementById('app-scheme-input');
+      const nameInput = document.getElementById('app-name-input');
+      if (!schemeInput) return;
+      let scheme = schemeInput.value.trim();
+      if (!scheme) {
+        alert('Please enter a valid URL scheme or App link.');
+        return;
+      }
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        name = scheme.split('://')[0] || 'iOS App';
+      }
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+
+      let targetX = 20, targetY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 112;
+        
+        targetX = lastX + lastW + 24;
+        targetY = lastY;
+        if (targetX > 1000) {
+          targetX = 20;
+          targetY = lastY + 160;
+        }
+      }
+
+      const newItem = {
+        id: uid(),
+        name: name,
+        fileType: 'ios-app',
+        size: 0,
+        dataUrl: scheme,
+        parentId: state.currentFolderId,
+        x: targetX,
+        y: targetY,
+        width: 112,
+        height: 144
+      };
+
+      state.files.push(newItem);
+      await saveFile(newItem);
+      closeAppModal();
+      render();
+    }
+
     function renderTextEditorModal() {
       const ed = state.textEditorModal;
       if (!ed) return '';
@@ -732,6 +828,7 @@
       const mediaUrl = file.blobUrl || file.dataUrl;
       const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
       const isLink = type === 'link';
+      const isApp = type === 'app' || type === 'ios-app';
       
       if (isLink) {
         return `
@@ -739,6 +836,16 @@
             <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="link" class="w-8 h-8"></i></div>
             <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
             <a href="${file.dataUrl}" target="_blank" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20"><i data-lucide="external-link" class="w-4 h-4"></i> Open Web Link</a>
+          </div>
+        `;
+      }
+      if (isApp) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full shadow-2xl text-center">
+            <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="smartphone" class="w-8 h-8"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">Launch App: ${file.name}</span>
+            <p class="text-xs text-zinc-400">Scheme: <code class="text-amber-400">${file.dataUrl}</code></p>
+            <a href="${file.dataUrl}" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20"><i data-lucide="external-link" class="w-4 h-4"></i> Open on iOS Device</a>
           </div>
         `;
       }
@@ -848,8 +955,8 @@
       else if (isBubbleItem) openTextEditorModal(id);
       else {
         const file = state.files.find(f => f.id === id);
-        if (file && file.fileType === 'link') {
-          window.open(file.dataUrl, '_blank');
+        if (file && (file.fileType === 'link' || file.fileType === 'ios-app')) {
+          window.location.href = file.dataUrl;
         } else {
           openQuickView(id);
         }
@@ -1112,9 +1219,9 @@
       if (!file) return;
       
       try {
-        if (file.fileType === 'link' && navigator.clipboard) {
+        if ((file.fileType === 'link' || file.fileType === 'ios-app') && navigator.clipboard) {
           await navigator.clipboard.writeText(file.dataUrl);
-          alert('Link URL copied to clipboard successfully!');
+          alert('URL scheme/link copied to clipboard successfully!');
           closeMenu();
           render();
           return;
@@ -1154,7 +1261,7 @@
     async function shareFile(id, isBulk = false) {
       const file = state.files.find(f => f.id === id);
       if (!file) return;
-      if (file.fileType === 'link') {
+      if (file.fileType === 'link' || file.fileType === 'ios-app') {
         if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: file.dataUrl });
         else alert('Sharing is not supported on this device.');
         if (!isBulk) closeMenu();
