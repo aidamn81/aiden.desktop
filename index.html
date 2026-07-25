@@ -621,7 +621,19 @@
           </div>
         `;
       }
-      if (type === 'application/pdf' || file.name.endsWith('.pdf')) return `<iframe src="${file.dataUrl}" class="w-[90vw] h-[75vh] rounded-2xl border border-zinc-800 bg-white"></iframe>`;
+      if (type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        return `
+          <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-zinc-950 relative">
+              <iframe src="${file.dataUrl}#view=FitH" class="w-full h-full border-0 bg-white"></iframe>
+            </div>
+          </div>
+        `;
+      }
       if (type.startsWith('text/') || file.name.endsWith('.txt')) return `<div class="w-[90vw] h-[75vh] max-w-2xl bg-zinc-900 border border-zinc-800 rounded-2xl p-4 overflow-auto text-xs font-mono text-zinc-300 whitespace-pre-wrap select-text">${file.textContent || ''}</div>`;
       return `<div class="flex flex-col items-center gap-3 text-zinc-500"><i data-lucide="file-text" class="w-16 h-16"></i><span class="text-xs text-zinc-400">${file.name}</span></div>`;
     }
@@ -746,19 +758,14 @@
       const text = ta.value;
 
       if (formatKey === 'fontSize') {
-        // If text is selected, we could wrap or handle; if nothing selected or general toolbar click:
         state.textEditorModal.fontSize = value;
         ta.focus();
         return;
       }
 
-      // Handle surgical wrapping for Bold, Italic, Underline on selected text
       let wrapper = '';
       if (formatKey === 'isBold') wrapper = '**';
       if (formatKey === 'isItalic') wrapper = '*';
-      if (formatKey === 'isUnderline' || formatKey === 'isItalic') {
-        // We can use standard markdown syntax or simple tag/symbol markers if supported, or let's wrap with markdown equivalents or custom tags
-      }
 
       if (start !== end) {
         const selectedText = text.substring(start, end);
@@ -772,7 +779,6 @@
         ta.focus();
         ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
       } else {
-        // If no text selected, toggle the global state property or insert markers
         if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
         if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
         if (formatKey === 'isUnderline') state.textEditorModal.isUnderline = !state.textEditorModal.isUnderline;
