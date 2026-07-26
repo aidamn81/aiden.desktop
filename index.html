@@ -363,6 +363,12 @@
               <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
                 <i data-lucide="menu" class="w-5 h-5"></i>
               </button>
+              ${state.currentFolderId !== null ? `
+                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                  <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                  <span>Back</span>
+                </button>
+              ` : ''}
               <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
                 ${state.selectMode ? 'Cancel' : 'Select'}
               </button>
@@ -989,6 +995,18 @@
     function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    function navigateBack() {
+      if (state.currentFolderId === null) return;
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      if (currentFolder) {
+        state.currentFolderId = currentFolder.parentId;
+      } else {
+        state.currentFolderId = null;
+      }
+      closeMenu();
+      closeHamburgerMenu();
+      render();
+    }
     function toggleEditMode() { 
       state.editMode = !state.editMode; 
       closeMenu(); 
