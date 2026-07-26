@@ -883,18 +883,13 @@
       }
       if (type === 'application/pdf' || name.endsWith('.pdf')) {
         return `
-          <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+          <div class="w-[98vw] h-[92vh] max-w-7xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300 shrink-0">
               <span class="font-semibold truncate">${file.name}</span>
               <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
             </div>
-            <div class="flex-1 w-full h-full bg-zinc-950 relative overflow-auto flex flex-col items-center p-4 gap-4" id="pdf-viewer-container">
-              <canvas id="pdf-canvas" class="shadow-2xl max-w-full bg-white rounded-lg"></canvas>
-              <div id="pdf-pagination" class="flex items-center gap-3 bg-zinc-900 px-4 py-2 rounded-xl border border-zinc-800 text-xs font-semibold text-zinc-300 my-2">
-                <button onclick="prevPdfPage()" class="p-1 hover:text-amber-400"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
-                <span>Page <span id="pdf-current-page">1</span> of <span id="pdf-total-pages">1</span></span>
-                <button onclick="nextPdfPage()" class="p-1 hover:text-amber-400"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
-              </div>
+            <div class="flex-1 w-full h-full bg-zinc-950 relative overflow-auto">
+              <embed src="${file.dataUrl}#toolbar=1&view=FitH" type="application/pdf" width="100%" height="100%" class="w-full h-full border-0 bg-white" />
             </div>
           </div>
         `;
@@ -939,86 +934,9 @@
       `;
     }
 
-    let pdfDoc_global = null;
-    let pdfPageNum_global = 1;
-
-    async function loadPdfDocument(dataUrl) {
-      if (!window.pdfjsLib) {
-        // Load PDF.js dynamically if not present
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-          script.onload = () => {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            resolve();
-          };
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      }
-
-      try {
-        const base64Data = dataUrl.split(',')[1];
-        const binaryString = atob(base64Data);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const loadingTask = pdfjsLib.getDocument({ data: bytes });
-        pdfDoc_global = await loadingTask.promise;
-        pdfPageNum_global = 1;
-        document.getElementById('pdf-total-pages').textContent = pdfDoc_global.numPages;
-        renderPdfPage(pdfPageNum_global);
-      } catch (err) {
-        console.error('Error loading PDF:', err);
-      }
-    }
-
-    async function renderPdfPage(num) {
-      if (!pdfDoc_global) return;
-      const page = await pdfDoc_global.getPage(num);
-      const canvas = document.getElementById('pdf-canvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      
-      const viewport = page.getViewport({ scale: 1.5 });
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      const renderContext = {
-        canvasContext: ctx,
-        viewport: viewport
-      };
-      await page.render(renderContext).promise;
-      document.getElementById('pdf-current-page').textContent = num;
-    }
-
-    function prevPdfPage() {
-      if (pdfPageNum_global <= 1) return;
-      pdfPageNum_global--;
-      renderPdfPage(pdfPageNum_global);
-    }
-
-    function nextPdfPage() {
-      if (!pdfDoc_global || pdfPageNum_global >= pdfDoc_global.numPages) return;
-      pdfPageNum_global++;
-      renderPdfPage(pdfPageNum_global);
-    }
-
     function renderQuickViewModal() {
       const file = state.files.find(f => f.id === state.quickViewFileId);
       if (!file) return '';
-      
-      setTimeout(() => {
-        const type = file.fileType || '';
-        const name = file.name || '';
-        if (type === 'application/pdf' || name.endsWith('.pdf')) {
-          loadPdfDocument(file.dataUrl);
-        }
-      }, 50);
-
       return `
         <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
           <div class="flex items-center justify-between text-zinc-300 pt-2 px-4 shrink-0" onclick="event.stopPropagation()">
