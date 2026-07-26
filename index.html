@@ -386,7 +386,6 @@
           </div>
 
           ${state.hamburgerMenuOpen ? `
-            <div class="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs" onclick="closeHamburgerMenu()"></div>
             <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-zinc-950/98 border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
               <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
@@ -419,6 +418,7 @@
         </header>
 
         <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}">
+          ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
           ${items.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
