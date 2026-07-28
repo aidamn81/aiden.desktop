@@ -565,7 +565,7 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text Bubble</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
             <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
@@ -1683,6 +1683,7 @@
         el.addEventListener('mousedown', onStart);
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onEnd);
+
         el.addEventListener('touchstart', onStart, { passive: false });
         window.addEventListener('touchmove', onMove, { passive: false });
         window.addEventListener('touchend', onEnd);
@@ -1690,12 +1691,32 @@
     }
 
     function attachBulkDragListeners() {
-      // Future expansion for multi-select dragging
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+      let isPanning = false, startX, startY, scrollLeft, scrollTop;
+
+      container.addEventListener('mousedown', (e) => {
+        if (!state.editMode) return;
+        if (e.target.closest('[data-id]') || e.target.closest('button') || e.target.closest('header')) return;
+        isPanning = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        scrollLeft = container.parentElement.scrollLeft;
+        scrollTop = container.parentElement.scrollTop;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        container.parentElement.scrollLeft = scrollLeft - dx;
+        container.parentElement.scrollTop = scrollTop - dy;
+      });
+
+      window.addEventListener('mouseup', () => { isPanning = false; });
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
+    loadData();
   </script>
 </body>
 </html>
