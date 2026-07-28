@@ -489,15 +489,22 @@
       const isSelected = state.selectedIds.includes(item.id);
 
       if (bubble) {
-        const fontSizeClass = item.fontSize === 'lg' ? 'text-base' : item.fontSize === 'sm' ? 'text-[10px]' : 'text-[11px]';
+        let fontSizeClass = 'text-[11px]';
+        if (item.fontSize === 'very-small') fontSizeClass = 'text-[9px]';
+        else if (item.fontSize === 'small') fontSizeClass = 'text-[10px]';
+        else if (item.fontSize === 'medium') fontSizeClass = 'text-[11px]';
+        else if (item.fontSize === 'large') fontSizeClass = 'text-sm';
+        else if (item.fontSize === 'extra-large') fontSizeClass = 'text-base';
+
         const fontWeightStyle = item.isBold ? 'font-bold' : 'font-medium';
         const fontStyleStyle = item.isItalic ? 'italic' : '';
         const fontUnderlineStyle = item.isUnderline ? 'underline' : '';
+        const fontColorStyle = item.fontColor ? `color: ${item.fontColor};` : '';
 
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}" style="${fontColorStyle}">${item.text || 'Empty bubble'}</div>
               ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -847,10 +854,17 @@
             </div>
             
             <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
-              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 overflow-x-auto max-w-full">
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'very-small')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'very-small' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Very Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'small')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'small' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'medium')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'medium' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Medium</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'large')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'large' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'extra-large')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'extra-large' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Extra Large</button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-lg border border-zinc-800 items-center">
+                <span class="text-[10px] text-zinc-400 px-1 font-medium">Color:</span>
+                <input type="color" value="${ed.fontColor || '#ffffff'}" onchange="applyTextEditorFormat('fontColor', this.value)" class="w-6 h-6 rounded cursor-pointer bg-transparent border-0" title="Change font color" />
               </div>
               <div class="h-5 w-px bg-zinc-800"></div>
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
@@ -860,7 +874,7 @@
               </div>
             </div>
 
-            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal">${ed.text || ''}</textarea>
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal" style="${ed.fontColor ? `color: ${ed.fontColor};` : ''}">${ed.text || ''}</textarea>
 
             <div class="flex items-center justify-end gap-3 pt-2">
               <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -1099,7 +1113,8 @@
           state.textEditorModal = {
             id: bubble.id,
             text: bubble.text || '',
-            fontSize: bubble.fontSize || 'md',
+            fontSize: bubble.fontSize || 'medium',
+            fontColor: bubble.fontColor || '#ffffff',
             isBold: !!bubble.isBold,
             isItalic: !!bubble.isItalic,
             isUnderline: !!bubble.isUnderline,
@@ -1110,7 +1125,8 @@
         state.textEditorModal = {
           id: null,
           text: '',
-          fontSize: 'md',
+          fontSize: 'medium',
+          fontColor: '#ffffff',
           isBold: false,
           isItalic: false,
           isUnderline: false,
@@ -1150,6 +1166,13 @@
 
       if (formatKey === 'fontSize') {
         state.textEditorModal.fontSize = value;
+        ta.focus();
+        return;
+      }
+
+      if (formatKey === 'fontColor') {
+        state.textEditorModal.fontColor = value;
+        ta.style.color = value;
         ta.focus();
         return;
       }
@@ -1227,6 +1250,7 @@
           width: 140,
           height: dynamicHeight,
           fontSize: ed.fontSize,
+          fontColor: ed.fontColor,
           isBold: ed.isBold,
           isItalic: ed.isItalic,
           isUnderline: ed.isUnderline
@@ -1239,6 +1263,7 @@
           bubble.text = textVal;
           bubble.height = dynamicHeight;
           bubble.fontSize = ed.fontSize;
+          bubble.fontColor = ed.fontColor;
           bubble.isBold = ed.isBold;
           bubble.isItalic = ed.isItalic;
           bubble.isUnderline = ed.isUnderline;
@@ -1691,28 +1716,29 @@
           const el = document.getElementById(`item-${id}`);
           const init = initialPositions[id];
           if (el && init) {
-            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.left = `${Math.max(8, init.x + dx)}px`;
+            el.style.top = `${Math.max(8, init.y + dy)}px`;
           }
         });
       };
 
-      const onEnd = () => {
+      const onEnd = async () => {
         if (!isDraggingAll) return;
-        state.selectedIds.forEach(id => {
+        isDraggingAll = false;
+
+        for (let id of state.selectedIds) {
           const el = document.getElementById(`item-${id}`);
           if (el) {
             const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
             if (target) {
-              target.x = parseInt(el.style.left);
-              target.y = parseInt(el.style.top);
-              if (isFolder(target)) saveFolder(target);
-              else if (isBubble(target)) saveTextBubble(target);
-              else saveFile(target);
+              target.x = parseInt(el.style.left) || 0;
+              target.y = parseInt(el.style.top) || 0;
+              if (isFolder(target)) await saveFolder(target);
+              else if (isBubble(target)) await saveTextBubble(target);
+              else await saveFile(target);
             }
           }
-        });
-        isDraggingAll = false;
+        }
       };
 
       container.addEventListener('mousedown', onStart);
