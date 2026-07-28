@@ -462,7 +462,6 @@
 
       if (window.lucide) window.lucide.createIcons();
       attachDragAndResizeListeners();
-      attachBulkDragListeners();
     }
 
     function getFileIcon(type, name) {
@@ -1187,15 +1186,35 @@
       if (start !== end) {
         const selectedText = text.substring(start, end);
         let wrapped = '';
-        if (formatKey === 'isBold') wrapped = `**${selectedText}**`;
-        else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
-        else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
+        if (formatKey === 'isBold') {
+          // Toggle wrapping if already wrapped or wrap
+          if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
+            wrapped = selectedText.slice(2, -2);
+          } else {
+            wrapped = `**${selectedText}**`;
+          }
+        } else if (formatKey === 'isItalic') {
+          if (selectedText.startsWith('*') && selectedText.endsWith('*') && !selectedText.startsWith('**')) {
+            wrapped = selectedText.slice(1, -1);
+          } else {
+            wrapped = `*${selectedText}*`;
+          }
+        } else if (formatKey === 'isUnderline') {
+          if (selectedText.startsWith('__') && selectedText.endsWith('__')) {
+            wrapped = selectedText.slice(2, -2);
+          } else {
+            wrapped = `__${selectedText}__`;
+          }
+        }
 
         state.textEditorModal.text = text.substring(0, start) + wrapped + text.substring(end);
         render();
         setTimeout(() => {
           const newTa = document.getElementById('modal-text-input');
-          if (newTa) { newTa.focus(); newTa.setSelectionRange(start + wrapped.length, start + wrapped.length); }
+          if (newTa) { 
+            newTa.focus(); 
+            newTa.setSelectionRange(start, start + wrapped.length); 
+          }
         }, 30);
       } else {
         if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
@@ -1690,33 +1709,7 @@
       });
     }
 
-    function attachBulkDragListeners() {
-      const container = document.getElementById('canvas-container');
-      if (!container) return;
-      let isPanning = false, startX, startY, scrollLeft, scrollTop;
-
-      container.addEventListener('mousedown', (e) => {
-        if (!state.editMode) return;
-        if (e.target.closest('[data-id]') || e.target.closest('button') || e.target.closest('header')) return;
-        isPanning = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        scrollLeft = container.parentElement.scrollLeft;
-        scrollTop = container.parentElement.scrollTop;
-      });
-
-      window.addEventListener('mousemove', (e) => {
-        if (!isPanning) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        container.parentElement.scrollLeft = scrollLeft - dx;
-        container.parentElement.scrollTop = scrollTop - dy;
-      });
-
-      window.addEventListener('mouseup', () => { isPanning = false; });
-    }
-
-    loadData();
+    window.onload = loadData;
   </script>
 </body>
 </html>
