@@ -2,533 +2,140 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aiden Files </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aiden Files - Gothic Archive</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --bg-color: #0d0b12;
-            --panel-bg: #16121f;
-            --panel-border: #3b2a4d;
-            --accent-purple: #8a4fff;
-            --accent-glow: rgba(138, 79, 255, 0.3);
-            --text-main: #e2d9f3;
-            --text-muted: #9585b2;
-            --danger: #ff4f4f;
-            --danger-glow: rgba(255, 79, 79, 0.3);
-            --success: #4fff8a;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            user-select: none;
-        }
-
         body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            min-height: 100vh;
+            background-color: #000000;
+            color: #e5e7eb;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
+            touch-action: manipulation;
         }
-
-        /* Top Bar & Formatting / Controls */
-        header {
-            background-color: var(--panel-bg);
-            border-bottom: 1px solid var(--panel-border);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 100;
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
         }
-
-        .logo-area {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-main);
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px var(--accent-glow);
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
         }
-
-        .formatting-bar {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-            flex-wrap: wrap;
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 3px;
         }
-
-        button, .file-input-label {
-            background-color: #221933;
-            color: var(--text-main);
-            border: 1px solid var(--panel-border);
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-        }
-
-        button:hover, .file-input-label:hover {
-            background-color: var(--accent-purple);
-            border-color: var(--accent-purple);
-            box-shadow: 0 0 10px var(--accent-glow);
-        }
-
-        /* Workspace & Grid Guide */
-        .workspace {
-            flex: 1;
-            position: relative;
-            padding: 2rem;
-            overflow: auto;
-            min-height: calc(100vh - 80px);
-        }
-
-        .workspace.edit-mode::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                linear-gradient(to right, rgba(59, 42, 77, 0.15) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(59, 42, 77, 0.15) 1px, transparent 1px);
-            background-size: 40px 40px;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        /* Folders & Relics Containers */
-        .folder-container {
-            position: absolute;
-            background-color: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 10px;
-            width: 320px;
-            min-height: 220px;
-            padding: 1rem;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            transition: box-shadow 0.2s ease;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            resize: both;
-            overflow: hidden;
-        }
-
-        .folder-container:hover {
-            border-color: var(--accent-purple);
-            box-shadow: 0 8px 30px var(--accent-glow);
-        }
-
-        .folder-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--panel-border);
-            padding-bottom: 0.5rem;
-            margin-bottom: 0.75rem;
-            cursor: move;
-        }
-
-        .folder-title {
-            font-weight: 600;
-            font-size: 1rem;
-            color: var(--text-main);
-            outline: none;
-            border: 1px solid transparent;
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-
-        .folder-title:focus {
-            border-color: var(--accent-purple);
-            background: rgba(0,0,0,0.2);
-        }
-
-        .folder-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            overflow-y: auto;
-            max-height: calc(100% - 40px);
-        }
-
-        .empty-folder-notice {
-            color: var(--text-muted);
-            font-style: italic;
-            text-align: center;
-            margin-top: 2rem;
-            font-size: 0.9rem;
-        }
-
-        /* Saved Notes / Items inside folders */
-        .saved-item {
-            background: #1e152d;
-            border: 1px solid var(--panel-border);
-            padding: 0.5rem 0.75rem;
-            border-radius: 6px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .saved-item span {
-            word-break: break-all;
-            font-size: 0.85rem;
-        }
-
-        .delete-btn {
-            background: transparent;
-            border: none;
-            color: var(--danger);
-            cursor: pointer;
-            padding: 2px 6px;
-            font-size: 0.8rem;
-            border-radius: 4px;
-        }
-
-        .delete-btn:hover {
-            background: var(--danger-glow);
-        }
-
-        /* Confirmation Modal Overlay */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .modal-box {
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            padding: 1.5rem;
-            border-radius: 10px;
-            width: 300px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-        }
-
-        .modal-box h3 {
-            margin-bottom: 1rem;
-            font-size: 1.1rem;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            border-color: var(--danger);
-            color: #fff;
-        }
-
-        .btn-danger:hover {
-            background: #ff6b6b;
-            box-shadow: 0 0 10px var(--danger-glow);
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
         }
     </style>
 </head>
-<body class="edit-mode">
+<body class="bg-black text-gray-100 min-h-screen flex flex-col select-none">
 
-    <header>
-        <div class="logo-area">Aiden Files - Gothic Archive</div>
-        <div class="formatting-bar" id="formattingBar">
-            <button id="toggleEditModeBtn">Toggle Edit Mode</button>
-            <button id="addFolderBtn">Add Folder</button>
-            <button id="saveBtn">Save State</button>
-            <button id="loadBtn">Load State</button>
-            <button id="recenterBtn">Recentering Formation</button>
-            <button id="resizeOriginalBtn">Resize to Original</button>
+    <!-- Top Navigation / Header -->
+    <header class="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded bg-purple-950 border border-purple-800 flex items-center justify-center text-purple-300 font-bold">A</div>
+            <div>
+                <h1 class="text-sm font-semibold tracking-wider uppercase text-purple-200">Aiden Files</h1>
+                <p class="text-xs text-zinc-500">Gothic Archive Edition</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button id="saveBtn" class="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-zinc-300 transition">Save State</button>
+            <button id="loadBtn" class="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-zinc-300 transition">Load State</button>
         </div>
     </header>
 
-    <div class="workspace edit-mode" id="workspace">
-        <!-- Folders/Relics render dynamically here -->
-    </div>
+    <!-- Main Content Area -->
+    <main class="flex-1 p-4 md:p-6 relative">
+        <div class="max-w-7xl mx-auto">
+            <!-- Toolbar / Formatting Bar -->
+            <div id="formattingBar" class="flex flex-wrap items-center justify-between gap-2 mb-6 p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+                <div class="flex items-center space-x-2">
+                    <button id="newFolderBtn" class="px-3 py-1.5 text-xs bg-purple-900/50 hover:bg-purple-900 text-purple-200 border border-purple-700/50 rounded transition">+ New Folder</button>
+                    <button id="uploadBtn" class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded transition">Upload File</button>
+                    <input type="file" id="fileInput" class="hidden" multiple>
+                </div>
+                <div class="flex items-center space-x-2 text-xs text-zinc-400">
+                    <span id="itemCount">0 items</span>
+                </div>
+            </div>
 
-    <!-- Confirmation Modal for Deletions -->
-    <div class="modal-overlay" id="confirmModal">
-        <div class="modal-box">
-            <h3>Confirm Deletion</h3>
-            <p id="confirmMessage">Are you sure you want to delete this item?</p>
-            <div class="modal-actions">
-                <button id="modalCancelBtn">Cancel</button>
-                <button id="modalConfirmBtn" class="btn-danger">Delete</button>
+            <!-- Archive Workspace / Grid -->
+            <div id="workspace" class="min-h-[60vh] border border-dashed border-zinc-800 rounded-xl p-4 flex flex-wrap gap-4 items-start content-start relative">
+                <!-- Empty State Message -->
+                <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-zinc-600 pointer-events-none">
+                    <svg class="w-12 h-12 mb-2 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                    <p class="text-sm">Your archive is empty. Upload files or create folders.</p>
+                </div>
             </div>
         </div>
-    </div>
+    </main>
 
+    <!-- Footer -->
+    <footer class="border-t border-zinc-900 py-3 text-center text-xs text-zinc-600">
+        Aiden Files &bull; Secure Standalone Archive
+    </footer>
+
+    <!-- Basic Client Script Wrapper -->
     <script>
-        // State Management & Preservation
-        let foldersData = [
-            {
-                id: 'folder-1',
-                title: 'Gothic Relics',
-                x: 100,
-                y: 100,
-                width: 320,
-                height: 250,
-                items: [
-                    { id: 'item-1', name: 'IMG_4738.jpeg', type: 'image' }
-                ]
-            }
-        ];
+        document.addEventListener('DOMContentLoaded', () => {
+            const workspace = document.getElementById('workspace');
+            const emptyState = document.getElementById('emptyState');
+            const itemCount = document.getElementById('itemCount');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const fileInput = document.getElementById('fileInput');
+            const newFolderBtn = document.getElementById('newFolderBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const loadBtn = document.getElementById('loadBtn');
 
-        let editMode = true;
-        let activeDrag = null;
-        let dragOffsetX = 0;
-        let dragOffsetY = 0;
-        let pendingDeleteCallback = null;
+            let items = [];
 
-        const workspace = document.getElementById('workspace');
-        const toggleEditModeBtn = document.getElementById('toggleEditModeBtn');
-        const addFolderBtn = document.getElementById('addFolderBtn');
-        const saveBtn = document.getElementById('saveBtn');
-        const loadBtn = document.getElementById('loadBtn');
-        const recenterBtn = document.getElementById('recenterBtn');
-        const resizeOriginalBtn = document.getElementById('resizeOriginalBtn');
-        
-        const confirmModal = document.getElementById('confirmModal');
-        const confirmMessage = document.getElementById('confirmMessage');
-        const modalCancelBtn = document.getElementById('modalCancelBtn');
-        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
-
-        // Toggle Edit Mode
-        toggleEditModeBtn.addEventListener('click', () => {
-            editMode = !editMode;
-            document.body.classList.toggle('edit-mode', editMode);
-            workspace.classList.toggle('edit-mode', editMode);
-            toggleEditModeBtn.style.borderColor = editMode ? 'var(--accent-purple)' : 'var(--panel-border)';
-        });
-
-        // Confirmation Dialog Helpers
-        function showConfirmation(message, callback) {
-            confirmMessage.textContent = message;
-            pendingDeleteCallback = callback;
-            confirmModal.classList.add('active');
-        }
-
-        modalCancelBtn.addEventListener('click', () => {
-            confirmModal.classList.remove('active');
-            pendingDeleteCallback = null;
-        });
-
-        modalConfirmBtn.addEventListener('click', () => {
-            if (pendingDeleteCallback) {
-                pendingDeleteCallback();
-            }
-            confirmModal.classList.remove('active');
-            pendingDeleteCallback = null;
-        });
-
-        // Render Workspace Folders
-        function renderFolders() {
-            // Keep track of scroll or active inputs if needed
-            workspace.innerHTML = '';
-            
-            foldersData.forEach(folder => {
-                const container = document.createElement('div');
-                container.className = 'folder-container';
-                container.style.left = `${folder.x}px`;
-                container.style.top = `${folder.y}px`;
-                container.style.width = `${folder.width}px`;
-                container.style.height = `${folder.height}px`;
-                container.dataset.id = folder.id;
-
-                // Folder Header (Draggable)
-                const header = document.createElement('div');
-                header.className = 'folder-header';
-
-                const titleInput = document.createElement('input');
-                titleInput.type = 'text';
-                titleInput.className = 'folder-title';
-                titleInput.value = folder.title;
-                titleInput.addEventListener('input', (e) => {
-                    folder.title = e.target.value;
-                });
-
-                // Delete Folder Option with Confirmation
-                const deleteFolderBtn = document.createElement('button');
-                deleteFolderBtn.className = 'delete-btn';
-                deleteFolderBtn.textContent = '✕';
-                deleteFolderBtn.title = 'Delete folder with confirmation';
-                deleteFolderBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    showConfirmation(`Are you sure you want to delete folder "${folder.title}" and all its contents?`, () => {
-                        foldersData = foldersData.filter(f => f.id !== folder.id);
-                        renderFolders();
-                    });
-                });
-
-                header.appendChild(titleInput);
-                header.appendChild(deleteFolderBtn);
-                container.appendChild(header);
-
-                // Folder Content Area
-                const contentArea = document.createElement('div');
-                contentArea.className = 'folder-content';
-
-                if (folder.items.length === 0) {
-                    const emptyNotice = document.createElement('div');
-                    emptyNotice.className = 'empty-folder-notice';
-                    emptyNotice.textContent = 'Folder is empty';
-                    contentArea.appendChild(emptyNotice);
+            function updateUI() {
+                itemCount.textContent = `${items.length} items`;
+                if (items.length > 0) {
+                    emptyState.style.display = 'none';
                 } else {
-                    folder.items.forEach(item => {
-                        const savedItem = document.createElement('div');
-                        savedItem.className = 'saved-item';
-                        
-                        const itemName = document.createElement('span');
-                        itemName.textContent = item.name;
-
-                        const deleteItemBtn = document.createElement('button');
-                        deleteItemBtn.className = 'delete-btn';
-                        deleteItemBtn.textContent = 'Delete';
-                        deleteItemBtn.addEventListener('click', () => {
-                            showConfirmation(`Are you sure you want to delete "${item.name}"?`, () => {
-                                folder.items = folder.items.filter(i => i.id !== item.id);
-                                renderFolders();
-                            });
-                        });
-
-                        savedItem.appendChild(itemName);
-                        savedItem.appendChild(deleteItemBtn);
-                        contentArea.appendChild(savedItem);
-                    });
+                    emptyState.style.display = 'flex';
                 }
+            }
 
-                container.appendChild(contentArea);
-
-                // Drag and Drop Logic with soft grid snap
-                header.addEventListener('mousedown', (e) => {
-                    if (!editMode || e.target === titleInput || e.target === deleteFolderBtn) return;
-                    activeDrag = folder;
-                    const rect = container.getBoundingClientRect();
-                    dragOffsetX = e.clientX - rect.left;
-                    dragOffsetY = e.clientY - rect.top;
-                    container.style.zIndex = 1000;
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            
+            fileInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    items.push({ id: Date.now() + Math.random(), name: file.name, type: 'file' });
                 });
-
-                workspace.appendChild(container);
+                updateUI();
             });
-        }
 
-        window.addEventListener('mousemove', (e) => {
-            if (!activeDrag || !editMode) return;
-            let newX = e.clientX - dragOffsetX - workspace.getBoundingClientRect().left + workspace.scrollLeft;
-            let newY = e.clientY - dragOffsetY - workspace.getBoundingClientRect().top + workspace.scrollTop;
-
-            // Soft grid snap (40px grid)
-            const gridSize = 40;
-            if (e.shiftKey) { // Optional strict snap or continuous soft snap
-                newX = Math.round(newX / gridSize) * gridSize;
-                newY = Math.round(newY / gridSize) * gridSize;
-            }
-
-            activeDrag.x = Math.max(0, newX);
-            activeDrag.y = Math.max(0, newY);
-
-            const el = workspace.querySelector(`[data-id="${activeDrag.id}"]`);
-            if (el) {
-                el.style.left = `${activeDrag.x}px`;
-                el.style.top = `${activeDrag.y}px`;
-            }
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (activeDrag) {
-                const el = workspace.querySelector(`[data-id="${activeDrag.id}"]`);
-                if (el) el.style.zIndex = 10;
-                activeDrag = null;
-                renderFolders();
-            }
-        });
-
-        // Add New Folder Action
-        addFolderBtn.addEventListener('click', () => {
-            const newFolder = {
-                id: `folder-${Date.now()}`,
-                title: 'New Archive Folder',
-                x: 120 + (foldersData.length * 30) % 400,
-                y: 120 + (foldersData.length * 30) % 300,
-                width: 320,
-                height: 250,
-                items: []
-            };
-            foldersData.push(newFolder);
-            renderFolders();
-        });
-
-        // Recentering Formation Action
-        recenterBtn.addEventListener('click', () => {
-            foldersData.forEach((folder, index) => {
-                folder.x = 100 + (index % 3) * 360;
-                folder.y = 100 + Math.floor(index / 3) * 300;
-            });
-            renderFolders();
-        });
-
-        // Resize to Original Action
-        resizeOriginalBtn.addEventListener('click', () => {
-            foldersData.forEach(folder => {
-                folder.width = 320;
-                folder.height = 250;
-            });
-            renderFolders();
-        });
-
-        // Save & Load State persistence
-        saveBtn.addEventListener('click', () => {
-            localStorage.setItem('aiden_files_gothic_archive', JSON.stringify(foldersData));
-            alert('Archive state saved successfully.');
-        });
-
-        loadBtn.addEventListener('click', () => {
-            const saved = localStorage.getItem('aiden_files_gothic_archive');
-            if (saved) {
-                try {
-                    foldersData = JSON.parse(saved);
-                    renderFolders();
-                    alert('Archive state loaded successfully.');
-                } catch (err) {
-                    alert('Failed to load saved state.');
+            newFolderBtn.addEventListener('click', () => {
+                const folderName = prompt("Enter folder name:", "New Gothic Folder");
+                if (folderName) {
+                    items.push({ id: Date.now() + Math.random(), name: folderName, type: 'folder' });
+                    updateUI();
                 }
-            } else {
-                alert('No saved state found.');
-            }
-        });
+            });
 
-        // Initial render
-        renderFolders();
+            saveBtn.addEventListener('click', () => {
+                localStorage.setItem('aiden_files_state', JSON.stringify(items));
+                alert('Archive state saved successfully.');
+            });
+
+            loadBtn.addEventListener('click', () => {
+                const saved = localStorage.getItem('aiden_files_state');
+                if (saved) {
+                    items = JSON.parse(saved);
+                    updateUI();
+                    alert('Archive state loaded successfully.');
+                } else {
+                    alert('No saved state found.');
+                }
+            });
+        });
     </script>
 </body>
 </html>
