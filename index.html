@@ -1649,20 +1649,20 @@
             el.style.left = `${Math.round(Math.max(8, origX + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
             el.style.top = `${Math.round(Math.max(8, origY + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
           } else if (activeResize) {
-            el.style.width = `${Math.max(64, origW + dx)}px`;
-            el.style.height = `${Math.max(64, origH + dy)}px`;
+            el.style.width = `${Math.max(80, Math.round((origW + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE)}px`;
+            el.style.height = `${Math.max(80, Math.round((origH + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE)}px`;
           }
         };
 
         const onEnd = async () => {
-          if (!activeDrag && !activeResize) return;
-          const itemId = el.getAttribute('data-id');
-          const item = state.folders.find(f => f.id === itemId) || state.files.find(f => f.id === itemId) || state.textBubbles.find(b => b.id === itemId);
+          if (!state.editMode || (!activeDrag && !activeResize)) return;
+          const id = el.getAttribute('data-id');
+          const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
           if (item) {
-            item.x = parseInt(el.style.left);
-            item.y = parseInt(el.style.top);
-            item.width = el.offsetWidth;
-            item.height = el.offsetHeight;
+            item.x = parseInt(el.style.left) || 0;
+            item.y = parseInt(el.style.top) || 0;
+            item.width = parseInt(el.style.width) || item.width;
+            item.height = parseInt(el.style.height) || item.height;
             if (isFolder(item)) await saveFolder(item);
             else if (isBubble(item)) await saveTextBubble(item);
             else await saveFile(item);
