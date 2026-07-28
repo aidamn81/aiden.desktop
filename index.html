@@ -893,7 +893,7 @@
       const type = file.fileType || '';
       const name = file.name || '';
       const mediaUrl = await getOrCreateBlobUrl(file);
-      const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
+      const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.ogv');
       const isLink = type === 'link';
       const isApp = type === 'app' || type === 'ios-app';
       
@@ -1080,7 +1080,7 @@
       render(); 
       setTimeout(async () => {
         const file = state.files.find(f => f.id === id);
-        if (file && (file.fileType?.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
+        if (file && (file.fileType?.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm') || file.name.endsWith('.m4v') || file.name.endsWith('.ogv'))) {
           const vEl = document.querySelector('video');
           if (vEl) {
             try { await vEl.play(); } catch(e) {}
@@ -1366,7 +1366,7 @@
         if (file) {
           const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
           delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) await getOrCreateBlobUrl(newFile);
+          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm') || newFile.name.endsWith('.m4v') || newFile.name.endsWith('.ogv')) await getOrCreateBlobUrl(newFile);
           state.files.push(newFile);
           await saveFile(newFile);
         }
@@ -1416,7 +1416,7 @@
 
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
       delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) {
+      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm') || newFile.name.endsWith('.m4v') || newFile.name.endsWith('.ogv')) {
         await getOrCreateBlobUrl(newFile);
       }
       state.files.push(newFile);
@@ -1473,7 +1473,7 @@
             item.thumbnailData = base64;
           } else {
             item.dataUrl = base64;
-            if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+            if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm') || item.name.endsWith('.m4v') || item.name.endsWith('.ogv')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
           }
           await saveFile(item);
           render();
@@ -1616,7 +1616,7 @@
         let inferredType = getMimeType(file);
         let blobUrl = '';
 
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
+        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm') || file.name.endsWith('.m4v') || file.name.endsWith('.ogv')) {
           blobUrl = URL.createObjectURL(file);
         } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
           try { textContent = await fileToText(file); } catch (e) {}
@@ -1644,14 +1644,14 @@
           }
         }
 
-        const item = {
+        const newFile = {
           id: uid(),
           name: file.name,
           fileType: inferredType,
           size: file.size,
           dataUrl: dataUrl,
-          blobUrl: blobUrl,
           textContent: textContent,
+          blobUrl: blobUrl,
           parentId: state.currentFolderId,
           x: targetX,
           y: targetY,
@@ -1659,8 +1659,8 @@
           height: 144
         };
 
-        state.files.push(item);
-        await saveFile(item);
+        state.files.push(newFile);
+        await saveFile(newFile);
       }
       render();
     }
@@ -1668,116 +1668,156 @@
     document.getElementById('file-input').addEventListener('change', (e) => handleFileImport(e.target.files));
     document.getElementById('photo-input').addEventListener('change', (e) => handleFileImport(e.target.files));
 
+    // --- DRAG, DROP & MULTI-DRAG / RESIZE LOGIC ---
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      const items = container.querySelectorAll('[id^="item-"]');
+      const items = container.querySelectorAll('[data-id]');
       items.forEach(el => {
         const id = el.getAttribute('data-id');
-        const handle = el.querySelector('.resize-handle');
+        const resizeHandle = el.querySelector('.resize-handle');
 
-        let isDragging = false;
-        let isResizing = false;
-        let startX, startY, initialX, initialY, initialW, initialH;
+        // RESIZE
+        if (resizeHandle) {
+          let isResizing = false;
+          let startX, startW, startH;
 
-        el.addEventListener('pointerdown', (e) => {
-          if (state.selectMode) return;
-          if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a') || e.target.closest('audio') || e.target.closest('video')) return;
-          if (!state.editMode) return;
-
-          isDragging = true;
-          el.setPointerCapture(e.pointerId);
-          startX = e.clientX;
-          startY = e.clientY;
-          initialX = parseInt(el.style.left) || 20;
-          initialY = parseInt(el.style.top) || 20;
-          e.stopPropagation();
-        });
-
-        if (handle) {
-          handle.addEventListener('pointerdown', (e) => {
+          const onResizeStart = (e) => {
             if (!state.editMode) return;
-            isResizing = true;
-            handle.setPointerCapture(e.pointerId);
-            startX = e.clientX;
-            startY = e.clientY;
-            initialW = el.offsetWidth;
-            initialH = el.offsetHeight;
             e.stopPropagation();
             e.preventDefault();
-          });
-        }
+            isResizing = true;
+            startX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+            startW = el.offsetWidth;
+            startH = el.offsetHeight;
 
-        el.addEventListener('pointermove', (e) => {
-          if (isResizing) {
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const newW = Math.max(80, initialW + dx);
-            const newH = Math.max(80, initialH + dy);
+            window.addEventListener('mousemove', onResizeMove);
+            window.addEventListener('mouseup', onResizeEnd);
+            window.addEventListener('touchmove', onResizeMove, { passive: false });
+            window.addEventListener('touchend', onResizeEnd);
+          };
+
+          const onResizeMove = (e) => {
+            if (!isResizing) return;
+            e.preventDefault();
+            const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+            const dx = clientX - startX;
+            const newW = Math.max(80, startW + dx);
+            const newH = Math.max(80, startH + dx);
             el.style.width = newW + 'px';
             el.style.height = newH + 'px';
-            e.stopPropagation();
-            return;
-          }
+          };
 
-          if (isDragging) {
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            let newX = initialX + dx;
-            let newY = initialY + dy;
-
-            if (state.editMode) {
-              const gs = CONFIG.GRID_SIZE;
-              newX = Math.round(newX / gs) * gs;
-              newY = Math.round(newY / gs) * gs;
-            }
-
-            newX = Math.max(0, newX);
-            newY = Math.max(0, newY);
-
-            el.style.left = newX + 'px';
-            el.style.top = newY + 'px';
-            e.stopPropagation();
-          }
-        });
-
-        const stopInteraction = async (e) => {
-          if (isResizing) {
+          const onResizeEnd = async () => {
+            if (!isResizing) return;
             isResizing = false;
-            try { handle.releasePointerCapture(e.pointerId); } catch(err){}
+            window.removeEventListener('mousemove', onResizeMove);
+            window.removeEventListener('mouseup', onResizeEnd);
+            window.removeEventListener('touchmove', onResizeMove);
+            window.removeEventListener('touchend', onResizeEnd);
+
             const finalW = el.offsetWidth;
             const finalH = el.offsetHeight;
-            let itemObj = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (itemObj) {
-              itemObj.width = finalW;
-              itemObj.height = finalH;
-              if (isFolder(itemObj)) await saveFolder(itemObj);
-              else if (isBubble(itemObj)) await saveTextBubble(itemObj);
-              else await saveFile(itemObj);
+            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (item) {
+              item.width = finalW;
+              item.height = finalH;
+              if (isFolder(item)) await saveFolder(item);
+              else if (isBubble(item)) await saveTextBubble(item);
+              else await saveFile(item);
             }
-            e.stopPropagation();
+          };
+
+          resizeHandle.addEventListener('mousedown', onResizeStart);
+          resizeHandle.addEventListener('touchstart', onResizeStart, { passive: false });
+        }
+
+        // DRAG & MULTI-DRAG
+        let isDragging = false;
+        let startX, startY;
+        let initialPositions = {};
+
+        const onDragStart = (e) => {
+          if (!state.editMode) return;
+          if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+          
+          isDragging = true;
+          startX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+          startY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+          let activeIds = [id];
+          if (state.selectMode && state.selectedIds.includes(id)) {
+            activeIds = [...state.selectedIds];
           }
 
-          if (isDragging) {
-            isDragging = false;
-            try { el.releasePointerCapture(e.pointerId); } catch(err){}
-            const finalX = parseInt(el.style.left);
-            const finalY = parseInt(el.style.top);
-            let itemObj = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (itemObj) {
-              itemObj.x = finalX;
-              itemObj.y = finalY;
-              if (isFolder(itemObj)) await saveFolder(itemObj);
-              else if (isBubble(itemObj)) await saveTextBubble(itemObj);
-              else await saveFile(itemObj);
+          initialPositions = {};
+          activeIds.forEach(targetId => {
+            const node = document.getElementById(`item-${targetId}`);
+            let itemObj = state.folders.find(f => f.id === targetId) || state.files.find(f => f.id === targetId) || state.textBubbles.find(b => b.id === targetId);
+            if (node && itemObj) {
+              initialPositions[targetId] = {
+                x: itemObj.x !== undefined ? itemObj.x : node.offsetLeft,
+                y: itemObj.y !== undefined ? itemObj.y : node.offsetTop,
+                node: node,
+                item: itemObj
+              };
             }
-            e.stopPropagation();
+          });
+
+          window.addEventListener('mousemove', onDragMove);
+          window.addEventListener('mouseup', onDragEnd);
+          window.addEventListener('touchmove', onDragMove, { passive: false });
+          window.addEventListener('touchend', onDragEnd);
+        };
+
+        const onDragMove = (e) => {
+          if (!isDragging) return;
+          e.preventDefault();
+          const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+          const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+          const dx = clientX - startX;
+          const dy = clientY - startY;
+
+          for (let targetId in initialPositions) {
+            const data = initialPositions[targetId];
+            let newX = Math.max(0, data.x + dx);
+            let newY = Math.max(0, data.y + dy);
+
+            // Soft grid snap
+            if (CONFIG.GRID_SIZE) {
+              newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+              newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            }
+
+            data.node.style.left = newX + 'px';
+            data.node.style.top = newY + 'px';
           }
         };
 
-        el.addEventListener('pointerup', stopInteraction);
-        el.addEventListener('pointercancel', stopInteraction);
+        const onDragEnd = async () => {
+          if (!isDragging) return;
+          isDragging = false;
+          window.removeEventListener('mousemove', onDragMove);
+          window.removeEventListener('mouseup', onDragEnd);
+          window.removeEventListener('touchmove', onDragMove);
+          window.removeEventListener('touchend', onDragEnd);
+
+          for (let targetId in initialPositions) {
+            const data = initialPositions[targetId];
+            const finalX = parseInt(data.node.style.left, 10);
+            const finalY = parseInt(data.node.style.top, 10);
+            data.item.x = finalX;
+            data.item.y = finalY;
+
+            if (isFolder(data.item)) await saveFolder(data.item);
+            else if (isBubble(data.item)) await saveTextBubble(data.item);
+            else await saveFile(data.item);
+          }
+        };
+
+        el.addEventListener('mousedown', onDragStart);
+        el.addEventListener('touchstart', onDragStart, { passive: false });
       });
     }
 
