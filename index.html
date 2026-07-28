@@ -893,7 +893,7 @@
       const type = file.fileType || '';
       const name = file.name || '';
       const mediaUrl = await getOrCreateBlobUrl(file);
-      const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.ogv');
+      const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
       const isLink = type === 'link';
       const isApp = type === 'app' || type === 'ios-app';
       
@@ -1080,7 +1080,7 @@
       render(); 
       setTimeout(async () => {
         const file = state.files.find(f => f.id === id);
-        if (file && (file.fileType?.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm') || file.name.endsWith('.m4v') || file.name.endsWith('.ogv'))) {
+        if (file && (file.fileType?.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
           const vEl = document.querySelector('video');
           if (vEl) {
             try { await vEl.play(); } catch(e) {}
@@ -1366,7 +1366,7 @@
         if (file) {
           const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
           delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm') || newFile.name.endsWith('.m4v') || newFile.name.endsWith('.ogv')) await getOrCreateBlobUrl(newFile);
+          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) await getOrCreateBlobUrl(newFile);
           state.files.push(newFile);
           await saveFile(newFile);
         }
@@ -1416,7 +1416,7 @@
 
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
       delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm') || newFile.name.endsWith('.m4v') || newFile.name.endsWith('.ogv')) {
+      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) {
         await getOrCreateBlobUrl(newFile);
       }
       state.files.push(newFile);
@@ -1473,7 +1473,7 @@
             item.thumbnailData = base64;
           } else {
             item.dataUrl = base64;
-            if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm') || item.name.endsWith('.m4v') || item.name.endsWith('.ogv')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+            if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
           }
           await saveFile(item);
           render();
@@ -1616,10 +1616,11 @@
         let inferredType = getMimeType(file);
         let blobUrl = '';
 
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm') || file.name.endsWith('.m4v') || file.name.endsWith('.ogv')) {
-          blobUrl = URL.createObjectURL(file);
-        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
-          try { textContent = await fileToText(file); } catch (e) {}
+        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
+          const blob = new Blob([file], { type: inferredType });
+          blobUrl = URL.createObjectURL(blob);
+        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.html') || file.name.endsWith('.csv')) {
+          try { textContent = await fileToText(file); } catch(e) {}
         }
 
         let allExisting = [
@@ -1628,8 +1629,7 @@
           ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
         ];
 
-        let targetX = 20;
-        let targetY = 20;
+        let targetX = 20, targetY = 20;
         if (allExisting.length > 0) {
           const lastItem = allExisting[allExisting.length - 1];
           const lastX = lastItem.x !== undefined ? lastItem.x : 20;
@@ -1644,14 +1644,14 @@
           }
         }
 
-        const newFile = {
+        const newItem = {
           id: uid(),
           name: file.name,
           fileType: inferredType,
           size: file.size,
           dataUrl: dataUrl,
-          textContent: textContent,
           blobUrl: blobUrl,
+          textContent: textContent,
           parentId: state.currentFolderId,
           x: targetX,
           y: targetY,
@@ -1659,66 +1659,66 @@
           height: 144
         };
 
-        state.files.push(newFile);
-        await saveFile(newFile);
+        state.files.push(newItem);
+        await saveFile(newItem);
       }
       render();
     }
 
-    document.getElementById('file-input').addEventListener('change', (e) => handleFileImport(e.target.files));
-    document.getElementById('photo-input').addEventListener('change', (e) => handleFileImport(e.target.files));
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) handleFileImport(e.target.files);
+      e.target.value = '';
+    });
 
-    // --- DRAG, DROP & MULTI-DRAG / RESIZE LOGIC ---
+    document.getElementById('photo-input').addEventListener('change', (e) => {
+      if (e.target.files.length > 0) handleFileImport(e.target.files);
+      e.target.value = '';
+    });
+
+    // --- DRAG & DROP / RESIZE MECHANICS ---
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      const items = container.querySelectorAll('[data-id]');
-      items.forEach(el => {
+      const itemEls = container.querySelectorAll('[id^="item-"]');
+      itemEls.forEach(el => {
         const id = el.getAttribute('data-id');
         const resizeHandle = el.querySelector('.resize-handle');
 
-        // RESIZE
+        // RESIZE MECHANIC
         if (resizeHandle) {
           let isResizing = false;
-          let startX, startW, startH;
+          let startW = 0, startH = 0, startX = 0, startY = 0;
 
-          const onResizeStart = (e) => {
+          resizeHandle.addEventListener('pointerdown', (e) => {
             if (!state.editMode) return;
             e.stopPropagation();
-            e.preventDefault();
             isResizing = true;
-            startX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+            resizeHandle.setPointerCapture(e.pointerId);
             startW = el.offsetWidth;
             startH = el.offsetHeight;
+            startX = e.clientX;
+            startY = e.clientY;
+          });
 
-            window.addEventListener('mousemove', onResizeMove);
-            window.addEventListener('mouseup', onResizeEnd);
-            window.addEventListener('touchmove', onResizeMove, { passive: false });
-            window.addEventListener('touchend', onResizeEnd);
-          };
-
-          const onResizeMove = (e) => {
+          resizeHandle.addEventListener('pointermove', (e) => {
             if (!isResizing) return;
-            e.preventDefault();
-            const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-            const dx = clientX - startX;
+            e.stopPropagation();
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
             const newW = Math.max(80, startW + dx);
-            const newH = Math.max(80, startH + dx);
+            const newH = Math.max(80, startH + dy);
             el.style.width = newW + 'px';
             el.style.height = newH + 'px';
-          };
+          });
 
-          const onResizeEnd = async () => {
+          resizeHandle.addEventListener('pointerup', async (e) => {
             if (!isResizing) return;
             isResizing = false;
-            window.removeEventListener('mousemove', onResizeMove);
-            window.removeEventListener('mouseup', onResizeEnd);
-            window.removeEventListener('touchmove', onResizeMove);
-            window.removeEventListener('touchend', onResizeEnd);
-
+            resizeHandle.releasePointerCapture(e.pointerId);
             const finalW = el.offsetWidth;
             const finalH = el.offsetHeight;
+
             let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
             if (item) {
               item.width = finalW;
@@ -1727,102 +1727,91 @@
               else if (isBubble(item)) await saveTextBubble(item);
               else await saveFile(item);
             }
-          };
-
-          resizeHandle.addEventListener('mousedown', onResizeStart);
-          resizeHandle.addEventListener('touchstart', onResizeStart, { passive: false });
+          });
         }
 
-        // DRAG & MULTI-DRAG
+        // DRAG & MULTI-DRAG MECHANIC
         let isDragging = false;
-        let startX, startY;
+        let startX = 0, startY = 0;
         let initialPositions = {};
 
-        const onDragStart = (e) => {
+        el.addEventListener('pointerdown', (e) => {
           if (!state.editMode) return;
-          if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
           
           isDragging = true;
-          startX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-          startY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+          el.setPointerCapture(e.pointerId);
+          startX = e.clientX;
+          startY = e.clientY;
 
-          let activeIds = [id];
-          if (state.selectMode && state.selectedIds.includes(id)) {
-            activeIds = [...state.selectedIds];
-          }
-
+          // If item is part of multi-selection, drag all selected items together
+          let activeSelected = state.selectedIds.includes(id) ? state.selectedIds : [id];
           initialPositions = {};
-          activeIds.forEach(targetId => {
-            const node = document.getElementById(`item-${targetId}`);
-            let itemObj = state.folders.find(f => f.id === targetId) || state.files.find(f => f.id === targetId) || state.textBubbles.find(b => b.id === targetId);
-            if (node && itemObj) {
-              initialPositions[targetId] = {
-                x: itemObj.x !== undefined ? itemObj.x : node.offsetLeft,
-                y: itemObj.y !== undefined ? itemObj.y : node.offsetTop,
-                node: node,
-                item: itemObj
+          activeSelected.forEach(selId => {
+            let selEl = document.getElementById(`item-${selId}`);
+            let itemObj = state.folders.find(f => f.id === selId) || state.files.find(f => f.id === selId) || state.textBubbles.find(b => b.id === selId);
+            if (selEl && itemObj) {
+              initialPositions[selId] = {
+                x: itemObj.x !== undefined ? itemObj.x : parseInt(selEl.style.left) || 0,
+                y: itemObj.y !== undefined ? itemObj.y : parseInt(selEl.style.top) || 0
               };
             }
           });
+        });
 
-          window.addEventListener('mousemove', onDragMove);
-          window.addEventListener('mouseup', onDragEnd);
-          window.addEventListener('touchmove', onDragMove, { passive: false });
-          window.addEventListener('touchend', onDragEnd);
-        };
-
-        const onDragMove = (e) => {
+        el.addEventListener('pointermove', (e) => {
           if (!isDragging) return;
-          e.preventDefault();
-          const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-          const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-          const dx = clientX - startX;
-          const dy = clientY - startY;
+          e.stopPropagation();
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
 
-          for (let targetId in initialPositions) {
-            const data = initialPositions[targetId];
-            let newX = Math.max(0, data.x + dx);
-            let newY = Math.max(0, data.y + dy);
-
-            // Soft grid snap
-            if (CONFIG.GRID_SIZE) {
-              newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-              newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+          let activeSelected = state.selectedIds.includes(id) ? state.selectedIds : [id];
+          activeSelected.forEach(selId => {
+            let initPos = initialPositions[selId];
+            let selEl = document.getElementById(`item-${selId}`);
+            if (initPos && selEl) {
+              let newX = Math.max(0, initPos.x + dx);
+              let newY = Math.max(0, initPos.y + dy);
+              selEl.style.left = newX + 'px';
+              selEl.style.top = newY + 'px';
             }
+          });
+        });
 
-            data.node.style.left = newX + 'px';
-            data.node.style.top = newY + 'px';
-          }
-        };
-
-        const onDragEnd = async () => {
+        el.addEventListener('pointerup', async (e) => {
           if (!isDragging) return;
           isDragging = false;
-          window.removeEventListener('mousemove', onDragMove);
-          window.removeEventListener('mouseup', onDragEnd);
-          window.removeEventListener('touchmove', onDragMove);
-          window.removeEventListener('touchend', onDragEnd);
+          el.releasePointerCapture(e.pointerId);
 
-          for (let targetId in initialPositions) {
-            const data = initialPositions[targetId];
-            const finalX = parseInt(data.node.style.left, 10);
-            const finalY = parseInt(data.node.style.top, 10);
-            data.item.x = finalX;
-            data.item.y = finalY;
+          let activeSelected = state.selectedIds.includes(id) ? state.selectedIds : [id];
+          for (let selId of activeSelected) {
+            let selEl = document.getElementById(`item-${selId}`);
+            let itemObj = state.folders.find(f => f.id === selId) || state.files.find(f => f.id === selId) || state.textBubbles.find(b => b.id === selId);
+            if (selEl && itemObj) {
+              let finalX = parseInt(selEl.style.left) || 0;
+              let finalY = parseInt(selEl.style.top) || 0;
+              
+              // Snap to grid
+              finalX = Math.round(finalX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+              finalY = Math.round(finalY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
 
-            if (isFolder(data.item)) await saveFolder(data.item);
-            else if (isBubble(data.item)) await saveTextBubble(data.item);
-            else await saveFile(data.item);
+              itemObj.x = finalX;
+              itemObj.y = finalY;
+
+              if (isFolder(itemObj)) await saveFolder(itemObj);
+              else if (isBubble(itemObj)) await saveTextBubble(itemObj);
+              else await saveFile(itemObj);
+            }
           }
-        };
-
-        el.addEventListener('mousedown', onDragStart);
-        el.addEventListener('touchstart', onDragStart, { passive: false });
+          render();
+        });
       });
     }
 
-    // Initialize
-    loadData();
+    // Initialize App on Load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
   </script>
 </body>
 </html>
