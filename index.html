@@ -93,14 +93,10 @@
     // --- MEDIA PLAYBACK HELPER ---
     async function getOrCreateBlobUrl(file) {
       if (file.blobUrl) {
-        // Verify if blob URL is still valid/revoked or working by fetching or simply using it. 
-        // If it's a blob url, we can also ensure it doesn't fail on second open by recreating it if needed.
         try {
           const res = await fetch(file.blobUrl);
           if (res.ok) return file.blobUrl;
-        } catch (e) {
-          // Fall through to recreate
-        }
+        } catch (e) {}
       }
       if (!file.dataUrl) return '';
       try {
@@ -921,7 +917,13 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) {
+        return `
+          <div class="flex flex-col items-center gap-4 max-w-[90vw] max-h-[85vh] w-full h-full justify-center">
+            <video controls playsinline autoplay class="max-w-full max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>
+          </div>
+        `;
+      }
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
@@ -1071,7 +1073,21 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    function openQuickView(id) { 
+      state.quickViewFileId = id; 
+      closeMenu(); 
+      closeHamburgerMenu(); 
+      render(); 
+      setTimeout(async () => {
+        const file = state.files.find(f => f.id === id);
+        if (file && (file.fileType?.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
+          const vEl = document.querySelector('video');
+          if (vEl) {
+            try { await vEl.play(); } catch(e) {}
+          }
+        }
+      }, 100);
+    }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function navigateBack() {
@@ -1653,90 +1669,119 @@
     document.getElementById('photo-input').addEventListener('change', (e) => handleFileImport(e.target.files));
 
     function attachDragAndResizeListeners() {
-      const elements = document.querySelectorAll('[data-id]');
-      elements.forEach(el => {
-        let activeDrag = false, activeResize = false;
-        let startX, startY, origX, origY, origW, origH;
-        const resizeHandle = el.querySelector('.resize-handle');
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
 
-        const onStart = (e) => {
+      const items = container.querySelectorAll('[id^="item-"]');
+      items.forEach(el => {
+        const id = el.getAttribute('data-id');
+        const handle = el.querySelector('.resize-handle');
+
+        let isDragging = false;
+        let isResizing = false;
+        let startX, startY, initialX, initialY, initialW, initialH;
+
+        el.addEventListener('pointerdown', (e) => {
+          if (state.selectMode) return;
+          if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a') || e.target.closest('audio') || e.target.closest('video')) return;
           if (!state.editMode) return;
-          if (e.target.closest('button') || e.target.closest('textarea')) return;
-          const touch = e.touches ? e.touches[0] : e;
-          startX = touch.clientX; startY = touch.clientY;
-          
-          if (e.target === resizeHandle || resizeHandle?.contains(e.target)) {
-            activeResize = true;
-            origW = el.offsetWidth;
-            origH = el.offsetHeight;
+
+          isDragging = true;
+          el.setPointerCapture(e.pointerId);
+          startX = e.clientX;
+          startY = e.clientY;
+          initialX = parseInt(el.style.left) || 20;
+          initialY = parseInt(el.style.top) || 20;
+          e.stopPropagation();
+        });
+
+        if (handle) {
+          handle.addEventListener('pointerdown', (e) => {
+            if (!state.editMode) return;
+            isResizing = true;
+            handle.setPointerCapture(e.pointerId);
+            startX = e.clientX;
+            startY = e.clientY;
+            initialW = el.offsetWidth;
+            initialH = el.offsetHeight;
             e.stopPropagation();
-          } else {
-            activeDrag = true;
-            origX = parseInt(el.style.left) || 0;
-            origY = parseInt(el.style.top) || 0;
-          }
-          window.addEventListener('mousemove', onMove);
-          window.addEventListener('mouseup', onEnd);
-          window.addEventListener('touchmove', onMove, { passive: false });
-          window.addEventListener('touchend', onEnd);
-        };
+            e.preventDefault();
+          });
+        }
 
-        const onMove = (e) => {
-          if (!activeDrag && !activeResize) return;
-          if (e.cancelable) e.preventDefault();
-          const touch = e.touches ? e.touches[0] : e;
-          const dx = touch.clientX - startX;
-          const dy = touch.clientY - startY;
-
-          if (activeDrag) {
-            let newX = Math.max(10, origX + dx);
-            let newY = Math.max(10, origY + dy);
-            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.left = newX + 'px';
-            el.style.top = newY + 'px';
-          } else if (activeResize) {
-            let newW = Math.max(80, origW + dx);
-            let newH = Math.max(80, origH + dy);
-            newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+        el.addEventListener('pointermove', (e) => {
+          if (isResizing) {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const newW = Math.max(80, initialW + dx);
+            const newH = Math.max(80, initialH + dy);
             el.style.width = newW + 'px';
             el.style.height = newH + 'px';
+            e.stopPropagation();
+            return;
           }
-        };
 
-        const onEnd = async () => {
-          if (activeDrag || activeResize) {
-            const id = el.getAttribute('data-id');
-            const finalX = parseInt(el.style.left) || 0;
-            const finalY = parseInt(el.style.top) || 0;
+          if (isDragging) {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            let newX = initialX + dx;
+            let newY = initialY + dy;
+
+            if (state.editMode) {
+              const gs = CONFIG.GRID_SIZE;
+              newX = Math.round(newX / gs) * gs;
+              newY = Math.round(newY / gs) * gs;
+            }
+
+            newX = Math.max(0, newX);
+            newY = Math.max(0, newY);
+
+            el.style.left = newX + 'px';
+            el.style.top = newY + 'px';
+            e.stopPropagation();
+          }
+        });
+
+        const stopInteraction = async (e) => {
+          if (isResizing) {
+            isResizing = false;
+            try { handle.releasePointerCapture(e.pointerId); } catch(err){}
             const finalW = el.offsetWidth;
             const finalH = el.offsetHeight;
-
-            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (item) {
-              item.x = finalX;
-              item.y = finalY;
-              item.width = finalW;
-              item.height = finalH;
-              if (isFolder(item)) await saveFolder(item);
-              else if (isBubble(item)) await saveTextBubble(item);
-              else await saveFile(item);
+            let itemObj = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (itemObj) {
+              itemObj.width = finalW;
+              itemObj.height = finalH;
+              if (isFolder(itemObj)) await saveFolder(itemObj);
+              else if (isBubble(itemObj)) await saveTextBubble(itemObj);
+              else await saveFile(itemObj);
             }
+            e.stopPropagation();
           }
-          activeDrag = false;
-          activeResize = false;
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onEnd);
-          window.removeEventListener('touchmove', onMove);
-          window.removeEventListener('touchend', onEnd);
+
+          if (isDragging) {
+            isDragging = false;
+            try { el.releasePointerCapture(e.pointerId); } catch(err){}
+            const finalX = parseInt(el.style.left);
+            const finalY = parseInt(el.style.top);
+            let itemObj = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (itemObj) {
+              itemObj.x = finalX;
+              itemObj.y = finalY;
+              if (isFolder(itemObj)) await saveFolder(itemObj);
+              else if (isBubble(itemObj)) await saveTextBubble(itemObj);
+              else await saveFile(itemObj);
+            }
+            e.stopPropagation();
+          }
         };
 
-        el.addEventListener('mousedown', onStart);
-        el.addEventListener('touchstart', onStart, { passive: true });
+        el.addEventListener('pointerup', stopInteraction);
+        el.addEventListener('pointercancel', stopInteraction);
       });
     }
 
+    // Initialize
     loadData();
   </script>
 </body>
