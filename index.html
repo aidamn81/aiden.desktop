@@ -1166,14 +1166,21 @@
 
       if (formatKey === 'fontSize') {
         state.textEditorModal.fontSize = value;
-        ta.focus();
+        render();
+        setTimeout(() => {
+          const newTa = document.getElementById('modal-text-input');
+          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
+        }, 30);
         return;
       }
 
       if (formatKey === 'fontColor') {
         state.textEditorModal.fontColor = value;
-        ta.style.color = value;
-        ta.focus();
+        render();
+        setTimeout(() => {
+          const newTa = document.getElementById('modal-text-input');
+          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
+        }, 30);
         return;
       }
 
@@ -1184,10 +1191,12 @@
         else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
         else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
 
-        ta.value = text.substring(0, start) + wrapped + text.substring(end);
-        state.textEditorModal.text = ta.value;
-        ta.focus();
-        ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
+        state.textEditorModal.text = text.substring(0, start) + wrapped + text.substring(end);
+        render();
+        setTimeout(() => {
+          const newTa = document.getElementById('modal-text-input');
+          if (newTa) { newTa.focus(); newTa.setSelectionRange(start + wrapped.length, start + wrapped.length); }
+        }, 30);
       } else {
         if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
         if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
@@ -1652,6 +1661,7 @@
             el.style.width = `${Math.max(80, Math.round((origW + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE)}px`;
             el.style.height = `${Math.max(80, Math.round((origH + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE)}px`;
           }
+          e.preventDefault();
         };
 
         const onEnd = async () => {
@@ -1659,31 +1669,33 @@
           const id = el.getAttribute('data-id');
           const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
           if (item) {
-            item.x = parseInt(el.style.left) || 0;
-            item.y = parseInt(el.style.top) || 0;
-            item.width = parseInt(el.style.width) || item.width;
-            item.height = parseInt(el.style.height) || item.height;
+            item.x = parseInt(el.style.left);
+            item.y = parseInt(el.style.top);
+            item.width = parseInt(el.style.width);
+            item.height = parseInt(el.style.height);
             if (isFolder(item)) await saveFolder(item);
             else if (isBubble(item)) await saveTextBubble(item);
             else await saveFile(item);
           }
-          activeDrag = false;
-          activeResize = false;
+          activeDrag = false; activeResize = false;
         };
 
         el.addEventListener('mousedown', onStart);
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onEnd);
-
-        el.addEventListener('touchstart', onStart, { passive: true });
-        window.addEventListener('touchmove', onMove, { passive: true });
+        el.addEventListener('touchstart', onStart, { passive: false });
+        window.addEventListener('touchmove', onMove, { passive: false });
         window.addEventListener('touchend', onEnd);
       });
     }
 
-    function attachBulkDragListeners() {}
+    function attachBulkDragListeners() {
+      // Future expansion for multi-select dragging
+    }
 
-    loadData();
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
   </script>
 </body>
 </html>
