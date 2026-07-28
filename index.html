@@ -53,6 +53,7 @@
   <input id="change-image-input" type="file" accept="image/*" class="hidden" />
   <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
   <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
+  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" />
 
   <script>
     // --- CONFIG & STATE ---
@@ -80,6 +81,7 @@
       showUploadModal: false,
       textEditorModal: null, 
       linkModal: false,
+      linkModalThumbData: null,
       appModal: false,
       appModalThumbData: null
     };
@@ -383,12 +385,6 @@
               <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
               ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
             </div>
-            ${state.selectMode ? `
-              <button onclick="toggleSelectAll()" class="px-2.5 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1 shadow-sm shrink-0">
-                <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-3.5 h-3.5"></i>
-                ${allChildrenSelected ? 'Deselect All' : 'Select All'}
-              </button>
-            ` : ''}
           </div>
 
           ${state.hamburgerMenuOpen ? `
@@ -433,20 +429,27 @@
               </button>
             </div>
           ` : `
-            <div class="relative min-w-[1200px] min-h-[1200px] p-4">
+            <div class="relative min-w-[1200px] min-h-[1200px] p-4" id="canvas-container">
               ${items.map((item, index) => renderItem(item, index)).join('')}
             </div>
           `}
         </main>
 
-        ${state.selectMode && state.selectedIds.length > 0 ? `
-          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-5">
-            <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
-            <div class="h-4 w-px bg-zinc-800"></div>
-            <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy to Clipboard</button>
-            <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move</button>
-            <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> iOS Share</button>
-            <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+        ${state.selectMode ? `
+          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-4 flex-wrap justify-center">
+            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0">
+              <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
+              ${allChildrenSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            ${state.selectedIds.length > 0 ? `
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
+              <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move</button>
+              <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+              <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+            ` : ''}
           </div>
         ` : ''}
 
@@ -459,6 +462,7 @@
 
       if (window.lucide) window.lucide.createIcons();
       attachDragAndResizeListeners();
+      attachBulkDragListeners();
     }
 
     function getFileIcon(type, name) {
@@ -527,7 +531,7 @@
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
               <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                ${(isImage || (isApp && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                ${(isImage || ((isApp || isLink) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
                     ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
@@ -615,10 +619,18 @@
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeLinkModal()">
           <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
             <h3 class="text-lg font-bold text-white">Add Web Link</h3>
-            <p class="text-xs text-zinc-400">Enter the URL and a title for the link thumbnail.</p>
+            <p class="text-xs text-zinc-400">Enter the URL and an optional display thumbnail.</p>
             <div class="flex flex-col gap-3 mt-2">
               <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               <input id="link-name-input" type="text" placeholder="Site Name (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Display Thumbnail</span>
+                <button type="button" onclick="document.getElementById('link-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.linkModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.linkModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.linkModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
             </div>
             <div class="flex items-center gap-2 mt-2">
               <button onclick="closeLinkModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -628,6 +640,14 @@
         </div>
       `;
     }
+
+    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.linkModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
 
     function renderAppModal() {
       return `
@@ -639,7 +659,6 @@
               <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               
-              <!-- Thumbnail upload section -->
               <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
                 <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
                 <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
@@ -667,6 +686,7 @@
 
     function openLinkModal() {
       state.linkModal = true;
+      state.linkModalThumbData = null;
       render();
       setTimeout(() => {
         const input = document.getElementById('link-url-input');
@@ -676,6 +696,7 @@
 
     function closeLinkModal() {
       state.linkModal = false;
+      state.linkModalThumbData = null;
       render();
     }
 
@@ -744,6 +765,7 @@
         fileType: 'link',
         size: 0,
         dataUrl: url,
+        thumbnailData: state.linkModalThumbData || null,
         parentId: state.currentFolderId,
         x: targetX,
         y: targetY,
@@ -1017,7 +1039,7 @@
       else {
         const file = state.files.find(f => f.id === id);
         if (file && (file.fileType === 'link' || file.fileType === 'ios-app')) {
-          window.location.href = file.dataUrl;
+          window.open(file.dataUrl, '_blank');
         } else {
           openQuickView(id);
         }
@@ -1369,7 +1391,7 @@
         const base64 = await fileToBase64(file);
         const item = state.files.find(f => f.id === state.targetChangeImageId);
         if (item) {
-          if (item.fileType === 'ios-app') {
+          if (item.fileType === 'ios-app' || item.fileType === 'link') {
             item.thumbnailData = base64;
           } else {
             item.dataUrl = base64;
@@ -1628,6 +1650,81 @@
         window.addEventListener('touchmove', onMove, { passive: true });
         window.addEventListener('touchend', onEnd);
       });
+    }
+
+    function attachBulkDragListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+
+      let isDraggingAll = false;
+      let startX, startY;
+      let initialPositions = {};
+
+      const onStart = (e) => {
+        if (!state.selectMode || state.selectedIds.length === 0) return;
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+
+        const touch = e.touches ? e.touches[0] : e;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isDraggingAll = true;
+
+        initialPositions = {};
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            initialPositions[id] = {
+              x: parseInt(el.style.left) || 0,
+              y: parseInt(el.style.top) || 0
+            };
+          }
+        });
+      };
+
+      const onMove = (e) => {
+        if (!isDraggingAll) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          const init = initialPositions[id];
+          if (el && init) {
+            el.style.left = `${Math.max(8, init.x + dx)}px`;
+            el.style.top = `${Math.max(8, init.y + dy)}px`;
+          }
+        });
+      };
+
+      const onEnd = async () => {
+        if (!isDraggingAll) return;
+        isDraggingAll = false;
+
+        for (let id of state.selectedIds) {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            const newX = parseInt(el.style.left) || 0;
+            const newY = parseInt(el.style.top) || 0;
+
+            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (target) {
+              target.x = newX;
+              target.y = newY;
+              if (isFolder(target)) await saveFolder(target);
+              else if (isBubble(target)) await saveTextBubble(target);
+              else await saveFile(target);
+            }
+          }
+        }
+      };
+
+      container.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      container.addEventListener('touchstart', onStart, { passive: true });
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onEnd);
     }
 
     loadData();
