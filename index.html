@@ -109,7 +109,6 @@
     async function getOrCreateBlobUrl(file) {
       if (file.blobUrl) {
         try {
-          // Test if blob URL is still active/valid
           const testRes = await fetch(file.blobUrl).catch(() => null);
           if (testRes && testRes.ok) return file.blobUrl;
         } catch (e) {}
@@ -1606,39 +1605,35 @@
           const touch = e.touches ? e.touches[0] : e;
           const dx = touch.clientX - startX;
           const dy = touch.clientY - startY;
-          const id = el.getAttribute('data-id');
 
-          if (activeDrag) {
-            let newX = Math.max(10, origX + dx);
-            let newY = Math.max(10, origY + dy);
-            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.left = newX + 'px';
-            el.style.top = newY + 'px';
-
-            const folder = state.folders.find(f => f.id === id);
-            const file = state.files.find(f => f.id === id);
-            const bubble = state.textBubbles.find(b => b.id === id);
-            if (folder) { folder.x = newX; folder.y = newY; saveFolder(folder); }
-            if (file) { file.x = newX; file.y = newY; saveFile(file); }
-            if (bubble) { bubble.x = newX; bubble.y = newY; saveTextBubble(bubble); }
-          } else if (activeResize) {
+          if (activeResize) {
             let newW = Math.max(80, origW + dx);
             let newH = Math.max(80, origH + dy);
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
-
-            const folder = state.folders.find(f => f.id === id);
-            const file = state.files.find(f => f.id === id);
-            const bubble = state.textBubbles.find(b => b.id === id);
-            if (folder) { folder.width = newW; folder.height = newH; saveFolder(folder); }
-            if (file) { file.width = newW; file.height = newH; saveFile(file); }
-            if (bubble) { bubble.width = newW; bubble.height = newH; saveTextBubble(bubble); }
+            el.style.width = `${newW}px`;
+            el.style.height = `${newH}px`;
+          } else if (activeDrag) {
+            let newX = Math.max(0, origX + dx);
+            let newY = Math.max(0, origY + dy);
+            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            el.style.left = `${newX}px`;
+            el.style.top = `${newY}px`;
           }
-          e.preventDefault();
         };
 
-        const onEnd = () => {
+        const onEnd = async () => {
+          if (!state.editMode || (!activeDrag && !activeResize)) return;
+          const id = el.getAttribute('data-id');
+          const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+          if (item) {
+            item.x = parseInt(el.style.left) || 0;
+            item.y = parseInt(el.style.top) || 0;
+            item.width = el.offsetWidth;
+            item.height = el.offsetHeight;
+            if (isFolder(item)) await saveFolder(item);
+            else if (isBubble(item)) await saveTextBubble(item);
+            else await saveFile(item);
+          }
           activeDrag = false;
           activeResize = false;
         };
@@ -1646,13 +1641,13 @@
         el.addEventListener('mousedown', onStart);
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onEnd);
-        el.addEventListener('touchstart', onStart, { passive: false });
-        window.addEventListener('touchmove', onMove, { passive: false });
+        el.addEventListener('touchstart', onStart, { passive: true });
+        window.addEventListener('touchmove', onMove, { passive: true });
         window.addEventListener('touchend', onEnd);
       });
     }
 
-    loadData();
+    window.onload = loadData;
   </script>
 </body>
 </html>
