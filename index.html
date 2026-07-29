@@ -362,11 +362,16 @@
         <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
           <div class="flex items-center gap-2">
             <div class="flex items-center gap-1.5 shrink-0">
-              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
-                <i data-lucide="menu" class="w-5 h-5"></i>
+              <button onclick="toggleHamburgerMenu(event)" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0 text-xs font-bold gap-1.5">
+                <i data-lucide="menu" class="w-4 h-4"></i>
+                <span>Menu</span>
+              </button>
+              <button onclick="navigateTo(null)" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0 text-xs font-bold gap-1.5" title="Home">
+                <i data-lucide="home" class="w-4 h-4"></i>
+                <span>Home</span>
               </button>
               ${state.currentFolderId !== null ? `
-                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
                   <i data-lucide="arrow-left" class="w-4 h-4"></i>
                   <span>Back</span>
                 </button>
@@ -1695,28 +1700,26 @@
           const el = document.getElementById(`item-${id}`);
           const init = initialPositions[id];
           if (el && init) {
-            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.left = `${Math.max(8, init.x + dx)}px`;
+            el.style.top = `${Math.max(8, init.y + dy)}px`;
           }
         });
       };
 
       const onEnd = () => {
         if (!isDraggingAll) return;
+        isDraggingAll = false;
         state.selectedIds.forEach(id => {
           const el = document.getElementById(`item-${id}`);
-          if (el) {
-            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (target) {
-              target.x = parseInt(el.style.left);
-              target.y = parseInt(el.style.top);
-              if (isFolder(target)) saveFolder(target);
-              else if (isBubble(target)) saveTextBubble(target);
-              else saveFile(target);
-            }
+          const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+          if (el && target) {
+            target.x = parseInt(el.style.left) || 0;
+            target.y = parseInt(el.style.top) || 0;
+            if (isFolder(target)) saveFolder(target);
+            else if (isBubble(target)) saveTextBubble(target);
+            else saveFile(target);
           }
         });
-        isDraggingAll = false;
       };
 
       container.addEventListener('mousedown', onStart);
@@ -1727,9 +1730,8 @@
       window.addEventListener('touchend', onEnd);
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
+    loadData();
   </script>
 </body>
 </html>
+
