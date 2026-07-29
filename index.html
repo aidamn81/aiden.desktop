@@ -92,12 +92,7 @@
 
     // --- MEDIA PLAYBACK HELPER ---
     async function getOrCreateBlobUrl(file) {
-      if (file.blobUrl) {
-        try {
-          const res = await fetch(file.blobUrl);
-          if (res.ok) return file.blobUrl;
-        } catch (e) {}
-      }
+      if (file.blobUrl) return file.blobUrl;
       if (!file.dataUrl) return '';
       try {
         const res = await fetch(file.dataUrl);
@@ -467,6 +462,7 @@
 
       if (window.lucide) window.lucide.createIcons();
       attachDragAndResizeListeners();
+      attachBulkDragListeners();
     }
 
     function getFileIcon(type, name) {
@@ -493,22 +489,15 @@
       const isSelected = state.selectedIds.includes(item.id);
 
       if (bubble) {
-        let fontSizeClass = 'text-[11px]';
-        if (item.fontSize === 'very-small') fontSizeClass = 'text-[9px]';
-        else if (item.fontSize === 'small') fontSizeClass = 'text-[10px]';
-        else if (item.fontSize === 'medium') fontSizeClass = 'text-[11px]';
-        else if (item.fontSize === 'large') fontSizeClass = 'text-sm';
-        else if (item.fontSize === 'extra-large') fontSizeClass = 'text-base';
-
+        const fontSizeClass = item.fontSize === 'lg' ? 'text-base' : item.fontSize === 'sm' ? 'text-[10px]' : 'text-[11px]';
         const fontWeightStyle = item.isBold ? 'font-bold' : 'font-medium';
         const fontStyleStyle = item.isItalic ? 'italic' : '';
         const fontUnderlineStyle = item.isUnderline ? 'underline' : '';
-        const fontColorStyle = item.fontColor ? `color: ${item.fontColor};` : '';
 
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}" style="${fontColorStyle}">${item.text || 'Empty bubble'}</div>
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
               ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -569,7 +558,7 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text Bubble</button>
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
             <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
@@ -858,17 +847,10 @@
             </div>
             
             <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
-              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 overflow-x-auto max-w-full">
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'very-small')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'very-small' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Very Small</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'small')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'small' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'medium')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'medium' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Medium</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'large')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'large' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
-                <button type="button" onclick="applyTextEditorFormat('fontSize', 'extra-large')" class="px-2 py-1 rounded-md text-[10px] font-semibold ${ed.fontSize === 'extra-large' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Extra Large</button>
-              </div>
-              <div class="h-5 w-px bg-zinc-800"></div>
-              <div class="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-lg border border-zinc-800 items-center">
-                <span class="text-[10px] text-zinc-400 px-1 font-medium">Color:</span>
-                <input type="color" value="${ed.fontColor || '#ffffff'}" onchange="applyTextEditorFormat('fontColor', this.value)" class="w-6 h-6 rounded cursor-pointer bg-transparent border-0" title="Change font color" />
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
               </div>
               <div class="h-5 w-px bg-zinc-800"></div>
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
@@ -878,7 +860,7 @@
               </div>
             </div>
 
-            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal" style="${ed.fontColor ? `color: ${ed.fontColor};` : ''}">${ed.text || ''}</textarea>
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal">${ed.text || ''}</textarea>
 
             <div class="flex items-center justify-end gap-3 pt-2">
               <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -889,10 +871,10 @@
       `;
     }
 
-    async function renderQuickViewContent(file) {
+    function renderQuickViewContent(file) {
       const type = file.fileType || '';
       const name = file.name || '';
-      const mediaUrl = await getOrCreateBlobUrl(file);
+      const mediaUrl = file.blobUrl || file.dataUrl;
       const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
       const isLink = type === 'link';
       const isApp = type === 'app' || type === 'ios-app';
@@ -917,13 +899,7 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) {
-        return `
-          <div class="flex flex-col items-center gap-4 max-w-[90vw] max-h-[85vh] w-full h-full justify-center">
-            <video controls playsinline autoplay class="max-w-full max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>
-          </div>
-        `;
-      }
+      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
@@ -986,7 +962,7 @@
       `;
     }
 
-    async function renderQuickViewModal() {
+    function renderQuickViewModal() {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       const file = currentFolderFiles[currentIndex];
@@ -994,7 +970,6 @@
 
       const hasPrev = currentIndex > 0;
       const hasNext = currentIndex < currentFolderFiles.length - 1;
-      const contentHtml = await renderQuickViewContent(file);
 
       return `
         <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
@@ -1012,7 +987,7 @@
               </button>
             ` : ''}
             
-            ${contentHtml}
+            ${renderQuickViewContent(file)}
 
             ${hasNext ? `
               <button onclick="navigateQuickView(1)" class="absolute right-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Next Media">
@@ -1030,7 +1005,7 @@
       `;
     }
 
-    async function navigateQuickView(direction) {
+    function navigateQuickView(direction) {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       if (currentIndex === -1) return;
@@ -1073,21 +1048,7 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openQuickView(id) { 
-      state.quickViewFileId = id; 
-      closeMenu(); 
-      closeHamburgerMenu(); 
-      render(); 
-      setTimeout(async () => {
-        const file = state.files.find(f => f.id === id);
-        if (file && (file.fileType?.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
-          const vEl = document.querySelector('video');
-          if (vEl) {
-            try { await vEl.play(); } catch(e) {}
-          }
-        }
-      }, 100);
-    }
+    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function navigateBack() {
@@ -1138,8 +1099,7 @@
           state.textEditorModal = {
             id: bubble.id,
             text: bubble.text || '',
-            fontSize: bubble.fontSize || 'medium',
-            fontColor: bubble.fontColor || '#ffffff',
+            fontSize: bubble.fontSize || 'md',
             isBold: !!bubble.isBold,
             isItalic: !!bubble.isItalic,
             isUnderline: !!bubble.isUnderline,
@@ -1150,8 +1110,7 @@
         state.textEditorModal = {
           id: null,
           text: '',
-          fontSize: 'medium',
-          fontColor: '#ffffff',
+          fontSize: 'md',
           isBold: false,
           isItalic: false,
           isUnderline: false,
@@ -1191,56 +1150,21 @@
 
       if (formatKey === 'fontSize') {
         state.textEditorModal.fontSize = value;
-        render();
-        setTimeout(() => {
-          const newTa = document.getElementById('modal-text-input');
-          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
-        }, 30);
-        return;
-      }
-
-      if (formatKey === 'fontColor') {
-        state.textEditorModal.fontColor = value;
-        render();
-        setTimeout(() => {
-          const newTa = document.getElementById('modal-text-input');
-          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
-        }, 30);
+        ta.focus();
         return;
       }
 
       if (start !== end) {
         const selectedText = text.substring(start, end);
         let wrapped = '';
-        if (formatKey === 'isBold') {
-          if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
-            wrapped = selectedText.slice(2, -2);
-          } else {
-            wrapped = `**${selectedText}**`;
-          }
-        } else if (formatKey === 'isItalic') {
-          if (selectedText.startsWith('*') && selectedText.endsWith('*') && !selectedText.startsWith('**')) {
-            wrapped = selectedText.slice(1, -1);
-          } else {
-            wrapped = `*${selectedText}*`;
-          }
-        } else if (formatKey === 'isUnderline') {
-          if (selectedText.startsWith('__') && selectedText.endsWith('__')) {
-            wrapped = selectedText.slice(2, -2);
-          } else {
-            wrapped = `__${selectedText}__`;
-          }
-        }
+        if (formatKey === 'isBold') wrapped = `**${selectedText}**`;
+        else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
+        else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
 
-        state.textEditorModal.text = text.substring(0, start) + wrapped + text.substring(end);
-        render();
-        setTimeout(() => {
-          const newTa = document.getElementById('modal-text-input');
-          if (newTa) { 
-            newTa.focus(); 
-            newTa.setSelectionRange(start, start + wrapped.length); 
-          }
-        }, 30);
+        ta.value = text.substring(0, start) + wrapped + text.substring(end);
+        state.textEditorModal.text = ta.value;
+        ta.focus();
+        ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
       } else {
         if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
         if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
@@ -1303,7 +1227,6 @@
           width: 140,
           height: dynamicHeight,
           fontSize: ed.fontSize,
-          fontColor: ed.fontColor,
           isBold: ed.isBold,
           isItalic: ed.isItalic,
           isUnderline: ed.isUnderline
@@ -1316,7 +1239,6 @@
           bubble.text = textVal;
           bubble.height = dynamicHeight;
           bubble.fontSize = ed.fontSize;
-          bubble.fontColor = ed.fontColor;
           bubble.isBold = ed.isBold;
           bubble.isItalic = ed.isItalic;
           bubble.isUnderline = ed.isUnderline;
@@ -1617,10 +1539,9 @@
         let blobUrl = '';
 
         if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
-          const blob = new Blob([file], { type: inferredType });
-          blobUrl = URL.createObjectURL(blob);
-        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.html') || file.name.endsWith('.csv')) {
-          try { textContent = await fileToText(file); } catch(e) {}
+          blobUrl = URL.createObjectURL(file);
+        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
+          try { textContent = await fileToText(file); } catch (e) {}
         }
 
         let allExisting = [
@@ -1629,7 +1550,8 @@
           ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
         ];
 
-        let targetX = 20, targetY = 20;
+        let targetX = 20;
+        let targetY = 20;
         if (allExisting.length > 0) {
           const lastItem = allExisting[allExisting.length - 1];
           const lastX = lastItem.x !== undefined ? lastItem.x : 20;
@@ -1644,7 +1566,7 @@
           }
         }
 
-        const newItem = {
+        const item = {
           id: uid(),
           name: file.name,
           fileType: inferredType,
@@ -1659,159 +1581,149 @@
           height: 144
         };
 
-        state.files.push(newItem);
-        await saveFile(newItem);
+        state.files.push(item);
+        await saveFile(item);
       }
       render();
     }
 
-    document.getElementById('file-input').addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleFileImport(e.target.files);
-      e.target.value = '';
-    });
+    document.getElementById('file-input').addEventListener('change', (e) => handleFileImport(e.target.files));
+    document.getElementById('photo-input').addEventListener('change', (e) => handleFileImport(e.target.files));
 
-    document.getElementById('photo-input').addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleFileImport(e.target.files);
-      e.target.value = '';
-    });
-
-    // --- DRAG & DROP / RESIZE MECHANICS ---
     function attachDragAndResizeListeners() {
-      const container = document.getElementById('canvas-container');
-      if (!container) return;
-
-      const itemEls = container.querySelectorAll('[id^="item-"]');
-      itemEls.forEach(el => {
-        const id = el.getAttribute('data-id');
+      const elements = document.querySelectorAll('[data-id]');
+      elements.forEach(el => {
+        let activeDrag = false, activeResize = false;
+        let startX, startY, origX, origY, origW, origH;
         const resizeHandle = el.querySelector('.resize-handle');
 
-        // RESIZE MECHANIC
-        if (resizeHandle) {
-          let isResizing = false;
-          let startW = 0, startH = 0, startX = 0, startY = 0;
-
-          resizeHandle.addEventListener('pointerdown', (e) => {
-            if (!state.editMode) return;
-            e.stopPropagation();
-            isResizing = true;
-            resizeHandle.setPointerCapture(e.pointerId);
-            startW = el.offsetWidth;
-            startH = el.offsetHeight;
-            startX = e.clientX;
-            startY = e.clientY;
-          });
-
-          resizeHandle.addEventListener('pointermove', (e) => {
-            if (!isResizing) return;
-            e.stopPropagation();
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const newW = Math.max(80, startW + dx);
-            const newH = Math.max(80, startH + dy);
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
-          });
-
-          resizeHandle.addEventListener('pointerup', async (e) => {
-            if (!isResizing) return;
-            isResizing = false;
-            resizeHandle.releasePointerCapture(e.pointerId);
-            const finalW = el.offsetWidth;
-            const finalH = el.offsetHeight;
-
-            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (item) {
-              item.width = finalW;
-              item.height = finalH;
-              if (isFolder(item)) await saveFolder(item);
-              else if (isBubble(item)) await saveTextBubble(item);
-              else await saveFile(item);
-            }
-          });
-        }
-
-        // DRAG & MULTI-DRAG MECHANIC
-        let isDragging = false;
-        let startX = 0, startY = 0;
-        let initialPositions = {};
-
-        el.addEventListener('pointerdown', (e) => {
+        const onStart = (e) => {
           if (!state.editMode) return;
-          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
+          if (e.target.closest('button') || e.target.closest('textarea')) return;
+          const touch = e.touches ? e.touches[0] : e;
+          startX = touch.clientX; startY = touch.clientY;
           
-          isDragging = true;
-          el.setPointerCapture(e.pointerId);
-          startX = e.clientX;
-          startY = e.clientY;
-
-          // If item is part of multi-selection, drag all selected items together
-          let activeSelected = state.selectedIds.includes(id) ? state.selectedIds : [id];
-          initialPositions = {};
-          activeSelected.forEach(selId => {
-            let selEl = document.getElementById(`item-${selId}`);
-            let itemObj = state.folders.find(f => f.id === selId) || state.files.find(f => f.id === selId) || state.textBubbles.find(b => b.id === selId);
-            if (selEl && itemObj) {
-              initialPositions[selId] = {
-                x: itemObj.x !== undefined ? itemObj.x : parseInt(selEl.style.left) || 0,
-                y: itemObj.y !== undefined ? itemObj.y : parseInt(selEl.style.top) || 0
-              };
-            }
-          });
-        });
-
-        el.addEventListener('pointermove', (e) => {
-          if (!isDragging) return;
-          e.stopPropagation();
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-
-          let activeSelected = state.selectedIds.includes(id) ? state.selectedIds : [id];
-          activeSelected.forEach(selId => {
-            let initPos = initialPositions[selId];
-            let selEl = document.getElementById(`item-${selId}`);
-            if (initPos && selEl) {
-              let newX = Math.max(0, initPos.x + dx);
-              let newY = Math.max(0, initPos.y + dy);
-              selEl.style.left = newX + 'px';
-              selEl.style.top = newY + 'px';
-            }
-          });
-        });
-
-        el.addEventListener('pointerup', async (e) => {
-          if (!isDragging) return;
-          isDragging = false;
-          el.releasePointerCapture(e.pointerId);
-
-          let activeSelected = state.selectedIds.includes(id) ? state.selectedIds : [id];
-          for (let selId of activeSelected) {
-            let selEl = document.getElementById(`item-${selId}`);
-            let itemObj = state.folders.find(f => f.id === selId) || state.files.find(f => f.id === selId) || state.textBubbles.find(b => b.id === selId);
-            if (selEl && itemObj) {
-              let finalX = parseInt(selEl.style.left) || 0;
-              let finalY = parseInt(selEl.style.top) || 0;
-              
-              // Snap to grid
-              finalX = Math.round(finalX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-              finalY = Math.round(finalY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-
-              itemObj.x = finalX;
-              itemObj.y = finalY;
-
-              if (isFolder(itemObj)) await saveFolder(itemObj);
-              else if (isBubble(itemObj)) await saveTextBubble(itemObj);
-              else await saveFile(itemObj);
-            }
+          if (e.target === resizeHandle || resizeHandle?.contains(e.target)) {
+            activeResize = true;
+            origW = el.offsetWidth;
+            origH = el.offsetHeight;
+            e.stopPropagation();
+          } else {
+            activeDrag = true;
+            origX = parseInt(el.style.left) || 0;
+            origY = parseInt(el.style.top) || 0;
           }
-          render();
-        });
+        };
+
+        const onMove = (e) => {
+          if (!state.editMode || (!activeDrag && !activeResize)) return;
+          const touch = e.touches ? e.touches[0] : e;
+          const dx = touch.clientX - startX, dy = touch.clientY - startY;
+          
+          if (activeDrag) {
+            el.style.left = `${Math.round(Math.max(8, origX + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.top = `${Math.round(Math.max(8, origY + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+          } else if (activeResize) {
+            el.style.width = `${Math.max(64, origW + dx)}px`;
+            el.style.height = `${Math.max(64, origH + dy)}px`;
+          }
+        };
+
+        const onEnd = () => {
+          if (!activeDrag && !activeResize) return;
+          const itemId = el.getAttribute('data-id');
+          const target = state.folders.find(f => f.id === itemId) || state.files.find(f => f.id === itemId) || state.textBubbles.find(b => b.id === itemId);
+          if (target) {
+            if (activeDrag) { target.x = parseInt(el.style.left); target.y = parseInt(el.style.top); }
+            if (activeResize) { target.width = parseInt(el.style.width); target.height = parseInt(el.style.height); }
+            if (isFolder(target)) saveFolder(target); 
+            else if (isBubble(target)) saveTextBubble(target);
+            else saveFile(target);
+          }
+          activeDrag = false; activeResize = false;
+        };
+
+        el.addEventListener('mousedown', onStart);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onEnd);
+        el.addEventListener('touchstart', onStart, { passive: true });
+        window.addEventListener('touchmove', onMove, { passive: true });
+        window.addEventListener('touchend', onEnd);
       });
     }
 
-    // Initialize App on Load
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
+    function attachBulkDragListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+
+      let isDraggingAll = false;
+      let startX, startY;
+      let initialPositions = {};
+
+      const onStart = (e) => {
+        if (!state.selectMode || state.selectedIds.length === 0) return;
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+
+        const touch = e.touches ? e.touches[0] : e;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isDraggingAll = true;
+
+        initialPositions = {};
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            initialPositions[id] = {
+              x: parseInt(el.style.left) || 0,
+              y: parseInt(el.style.top) || 0
+            };
+          }
+        });
+      };
+
+      const onMove = (e) => {
+        if (!isDraggingAll) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          const init = initialPositions[id];
+          if (el && init) {
+            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+          }
+        });
+      };
+
+      const onEnd = () => {
+        if (!isDraggingAll) return;
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (target) {
+              target.x = parseInt(el.style.left);
+              target.y = parseInt(el.style.top);
+              if (isFolder(target)) saveFolder(target);
+              else if (isBubble(target)) saveTextBubble(target);
+              else saveFile(target);
+            }
+          }
+        });
+        isDraggingAll = false;
+      };
+
+      container.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      container.addEventListener('touchstart', onStart, { passive: true });
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onEnd);
+    }
+
+    loadData();
   </script>
 </body>
 </html>
