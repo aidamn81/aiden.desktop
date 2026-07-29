@@ -899,13 +899,23 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) {
+        return `
+          <video controls playsinline autoplay preload="auto" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black">
+            <source src="${mediaUrl}" type="${type || 'video/mp4'}">
+            Your browser does not support the video tag.
+          </video>
+        `;
+      }
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
             <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
             <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
-            <audio controls playsinline autoplay class="w-full" src="${mediaUrl}"></audio>
+            <audio controls playsinline autoplay preload="auto" class="w-full">
+              <source src="${mediaUrl}" type="${type || 'audio/mpeg'}">
+              Your browser does not support the audio element.
+            </audio>
           </div>
         `;
       }
@@ -1691,28 +1701,31 @@
           const el = document.getElementById(`item-${id}`);
           const init = initialPositions[id];
           if (el && init) {
-            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.left = `${Math.max(8, init.x + dx)}px`;
+            el.style.top = `${Math.max(8, init.y + dy)}px`;
           }
         });
       };
 
-      const onEnd = () => {
+      const onEnd = async () => {
         if (!isDraggingAll) return;
-        state.selectedIds.forEach(id => {
+        isDraggingAll = false;
+
+        for (let id of state.selectedIds) {
           const el = document.getElementById(`item-${id}`);
           if (el) {
-            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            const newX = parseInt(el.style.left);
+            const newY = parseInt(el.style.top);
+            let target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
             if (target) {
-              target.x = parseInt(el.style.left);
-              target.y = parseInt(el.style.top);
-              if (isFolder(target)) saveFolder(target);
-              else if (isBubble(target)) saveTextBubble(target);
-              else saveFile(target);
+              target.x = newX;
+              target.y = newY;
+              if (isFolder(target)) await saveFolder(target);
+              else if (isBubble(target)) await saveTextBubble(target);
+              else await saveFile(target);
             }
           }
-        });
-        isDraggingAll = false;
+        }
       };
 
       container.addEventListener('mousedown', onStart);
