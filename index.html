@@ -49,7 +49,7 @@
 
   <!-- Hidden Inputs -->
   <input id="file-input" type="file" multiple class="hidden" />
-  <input id="photo-input" type="file" accept="image/*,audio/*" multiple class="hidden" />
+  <input id="photo-input" type="file" accept="image/*,audio/*,video/*" multiple class="hidden" />
   <input id="change-image-input" type="file" accept="image/*" class="hidden" />
   <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
   <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
@@ -145,7 +145,7 @@
       }
 
       for (let file of state.files) {
-        if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/'))) {
+        if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
           await getOrCreateBlobUrl(file);
         }
       }
@@ -250,7 +250,7 @@
             state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
 
             for (let file of state.files) {
-              if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/'))) {
+              if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
                 await getOrCreateBlobUrl(file);
               }
             }
@@ -547,6 +547,13 @@
                     ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
                   </div>
                 `}
+                ${isVideo ? `
+                  <div class="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+                    <div class="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-amber-400 shadow-lg">
+                      <i data-lucide="play" class="w-5 h-5 fill-amber-400 ml-0.5"></i>
+                    </div>
+                  </div>
+                ` : ''}
                 ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
                 <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
                 <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md">${item.name}</span>
@@ -611,7 +618,7 @@
             <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
             <div class="flex flex-col gap-2.5 mt-2">
               <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
-              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos & Audio</button>
+              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Video</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
               <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
@@ -908,7 +915,19 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) {
+        return `
+          <div class="w-[92vw] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-semibold truncate max-w-[280px]">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download</a>
+            </div>
+            <div class="w-full bg-black flex items-center justify-center max-h-[72vh]">
+              <video controls playsinline autoplay class="max-h-[70vh] w-auto h-auto object-contain bg-black" src="${mediaUrl}"></video>
+            </div>
+          </div>
+        `;
+      }
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
@@ -1677,8 +1696,8 @@
         startX = touch.clientX;
         startY = touch.clientY;
         isDraggingAll = true;
-
         initialPositions = {};
+
         state.selectedIds.forEach(id => {
           const el = document.getElementById(`item-${id}`);
           if (el) {
@@ -1713,8 +1732,8 @@
           const el = document.getElementById(`item-${id}`);
           const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
           if (el && target) {
-            target.x = parseInt(el.style.left) || 0;
-            target.y = parseInt(el.style.top) || 0;
+            target.x = parseInt(el.style.left);
+            target.y = parseInt(el.style.top);
             if (isFolder(target)) saveFolder(target);
             else if (isBubble(target)) saveTextBubble(target);
             else saveFile(target);
@@ -1734,4 +1753,3 @@
   </script>
 </body>
 </html>
-
