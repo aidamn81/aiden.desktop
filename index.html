@@ -1608,16 +1608,14 @@
 
           if (activeResize) {
             let newW = Math.max(80, origW + dx);
-            let newH = Math.max(80, origH + dy);
-            el.style.width = `${newW}px`;
-            el.style.height = `${newH}px`;
+            let newH = Math.max(60, origH + dy);
+            el.style.width = newW + 'px';
+            el.style.height = newH + 'px';
           } else if (activeDrag) {
             let newX = Math.max(0, origX + dx);
             let newY = Math.max(0, origY + dy);
-            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.left = `${newX}px`;
-            el.style.top = `${newY}px`;
+            el.style.left = newX + 'px';
+            el.style.top = newY + 'px';
           }
         };
 
@@ -1641,13 +1639,14 @@
         el.addEventListener('mousedown', onStart);
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onEnd);
+
         el.addEventListener('touchstart', onStart, { passive: true });
         window.addEventListener('touchmove', onMove, { passive: true });
         window.addEventListener('touchend', onEnd);
       });
     }
 
-    window.onload = loadData;
+    loadData();
   </script>
 </body>
 </html>
