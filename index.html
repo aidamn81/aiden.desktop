@@ -558,6 +558,8 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+            <button type="button" onclick="navigateTo(null); closeMenu();" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-bold cursor-pointer"><i data-lucide="home" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Home</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
             <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
@@ -569,6 +571,8 @@
       }
       return `
         <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+          <button type="button" onclick="navigateTo(null); closeMenu();" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-bold cursor-pointer"><i data-lucide="home" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Home</button>
+          <div class="h-px bg-zinc-800 my-1"></div>
           ${isFolderItem ? `
             <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
             <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
@@ -1723,7 +1727,9 @@
       window.addEventListener('touchend', onEnd);
     }
 
-    loadData();
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
   </script>
 </body>
 </html>
