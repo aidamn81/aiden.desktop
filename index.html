@@ -49,7 +49,7 @@
 
   <!-- Hidden Inputs -->
   <input id="file-input" type="file" multiple class="hidden" />
-  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
+  <input id="photo-input" type="file" accept="image/*,audio/*" multiple class="hidden" />
   <input id="change-image-input" type="file" accept="image/*" class="hidden" />
   <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
   <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
@@ -92,12 +92,7 @@
 
     // --- MEDIA PLAYBACK HELPER ---
     async function getOrCreateBlobUrl(file) {
-      if (file.blobUrl) {
-        try {
-          const testRes = await fetch(file.blobUrl).catch(() => null);
-          if (testRes && testRes.ok) return file.blobUrl;
-        } catch (e) {}
-      }
+      if (file.blobUrl) return file.blobUrl;
       if (!file.dataUrl) return '';
       try {
         const res = await fetch(file.dataUrl);
@@ -607,7 +602,7 @@
             <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
             <div class="flex flex-col gap-2.5 mt-2">
               <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
-              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
+              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos & Audio</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
               <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
@@ -883,7 +878,6 @@
       const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
       const isLink = type === 'link';
       const isApp = type === 'app' || type === 'ios-app';
-      const isImage = type.startsWith('image/');
       
       if (isLink) {
         return `
@@ -904,32 +898,14 @@
           </div>
         `;
       }
-      if (isImage) {
-        return `
-          <div class="w-full h-full flex items-center justify-center overflow-auto p-4">
-            <img src="${file.dataUrl}" class="w-full h-full object-contain rounded-2xl shadow-2xl" />
-          </div>
-        `;
-      }
-      if (isVideo) {
-        return `
-          <div class="w-full h-full flex flex-col items-center justify-center p-4">
-            <video controls playsinline autoplay preload="auto" class="w-full h-full max-h-[80vh] object-contain rounded-2xl shadow-2xl bg-black">
-              <source src="${mediaUrl}" type="${type || 'video/mp4'}">
-              Your browser does not support the video tag.
-            </video>
-          </div>
-        `;
-      }
+      if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
+      if (isVideo) return `<video controls playsinline autoplay class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (type.startsWith('audio/')) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
             <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
             <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
-            <audio controls playsinline autoplay preload="auto" class="w-full">
-              <source src="${mediaUrl}" type="${type || 'audio/mpeg'}">
-              Your browser does not support the audio element.
-            </audio>
+            <audio controls playsinline autoplay class="w-full" src="${mediaUrl}"></audio>
           </div>
         `;
       }
@@ -986,34 +962,18 @@
       `;
     }
 
-    async function ensureBlobUrlForModal(file) {
-      if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
-        file.blobUrl = await getOrCreateBlobUrl(file);
-      }
-    }
-
-    async function renderQuickViewModal() {
+    function renderQuickViewModal() {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       const file = currentFolderFiles[currentIndex];
       if (!file) return '';
 
-      await ensureBlobUrlForModal(file);
-
       const hasPrev = currentIndex > 0;
       const hasNext = currentIndex < currentFolderFiles.length - 1;
-      const type = file.fileType || '';
-      const isImage = type.startsWith('image/');
-      const isVideo = type.startsWith('video/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm');
-
-      let containerClass = "w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl";
-      if (isImage || isVideo) {
-        containerClass = "w-screen h-screen bg-black flex flex-col overflow-hidden";
-      }
 
       return `
         <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
-          <div class="flex items-center justify-between text-zinc-300 pt-2 px-4 shrink-0 z-20" onclick="event.stopPropagation()">
+          <div class="flex items-center justify-between text-zinc-300 pt-2 px-4 shrink-0" onclick="event.stopPropagation()">
             <div class="flex items-center gap-2">
               <span class="text-sm font-semibold truncate max-w-[200px]">${file.name}</span>
               <span class="text-xs text-zinc-500">(${currentIndex + 1} of ${currentFolderFiles.length})</span>
@@ -1027,9 +987,7 @@
               </button>
             ` : ''}
             
-            <div class="${containerClass}">
-              ${renderQuickViewContent(file)}
-            </div>
+            ${renderQuickViewContent(file)}
 
             ${hasNext ? `
               <button onclick="navigateQuickView(1)" class="absolute right-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Next Media">
@@ -1037,7 +995,7 @@
               </button>
             ` : ''}
           </div>
-          <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 flex items-center justify-center gap-8 text-xs font-semibold text-zinc-200 shrink-0 z-20" onclick="event.stopPropagation()">
+          <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 flex items-center justify-center gap-8 text-xs font-semibold text-zinc-200 shrink-0" onclick="event.stopPropagation()">
             <button onclick="copySingleFileClipboard('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="copy" class="w-5 h-5"></i> Copy</button>
             <button onclick="moveToFolder('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="folder-output" class="w-5 h-5"></i> Move</button>
             <button onclick="shareFile('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="share" class="w-5 h-5"></i> Share</button>
@@ -1047,15 +1005,13 @@
       `;
     }
 
-    async function navigateQuickView(direction) {
+    function navigateQuickView(direction) {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       if (currentIndex === -1) return;
       const newIndex = currentIndex + direction;
       if (newIndex >= 0 && newIndex < currentFolderFiles.length) {
         state.quickViewFileId = currentFolderFiles[newIndex].id;
-        const targetFile = currentFolderFiles[newIndex];
-        await ensureBlobUrlForModal(targetFile);
         render();
       }
     }
@@ -1092,14 +1048,7 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    async function openQuickView(id) { 
-      state.quickViewFileId = id; 
-      const file = state.files.find(f => f.id === id);
-      if (file) await ensureBlobUrlForModal(file);
-      closeMenu(); 
-      closeHamburgerMenu(); 
-      render(); 
-    }
+    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function navigateBack() {
@@ -1703,9 +1652,77 @@
       });
     }
 
-    function attachBulkDragListeners() {}
+    function attachBulkDragListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
 
-    // Initialize
+      let isDraggingAll = false;
+      let startX, startY;
+      let initialPositions = {};
+
+      const onStart = (e) => {
+        if (!state.selectMode || state.selectedIds.length === 0) return;
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+
+        const touch = e.touches ? e.touches[0] : e;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isDraggingAll = true;
+
+        initialPositions = {};
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            initialPositions[id] = {
+              x: parseInt(el.style.left) || 0,
+              y: parseInt(el.style.top) || 0
+            };
+          }
+        });
+      };
+
+      const onMove = (e) => {
+        if (!isDraggingAll) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          const init = initialPositions[id];
+          if (el && init) {
+            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+          }
+        });
+      };
+
+      const onEnd = () => {
+        if (!isDraggingAll) return;
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (target) {
+              target.x = parseInt(el.style.left);
+              target.y = parseInt(el.style.top);
+              if (isFolder(target)) saveFolder(target);
+              else if (isBubble(target)) saveTextBubble(target);
+              else saveFile(target);
+            }
+          }
+        });
+        isDraggingAll = false;
+      };
+
+      container.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      container.addEventListener('touchstart', onStart, { passive: true });
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onEnd);
+    }
+
     loadData();
   </script>
 </body>
