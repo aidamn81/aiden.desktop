@@ -9,10 +9,10 @@
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    
+
     .edit-grid-bg {
       background-size: 24px 24px;
-      background-image: 
+      background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     }
@@ -42,21 +42,26 @@
     body.edit-mode .resize-handle {
       display: flex;
     }
+
+    #modal-text-input:empty:before {
+      content: attr(data-placeholder);
+      color: #71717a;
+      pointer-events: none;
+    }
+    #modal-text-input { outline: none; }
   </style>
 </head>
 <body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
   <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
 
-  <!-- Hidden Inputs -->
   <input id="file-input" type="file" multiple class="hidden" />
-  <input id="photo-input" type="file" accept="image/*,audio/*,video/*" multiple class="hidden" />
+  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
   <input id="change-image-input" type="file" accept="image/*" class="hidden" />
   <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
   <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
   <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" />
 
   <script>
-    // --- CONFIG & STATE ---
     const CONFIG = {
       ghRepo: 'aidamn81/aidenfiles',
       ghPath: 'aiden_meta.json',
@@ -79,7 +84,7 @@
       targetFolderCoverId: null,
       quickViewFileId: null,
       showUploadModal: false,
-      textEditorModal: null, 
+      textEditorModal: null,
       linkModal: false,
       linkModalThumbData: null,
       appModal: false,
@@ -90,7 +95,17 @@
     const isFolder = item => !('fileType' in item) && !('isBubble' in item);
     const isBubble = item => item.isBubble === true;
 
-    // --- MEDIA PLAYBACK HELPER ---
+    function isVideoFile(file) {
+      const t = file.fileType || '';
+      const n = file.name || '';
+      return t.startsWith('video/') || n.endsWith('.mp4') || n.endsWith('.mov') || n.endsWith('.webm') || n.endsWith('.m4v') || n.endsWith('.mkv');
+    }
+    function isAudioFile(file) {
+      const t = file.fileType || '';
+      const n = file.name || '';
+      return t.startsWith('audio/') || n.endsWith('.mp3') || n.endsWith('.m4a') || n.endsWith('.wav') || n.endsWith('.aac');
+    }
+
     async function getOrCreateBlobUrl(file) {
       if (file.blobUrl) return file.blobUrl;
       if (!file.dataUrl) return '';
@@ -104,7 +119,6 @@
       }
     }
 
-    // --- INDEXEDDB ---
     const DB_NAME = 'aiden_files_db';
     const DB_VERSION = 4;
 
@@ -145,7 +159,7 @@
       }
 
       for (let file of state.files) {
-        if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
+        if (file.dataUrl && (isVideoFile(file) || isAudioFile(file))) {
           await getOrCreateBlobUrl(file);
         }
       }
@@ -191,8 +205,6 @@
         tx.objectStore(storeName).delete(id);
       }
     }
-
-    // --- TOKEN & GITHUB SYNC ---
     function resetToken() {
       const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
       if (token !== null) {
@@ -222,13 +234,13 @@
         };
 
         const metaUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/aiden_meta.json`;
-        
+
         if (forcePull) {
           const getRes = await fetch(metaUrl, { headers });
           if (getRes.ok) {
             const getJson = await getRes.json();
             const manifest = JSON.parse(decodeURIComponent(escape(atob(getJson.content))));
-            
+
             let allFolders = [];
             let allFiles = [];
             let allBubbles = [];
@@ -250,7 +262,7 @@
             state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
 
             for (let file of state.files) {
-              if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
+              if (file.dataUrl && (isVideoFile(file) || isAudioFile(file))) {
                 await getOrCreateBlobUrl(file);
               }
             }
@@ -341,8 +353,6 @@
         render();
       }
     }
-
-    // --- RENDER & UI ---
     function render() {
       const app = document.getElementById('app');
       const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
@@ -362,16 +372,11 @@
         <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
           <div class="flex items-center gap-2">
             <div class="flex items-center gap-1.5 shrink-0">
-              <button onclick="toggleHamburgerMenu(event)" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0 text-xs font-bold gap-1.5">
-                <i data-lucide="menu" class="w-4 h-4"></i>
-                <span>Menu</span>
-              </button>
-              <button onclick="navigateTo(null)" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0 text-xs font-bold gap-1.5" title="Home">
-                <i data-lucide="home" class="w-4 h-4"></i>
-                <span>Home</span>
+              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
+                <i data-lucide="menu" class="w-5 h-5"></i>
               </button>
               ${state.currentFolderId !== null ? `
-                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
                   <i data-lucide="arrow-left" class="w-4 h-4"></i>
                   <span>Back</span>
                 </button>
@@ -469,16 +474,28 @@
       attachDragAndResizeListeners();
       attachBulkDragListeners();
     }
-
     function getFileIcon(type, name) {
       if (type === 'link' || name.startsWith('http')) return 'link';
       if (type === 'app' || type === 'ios-app') return 'smartphone';
-      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm')) return 'video';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.mkv')) return 'video';
       if (type.startsWith('audio/')) return 'music';
       if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
       if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.html') || name.endsWith('.json') || name.endsWith('.csv')) return 'file-text';
       if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'file-spreadsheet';
       return 'file';
+    }
+
+    function bubbleInlineStyle(item) {
+      let style = '';
+      if (item.fontSize === 'lg') style += 'font-size:16px;';
+      else if (item.fontSize === 'sm') style += 'font-size:10px;';
+      else style += 'font-size:11px;';
+      if (item.isBold) style += 'font-weight:bold;';
+      if (item.isItalic) style += 'font-style:italic;';
+      if (item.isUnderline) style += 'text-decoration:underline;';
+      if (item.fontColor) style += `color:${item.fontColor};`;
+      if (item.align) style += `text-align:${item.align};`;
+      return style;
     }
 
     function renderItem(item, index) {
@@ -494,15 +511,10 @@
       const isSelected = state.selectedIds.includes(item.id);
 
       if (bubble) {
-        const fontSizeClass = item.fontSize === 'lg' ? 'text-base' : item.fontSize === 'sm' ? 'text-[10px]' : 'text-[11px]';
-        const fontWeightStyle = item.isBold ? 'font-bold' : 'font-medium';
-        const fontStyleStyle = item.isItalic ? 'italic' : '';
-        const fontUnderlineStyle = item.isUnderline ? 'underline' : '';
-
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none ${fontSizeClass} ${fontWeightStyle} ${fontStyleStyle} ${fontUnderlineStyle}">${item.text || 'Empty bubble'}</div>
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
               ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -526,7 +538,7 @@
       } else {
         const type = item.fileType || '';
         const isImage = type.startsWith('image/');
-        const isVideo = type.startsWith('video/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm');
+        const isVideo = isVideoFile(item);
         const isLink = type === 'link';
         const isApp = type === 'app' || type === 'ios-app';
         const imgSrc = item.thumbnailData || item.dataUrl;
@@ -547,13 +559,6 @@
                     ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
                   </div>
                 `}
-                ${isVideo ? `
-                  <div class="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
-                    <div class="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-amber-400 shadow-lg">
-                      <i data-lucide="play" class="w-5 h-5 fill-amber-400 ml-0.5"></i>
-                    </div>
-                  </div>
-                ` : ''}
                 ${state.selectMode ? `<div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>` : ''}
                 <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
                 <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md">${item.name}</span>
@@ -565,13 +570,10 @@
         `;
       }
     }
-
     function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="navigateTo(null); closeMenu();" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-bold cursor-pointer"><i data-lucide="home" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Home</button>
-            <div class="h-px bg-zinc-800 my-1"></div>
             <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
@@ -583,8 +585,6 @@
       }
       return `
         <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-          <button type="button" onclick="navigateTo(null); closeMenu();" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-bold cursor-pointer"><i data-lucide="home" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Home</button>
-          <div class="h-px bg-zinc-800 my-1"></div>
           ${isFolderItem ? `
             <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
             <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
@@ -618,7 +618,7 @@
             <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
             <div class="flex flex-col gap-2.5 mt-2">
               <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
-              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Video</button>
+              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
               <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
@@ -639,7 +639,6 @@
             <div class="flex flex-col gap-3 mt-2">
               <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               <input id="link-name-input" type="text" placeholder="Site Name (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
-              
               <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
                 <span class="text-xs text-zinc-300 font-medium">Display Thumbnail</span>
                 <button type="button" onclick="document.getElementById('link-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
@@ -657,14 +656,6 @@
       `;
     }
 
-    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        state.linkModalThumbData = await fileToBase64(file);
-        render();
-      }
-    });
-
     function renderAppModal() {
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAppModal()">
@@ -674,7 +665,6 @@
             <div class="flex flex-col gap-3 mt-2">
               <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
-              
               <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
                 <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
                 <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
@@ -691,168 +681,16 @@
         </div>
       `;
     }
-
-    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        state.appModalThumbData = await fileToBase64(file);
-        render();
-      }
-    });
-
-    function openLinkModal() {
-      state.linkModal = true;
-      state.linkModalThumbData = null;
-      render();
-      setTimeout(() => {
-        const input = document.getElementById('link-url-input');
-        if (input) input.focus();
-      }, 50);
-    }
-
-    function closeLinkModal() {
-      state.linkModal = false;
-      state.linkModalThumbData = null;
-      render();
-    }
-
-    function openAppModal() {
-      state.appModal = true;
-      state.appModalThumbData = null;
-      render();
-      setTimeout(() => {
-        const input = document.getElementById('app-scheme-input');
-        if (input) input.focus();
-      }, 50);
-    }
-
-    function closeAppModal() {
-      state.appModal = false;
-      state.appModalThumbData = null;
-      render();
-    }
-
-    async function saveLinkModal() {
-      const urlInput = document.getElementById('link-url-input');
-      const nameInput = document.getElementById('link-name-input');
-      if (!urlInput) return;
-      let url = urlInput.value.trim();
-      if (!url) {
-        alert('Please enter a valid URL.');
-        return;
-      }
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-      let name = nameInput ? nameInput.value.trim() : '';
-      if (!name) {
-        try {
-          const parsed = new URL(url);
-          name = parsed.hostname;
-        } catch (e) {
-          name = url;
-        }
-      }
-
-      let allExisting = [
-        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-        ...state.files.filter(f => f.parentId === state.currentFolderId),
-        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-      ];
-
-      let targetX = 20, targetY = 20;
-      if (allExisting.length > 0) {
-        const lastItem = allExisting[allExisting.length - 1];
-        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-        const lastW = lastItem.width || 112;
-        
-        targetX = lastX + lastW + 24;
-        targetY = lastY;
-        if (targetX > 1000) {
-          targetX = 20;
-          targetY = lastY + 160;
-        }
-      }
-
-      const newItem = {
-        id: uid(),
-        name: name,
-        fileType: 'link',
-        size: 0,
-        dataUrl: url,
-        thumbnailData: state.linkModalThumbData || null,
-        parentId: state.currentFolderId,
-        x: targetX,
-        y: targetY,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(newItem);
-      await saveFile(newItem);
-      closeLinkModal();
-      render();
-    }
-
-    async function saveAppModal() {
-      const schemeInput = document.getElementById('app-scheme-input');
-      const nameInput = document.getElementById('app-name-input');
-      if (!schemeInput) return;
-      let scheme = schemeInput.value.trim();
-      if (!scheme) {
-        alert('Please enter a valid URL scheme or App link.');
-        return;
-      }
-      let name = nameInput ? nameInput.value.trim() : '';
-      if (!name) {
-        name = scheme.split('://')[0] || 'iOS App';
-      }
-
-      let allExisting = [
-        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-        ...state.files.filter(f => f.parentId === state.currentFolderId),
-        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-      ];
-
-      let targetX = 20, targetY = 20;
-      if (allExisting.length > 0) {
-        const lastItem = allExisting[allExisting.length - 1];
-        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-        const lastW = lastItem.width || 112;
-        
-        targetX = lastX + lastW + 24;
-        targetY = lastY;
-        if (targetX > 1000) {
-          targetX = 20;
-          targetY = lastY + 160;
-        }
-      }
-
-      const newItem = {
-        id: uid(),
-        name: name,
-        fileType: 'ios-app',
-        size: 0,
-        dataUrl: scheme,
-        thumbnailData: state.appModalThumbData || null,
-        parentId: state.currentFolderId,
-        x: targetX,
-        y: targetY,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(newItem);
-      await saveFile(newItem);
-      closeAppModal();
-      render();
-    }
-
     function renderTextEditorModal() {
       const ed = state.textEditorModal;
       if (!ed) return '';
+
+      const colorSwatches = ['#ffffff', '#fbbf24', '#f87171', '#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fdba74', '#000000'];
+      const aligns = [
+        { key: 'left', icon: 'align-left' },
+        { key: 'center', icon: 'align-center' },
+        { key: 'right', icon: 'align-right' }
+      ];
 
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
@@ -861,7 +699,7 @@
               <h3 class="text-sm font-bold text-white">${ed.isNew ? 'New Text Bubble' : 'Edit Text Bubble'}</h3>
               <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
             </div>
-            
+
             <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
                 <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
@@ -874,9 +712,28 @@
                 <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
                 <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
               </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                ${aligns.map(a => `
+                  <button type="button" onclick="applyTextEditorFormat('align', '${a.key}')" class="p-1.5 rounded-md ${ed.align === a.key ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Align ${a.key}"><i data-lucide="${a.icon}" class="w-4 h-4"></i></button>
+                `).join('')}
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <label class="cursor-pointer relative" title="Font colour">
+                  <input type="color" value="${ed.fontColor || '#ffffff'}" oninput="applyTextEditorFormat('fontColor', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <span class="p-1.5 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="palette" class="w-4 h-4" style="color:${ed.fontColor || '#ffffff'}"></i></span>
+                </label>
+                ${colorSwatches.map(c => `
+                  <button type="button" onclick="applyTextEditorFormat('fontColor', '${c}')" class="w-5 h-5 rounded-full border ${ed.fontColor === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
+                `).join('')}
+                <button type="button" onclick="applyTextEditorFormat('fontColor', null)" class="p-1.5 rounded-md text-zinc-400 hover:bg-zinc-800" title="Reset colour"><i data-lucide="eraser" class="w-4 h-4"></i></button>
+              </div>
             </div>
 
-            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal">${ed.text || ''}</textarea>
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal" style="${ed.isBold ? 'font-weight:bold;' : ''}${ed.isItalic ? 'font-style:italic;' : ''}${ed.isUnderline ? 'text-decoration:underline;' : ''}${ed.fontColor ? 'color:' + ed.fontColor + ';' : ''}${ed.align ? 'text-align:' + ed.align + ';' : ''}${ed.fontSize === 'lg' ? 'font-size:16px;' : ed.fontSize === 'sm' ? 'font-size:10px;' : 'font-size:11px;'}">${ed.text || ''}</textarea>
+
+            <p class="text-[10px] text-zinc-500 -mt-2">Tip: select text and tap a button to apply formatting to that selection only. With no selection it applies to the whole bubble.</p>
 
             <div class="flex items-center justify-end gap-3 pt-2">
               <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -887,20 +744,14 @@
       `;
     }
 
-    async function renderQuickViewContent(file) {
+    function renderQuickViewContent(file) {
       const type = file.fileType || '';
       const name = file.name || '';
-      let mediaUrl = file.blobUrl || file.dataUrl;
-      
-      // Ensure valid blob URL or data URL for video playback
-      if ((type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm')) && file.dataUrl && !file.blobUrl) {
-        mediaUrl = await getOrCreateBlobUrl(file);
-      }
-
-      const isVideo = type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm');
+      const mediaUrl = file.blobUrl || file.dataUrl;
+      const isVideo = isVideoFile(file);
       const isLink = type === 'link';
       const isApp = type === 'app' || type === 'ios-app';
-      
+
       if (isLink) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full shadow-2xl text-center">
@@ -921,25 +772,13 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) {
-        return `
-          <div class="w-[92vw] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
-            <div class="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
-              <span class="font-semibold truncate max-w-[280px]">${file.name}</span>
-              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download</a>
-            </div>
-            <div class="w-full bg-black flex items-center justify-center max-h-[72vh]">
-              <video controls playsinline autoplay preload="auto" class="max-h-[70vh] w-auto h-auto object-contain bg-black" src="${mediaUrl}"></video>
-            </div>
-          </div>
-        `;
-      }
-      if (type.startsWith('audio/')) {
+      if (isVideo) return `<video controls playsinline webkit-playsinline muted autoplay loop class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isAudioFile(file)) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
             <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
             <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
-            <audio controls playsinline autoplay preload="auto" class="w-full" src="${mediaUrl}"></audio>
+            <audio controls autoplay class="w-full" src="${mediaUrl}"></audio>
           </div>
         `;
       }
@@ -996,7 +835,7 @@
       `;
     }
 
-    async function renderQuickViewModal() {
+    function renderQuickViewModal() {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       const file = currentFolderFiles[currentIndex];
@@ -1004,7 +843,6 @@
 
       const hasPrev = currentIndex > 0;
       const hasNext = currentIndex < currentFolderFiles.length - 1;
-      const contentHtml = await renderQuickViewContent(file);
 
       return `
         <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
@@ -1021,9 +859,7 @@
                 <i data-lucide="chevron-left" class="w-6 h-6"></i>
               </button>
             ` : ''}
-            
-            ${contentHtml}
-
+            ${renderQuickViewContent(file)}
             ${hasNext ? `
               <button onclick="navigateQuickView(1)" class="absolute right-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Next Media">
                 <i data-lucide="chevron-right" class="w-6 h-6"></i>
@@ -1039,8 +875,7 @@
         </div>
       `;
     }
-
-    async function navigateQuickView(direction) {
+    function navigateQuickView(direction) {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       if (currentIndex === -1) return;
@@ -1069,7 +904,7 @@
         render();
         return;
       }
-      if (isFolderItem) navigateTo(id); 
+      if (isFolderItem) navigateTo(id);
       else if (isBubbleItem) openTextEditorModal(id);
       else {
         const file = state.files.find(f => f.id === id);
@@ -1083,12 +918,7 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    async function openQuickView(id) { 
-      state.quickViewFileId = id; 
-      closeMenu(); 
-      closeHamburgerMenu(); 
-      render(); 
-    }
+    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function navigateBack() {
@@ -1103,11 +933,11 @@
       closeHamburgerMenu();
       render();
     }
-    function toggleEditMode() { 
-      state.editMode = !state.editMode; 
-      closeMenu(); 
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      closeMenu();
       closeHamburgerMenu();
-      render(); 
+      render();
     }
     function toggleMenu(e, id) {
       e.stopPropagation();
@@ -1115,7 +945,7 @@
       render();
     }
     function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
-    
+
     function toggleHamburgerMenu(e) {
       e.stopPropagation();
       state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
@@ -1143,6 +973,8 @@
             isBold: !!bubble.isBold,
             isItalic: !!bubble.isItalic,
             isUnderline: !!bubble.isUnderline,
+            fontColor: bubble.fontColor || null,
+            align: bubble.align || null,
             isNew: false
           };
         }
@@ -1154,6 +986,8 @@
           isBold: false,
           isItalic: false,
           isUnderline: false,
+          fontColor: null,
+          align: null,
           isNew: true,
           referenceItemId: referenceItemId
         };
@@ -1187,16 +1021,30 @@
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
       const text = ta.value;
+      const hasSelection = start !== end;
 
       if (formatKey === 'fontSize') {
         state.textEditorModal.fontSize = value;
-        ta.focus();
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'align') {
+        state.textEditorModal.align = state.textEditorModal.align === value ? null : value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'fontColor') {
+        state.textEditorModal.fontColor = value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
         return;
       }
 
-      if (start !== end) {
+      if (hasSelection) {
         const selectedText = text.substring(start, end);
-        let wrapped = '';
+        let wrapped = selectedText;
         if (formatKey === 'isBold') wrapped = `**${selectedText}**`;
         else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
         else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
@@ -1248,13 +1096,9 @@
           const lastX = lastItem.x !== undefined ? lastItem.x : 20;
           const lastY = lastItem.y !== undefined ? lastItem.y : 20;
           const lastW = lastItem.width || 140;
-          
           posX = lastX + lastW + 24;
           posY = lastY;
-          if (posX > 1000) {
-            posX = 20;
-            posY = lastY + 160;
-          }
+          if (posX > 1000) { posX = 20; posY = lastY + 160; }
         }
 
         const bubble = {
@@ -1269,7 +1113,9 @@
           fontSize: ed.fontSize,
           isBold: ed.isBold,
           isItalic: ed.isItalic,
-          isUnderline: ed.isUnderline
+          isUnderline: ed.isUnderline,
+          fontColor: ed.fontColor,
+          align: ed.align
         };
         state.textBubbles.push(bubble);
         await saveTextBubble(bubble);
@@ -1282,6 +1128,8 @@
           bubble.isBold = ed.isBold;
           bubble.isItalic = ed.isItalic;
           bubble.isUnderline = ed.isUnderline;
+          bubble.fontColor = ed.fontColor;
+          bubble.align = ed.align;
           await saveTextBubble(bubble);
         }
       }
@@ -1289,7 +1137,6 @@
       state.textEditorModal = null;
       render();
     }
-
     async function bulkDelete() {
       if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
       for (let id of state.selectedIds) {
@@ -1328,7 +1175,7 @@
         if (file) {
           const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
           delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-          if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) await getOrCreateBlobUrl(newFile);
+          if (isVideoFile(newFile) || isAudioFile(newFile)) await getOrCreateBlobUrl(newFile);
           state.files.push(newFile);
           await saveFile(newFile);
         }
@@ -1347,7 +1194,7 @@
     async function copySingleFileClipboard(id) {
       const file = state.files.find(f => f.id === id);
       if (!file) return;
-      
+
       try {
         if ((file.fileType === 'link' || file.fileType === 'ios-app') && navigator.clipboard) {
           await navigator.clipboard.writeText(file.dataUrl);
@@ -1378,7 +1225,7 @@
 
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
       delete newFile.x; delete newFile.y; delete newFile.blobUrl;
-      if (newFile.fileType?.startsWith('video/') || newFile.fileType?.startsWith('audio/') || newFile.name.endsWith('.mp4') || newFile.name.endsWith('.mov') || newFile.name.endsWith('.webm')) {
+      if (isVideoFile(newFile) || isAudioFile(newFile)) {
         await getOrCreateBlobUrl(newFile);
       }
       state.files.push(newFile);
@@ -1435,7 +1282,7 @@
             item.thumbnailData = base64;
           } else {
             item.dataUrl = base64;
-            if (item.fileType?.startsWith('video/') || item.fileType?.startsWith('audio/') || item.name.endsWith('.mp4') || item.name.endsWith('.mov') || item.name.endsWith('.webm')) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+            if (isVideoFile(item) || isAudioFile(item)) { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
           }
           await saveFile(item);
           render();
@@ -1464,7 +1311,7 @@
         const item = isFolderItem ? state.folders.find(f => f.id === id) : isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id);
         if (item) {
           item.parentId = actualParent; delete item.x; delete item.y;
-          if (isFolderItem) await saveFolder(item); 
+          if (isFolderItem) await saveFolder(item);
           else if (isBubbleItem) await saveTextBubble(item);
           else await saveFile(item);
           closeMenu(); render();
@@ -1490,7 +1337,7 @@
       if (item) {
         item.width = isFolder(item) ? 96 : isBubble(item) ? 140 : 112;
         item.height = isFolder(item) ? 96 : isBubble(item) ? (Math.max(80, (item.text?.split('\n').length || 1) * 22)) : 144;
-        if (isFolder(item)) await saveFolder(item); 
+        if (isFolder(item)) await saveFolder(item);
         else if (isBubble(item)) await saveTextBubble(item);
         else await saveFile(item);
         closeMenu(); render();
@@ -1528,13 +1375,9 @@
           const lastX = lastItem.x !== undefined ? lastItem.x : 20;
           const lastY = lastItem.y !== undefined ? lastItem.y : 20;
           const lastW = lastItem.width || 96;
-          
           targetX = lastX + lastW + 24;
           targetY = lastY;
-          if (targetX > 1000) {
-            targetX = 20;
-            targetY = lastY + 160;
-          }
+          if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
         }
 
         const folder = { id: uid(), name: name.trim(), parentId: state.currentFolderId, x: targetX, y: targetY, width: 96, height: 96 };
@@ -1565,7 +1408,7 @@
     function getMimeType(file) {
       if (file.type && file.type !== '') return file.type;
       const ext = file.name.split('.').pop().toLowerCase();
-      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'pdf': 'application/pdf', 'txt': 'text/plain', 'html': 'text/html', 'htm': 'text/html', 'json': 'application/json'};
+      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'wav': 'audio/wav', 'aac': 'audio/aac', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'm4v': 'video/x-m4v', 'mkv': 'video/x-matroska', 'pdf': 'application/pdf', 'txt': 'text/plain', 'html': 'text/html', 'htm': 'text/html', 'json': 'application/json'};
       return mimeMap[ext] || 'application/octet-stream';
     }
 
@@ -1578,7 +1421,7 @@
         let inferredType = getMimeType(file);
         let blobUrl = '';
 
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm')) {
+        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm') || file.name.endsWith('.m4v') || file.name.endsWith('.mkv') || file.name.endsWith('.mp3') || file.name.endsWith('.m4a') || file.name.endsWith('.wav') || file.name.endsWith('.aac')) {
           blobUrl = URL.createObjectURL(file);
         } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
           try { textContent = await fileToText(file); } catch (e) {}
@@ -1597,13 +1440,9 @@
           const lastX = lastItem.x !== undefined ? lastItem.x : 20;
           const lastY = lastItem.y !== undefined ? lastItem.y : 20;
           const lastW = lastItem.width || 112;
-          
           targetX = lastX + lastW + 24;
           targetY = lastY;
-          if (targetX > 1000) {
-            targetX = 20;
-            targetY = lastY + 160;
-          }
+          if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
         }
 
         const item = {
@@ -1629,6 +1468,99 @@
 
     document.getElementById('file-input').addEventListener('change', (e) => handleFileImport(e.target.files));
     document.getElementById('photo-input').addEventListener('change', (e) => handleFileImport(e.target.files));
+    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.linkModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.appModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    function openLinkModal() {
+      state.linkModal = true;
+      state.linkModalThumbData = null;
+      render();
+      setTimeout(() => { const input = document.getElementById('link-url-input'); if (input) input.focus(); }, 50);
+    }
+    function closeLinkModal() { state.linkModal = false; state.linkModalThumbData = null; render(); }
+
+    function openAppModal() {
+      state.appModal = true;
+      state.appModalThumbData = null;
+      render();
+      setTimeout(() => { const input = document.getElementById('app-scheme-input'); if (input) input.focus(); }, 50);
+    }
+    function closeAppModal() { state.appModal = false; state.appModalThumbData = null; render(); }
+
+    async function saveLinkModal() {
+      const urlInput = document.getElementById('link-url-input');
+      const nameInput = document.getElementById('link-name-input');
+      if (!urlInput) return;
+      let url = urlInput.value.trim();
+      if (!url) { alert('Please enter a valid URL.'); return; }
+      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) { try { name = new URL(url).hostname; } catch (e) { name = url; } }
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+      let targetX = 20, targetY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 112;
+        targetX = lastX + lastW + 24; targetY = lastY;
+        if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
+      }
+
+      const newItem = { id: uid(), name, fileType: 'link', size: 0, dataUrl: url, thumbnailData: state.linkModalThumbData || null, parentId: state.currentFolderId, x: targetX, y: targetY, width: 112, height: 144 };
+      state.files.push(newItem);
+      await saveFile(newItem);
+      closeLinkModal();
+      render();
+    }
+
+    async function saveAppModal() {
+      const schemeInput = document.getElementById('app-scheme-input');
+      const nameInput = document.getElementById('app-name-input');
+      if (!schemeInput) return;
+      let scheme = schemeInput.value.trim();
+      if (!scheme) { alert('Please enter a valid URL scheme or App link.'); return; }
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) name = scheme.split('://')[0] || 'iOS App';
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+      let targetX = 20, targetY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 112;
+        targetX = lastX + lastW + 24; targetY = lastY;
+        if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
+      }
+
+      const newItem = { id: uid(), name, fileType: 'ios-app', size: 0, dataUrl: scheme, thumbnailData: state.appModalThumbData || null, parentId: state.currentFolderId, x: targetX, y: targetY, width: 112, height: 144 };
+      state.files.push(newItem);
+      await saveFile(newItem);
+      closeAppModal();
+      render();
+    }
 
     function attachDragAndResizeListeners() {
       const elements = document.querySelectorAll('[data-id]');
@@ -1642,11 +1574,9 @@
           if (e.target.closest('button') || e.target.closest('textarea')) return;
           const touch = e.touches ? e.touches[0] : e;
           startX = touch.clientX; startY = touch.clientY;
-          
           if (e.target === resizeHandle || resizeHandle?.contains(e.target)) {
             activeResize = true;
-            origW = el.offsetWidth;
-            origH = el.offsetHeight;
+            origW = el.offsetWidth; origH = el.offsetHeight;
             e.stopPropagation();
           } else {
             activeDrag = true;
@@ -1659,7 +1589,6 @@
           if (!state.editMode || (!activeDrag && !activeResize)) return;
           const touch = e.touches ? e.touches[0] : e;
           const dx = touch.clientX - startX, dy = touch.clientY - startY;
-          
           if (activeDrag) {
             el.style.left = `${Math.round(Math.max(8, origX + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
             el.style.top = `${Math.round(Math.max(8, origY + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
@@ -1669,38 +1598,90 @@
           }
         };
 
-        const onEnd = async () => {
-          if (!state.editMode || (!activeDrag && !activeResize)) return;
-          const id = el.getAttribute('data-id');
-          const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-          if (item) {
-            item.x = parseInt(el.style.left) || item.x;
-            item.y = parseInt(el.style.top) || item.y;
-            item.width = el.offsetWidth;
-            item.height = el.offsetHeight;
-            if (isFolder(item)) await saveFolder(item);
-            else if (isBubble(item)) await saveTextBubble(item);
-            else await saveFile(item);
+        const onEnd = () => {
+          if (!activeDrag && !activeResize) return;
+          const itemId = el.getAttribute('data-id');
+          const target = state.folders.find(f => f.id === itemId) || state.files.find(f => f.id === itemId) || state.textBubbles.find(b => b.id === itemId);
+          if (target) {
+            if (activeDrag) { target.x = parseInt(el.style.left); target.y = parseInt(el.style.top); }
+            if (activeResize) { target.width = parseInt(el.style.width); target.height = parseInt(el.style.height); }
+            if (isFolder(target)) saveFolder(target);
+            else if (isBubble(target)) saveTextBubble(target);
+            else saveFile(target);
           }
-          activeDrag = false;
-          activeResize = false;
+          activeDrag = false; activeResize = false;
         };
 
         el.addEventListener('mousedown', onStart);
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onEnd);
-
         el.addEventListener('touchstart', onStart, { passive: true });
         window.addEventListener('touchmove', onMove, { passive: true });
         window.addEventListener('touchend', onEnd);
       });
     }
 
-    function attachBulkDragListeners() {}
+    function attachBulkDragListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
 
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
+      let isDraggingAll = false;
+      let startX, startY;
+      let initialPositions = {};
+
+      const onStart = (e) => {
+        if (!state.selectMode || state.selectedIds.length === 0) return;
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
+        const touch = e.touches ? e.touches[0] : e;
+        startX = touch.clientX; startY = touch.clientY;
+        isDraggingAll = true;
+        initialPositions = {};
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) initialPositions[id] = { x: parseInt(el.style.left) || 0, y: parseInt(el.style.top) || 0 };
+        });
+      };
+
+      const onMove = (e) => {
+        if (!isDraggingAll) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - startX, dy = touch.clientY - startY;
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          const init = initialPositions[id];
+          if (el && init) {
+            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+          }
+        });
+      };
+
+      const onEnd = () => {
+        if (!isDraggingAll) return;
+        state.selectedIds.forEach(id => {
+          const el = document.getElementById(`item-${id}`);
+          if (el) {
+            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (target) {
+              target.x = parseInt(el.style.left); target.y = parseInt(el.style.top);
+              if (isFolder(target)) saveFolder(target);
+              else if (isBubble(target)) saveTextBubble(target);
+              else saveFile(target);
+            }
+          }
+        });
+        isDraggingAll = false;
+      };
+
+      container.addEventListener('mousedown', onStart);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      container.addEventListener('touchstart', onStart, { passive: true });
+      window.addEventListener('touchmove', onMove, { passive: true });
+      window.addEventListener('touchend', onEnd);
+    }
+
+    loadData();
   </script>
 </body>
 </html>
