@@ -92,7 +92,14 @@
 
     // --- MEDIA PLAYBACK HELPER ---
     async function getOrCreateBlobUrl(file) {
-      if (file.blobUrl) return file.blobUrl;
+      if (file.blobUrl) {
+        // Verify if blob URL is still valid/revoked by testing fetch or simply returning if exists, 
+        // but if dataUrl exists and blobUrl fails, recreate it.
+        try {
+          const testRes = await fetch(file.blobUrl).catch(() => null);
+          if (testRes && testRes.ok) return file.blobUrl;
+        } catch (e) {}
+      }
       if (!file.dataUrl) return '';
       try {
         const res = await fetch(file.dataUrl);
@@ -972,11 +979,19 @@
       `;
     }
 
-    function renderQuickViewModal() {
+    async function ensureBlobUrlForModal(file) {
+      if (file.dataUrl && (file.fileType?.startsWith('video/') || file.fileType?.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm'))) {
+        file.blobUrl = await getOrCreateBlobUrl(file);
+      }
+    }
+
+    async function renderQuickViewModal() {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       const file = currentFolderFiles[currentIndex];
       if (!file) return '';
+
+      await ensureBlobUrlForModal(file);
 
       const hasPrev = currentIndex > 0;
       const hasNext = currentIndex < currentFolderFiles.length - 1;
@@ -1015,13 +1030,15 @@
       `;
     }
 
-    function navigateQuickView(direction) {
+    async function navigateQuickView(direction) {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
       if (currentIndex === -1) return;
       const newIndex = currentIndex + direction;
       if (newIndex >= 0 && newIndex < currentFolderFiles.length) {
         state.quickViewFileId = currentFolderFiles[newIndex].id;
+        const targetFile = currentFolderFiles[newIndex];
+        await ensureBlobUrlForModal(targetFile);
         render();
       }
     }
@@ -1058,7 +1075,14 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    async function openQuickView(id) { 
+      state.quickViewFileId = id; 
+      const file = state.files.find(f => f.id === id);
+      if (file) await ensureBlobUrlForModal(file);
+      closeMenu(); 
+      closeHamburgerMenu(); 
+      render(); 
+    }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function navigateBack() {
@@ -1662,80 +1686,9 @@
       });
     }
 
-    function attachBulkDragListeners() {
-      const container = document.getElementById('canvas-container');
-      if (!container) return;
+    function attachBulkDragListeners() {}
 
-      let isDraggingAll = false;
-      let startX, startY;
-      let initialPositions = {};
-
-      const onStart = (e) => {
-        if (!state.selectMode || state.selectedIds.length === 0) return;
-        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
-
-        const touch = e.touches ? e.touches[0] : e;
-        startX = touch.clientX;
-        startY = touch.clientY;
-        isDraggingAll = true;
-
-        initialPositions = {};
-        state.selectedIds.forEach(id => {
-          const el = document.getElementById(`item-${id}`);
-          if (el) {
-            initialPositions[id] = {
-              x: parseInt(el.style.left) || 0,
-              y: parseInt(el.style.top) || 0
-            };
-          }
-        });
-      };
-
-      const onMove = (e) => {
-        if (!isDraggingAll) return;
-        const touch = e.touches ? e.touches[0] : e;
-        const dx = touch.clientX - startX;
-        const dy = touch.clientY - startY;
-
-        state.selectedIds.forEach(id => {
-          const el = document.getElementById(`item-${id}`);
-          const init = initialPositions[id];
-          if (el && init) {
-            el.style.left = `${Math.max(8, init.x + dx)}px`;
-            el.style.top = `${Math.max(8, init.y + dy)}px`;
-          }
-        });
-      };
-
-      const onEnd = async () => {
-        if (!isDraggingAll) return;
-        isDraggingAll = false;
-
-        for (let id of state.selectedIds) {
-          const el = document.getElementById(`item-${id}`);
-          if (el) {
-            const newX = parseInt(el.style.left);
-            const newY = parseInt(el.style.top);
-            let target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (target) {
-              target.x = newX;
-              target.y = newY;
-              if (isFolder(target)) await saveFolder(target);
-              else if (isBubble(target)) await saveTextBubble(target);
-              else await saveFile(target);
-            }
-          }
-        }
-      };
-
-      container.addEventListener('mousedown', onStart);
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onEnd);
-      container.addEventListener('touchstart', onStart, { passive: true });
-      window.addEventListener('touchmove', onMove, { passive: true });
-      window.addEventListener('touchend', onEnd);
-    }
-
+    // Initialize
     loadData();
   </script>
 </body>
