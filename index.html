@@ -784,7 +784,7 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls playsinline webkit-playsinline class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) return `<video controls autoplay playsinline webkit-playsinline class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (isAudioFile(file)) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
@@ -1607,33 +1607,43 @@
           const dy = touch.clientY - startY;
 
           if (activeResize) {
-            let newW = Math.max(80, origW + dx);
-            let newH = Math.max(60, origH + dy);
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
+            const newW = Math.max(64, origW + dx);
+            const newH = Math.max(64, origH + dy);
+            el.style.width = `${newW}px`;
+            el.style.height = `${newH}px`;
           } else if (activeDrag) {
-            let newX = Math.max(0, origX + dx);
-            let newY = Math.max(0, origY + dy);
-            el.style.left = newX + 'px';
-            el.style.top = newY + 'px';
+            const newX = Math.max(0, origX + dx);
+            const newY = Math.max(0, origY + dy);
+            el.style.left = `${newX}px`;
+            el.style.top = `${newY}px`;
           }
         };
 
         const onEnd = async () => {
           if (!state.editMode || (!activeDrag && !activeResize)) return;
           const id = el.getAttribute('data-id');
-          const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-          if (item) {
-            item.x = parseInt(el.style.left) || 0;
-            item.y = parseInt(el.style.top) || 0;
-            item.width = el.offsetWidth;
-            item.height = el.offsetHeight;
-            if (isFolder(item)) await saveFolder(item);
-            else if (isBubble(item)) await saveTextBubble(item);
-            else await saveFile(item);
-          }
+          const finalX = parseInt(el.style.left) || 0;
+          const finalY = parseInt(el.style.top) || 0;
+          const finalW = el.offsetWidth;
+          const finalH = el.offsetHeight;
+
           activeDrag = false;
           activeResize = false;
+
+          let folder = state.folders.find(f => f.id === id);
+          let file = state.files.find(f => f.id === id);
+          let bubble = state.textBubbles.find(b => b.id === id);
+
+          if (folder) {
+            folder.x = finalX; folder.y = finalY; folder.width = finalW; folder.height = finalH;
+            await saveFolder(folder);
+          } else if (file) {
+            file.x = finalX; file.y = finalY; file.width = finalW; file.height = finalH;
+            await saveFile(file);
+          } else if (bubble) {
+            bubble.x = finalX; bubble.y = finalY; bubble.width = finalW; bubble.height = finalH;
+            await saveTextBubble(bubble);
+          }
         };
 
         el.addEventListener('mousedown', onStart);
