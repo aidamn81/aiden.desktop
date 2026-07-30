@@ -932,7 +932,16 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    async function openQuickView(id) { 
+      state.quickViewFileId = id; 
+      closeMenu(); 
+      closeHamburgerMenu(); 
+      const file = state.files.find(f => f.id === id);
+      if (file && (isVideoFile(file) || isAudioFile(file))) {
+        await getOrCreateBlobUrl(file);
+      }
+      render(); 
+    }
     function closeQuickView() { state.quickViewFileId = null; render(); }
     function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
     function navigateBack() {
@@ -1598,30 +1607,39 @@
             origX = parseInt(el.style.left) || 0;
             origY = parseInt(el.style.top) || 0;
           }
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onEnd);
+          window.addEventListener('touchmove', onMove, { passive: false });
+          window.addEventListener('touchend', onEnd);
         };
 
         const onMove = (e) => {
-          if (!state.editMode || (!activeDrag && !activeResize)) return;
+          if (!activeDrag && !activeResize) return;
+          e.preventDefault();
           const touch = e.touches ? e.touches[0] : e;
           const dx = touch.clientX - startX;
           const dy = touch.clientY - startY;
+          const id = el.getAttribute('data-id');
 
-          if (activeResize) {
-            const newW = Math.max(64, origW + dx);
-            const newH = Math.max(64, origH + dy);
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
-          } else if (activeDrag) {
-            const newX = Math.max(0, origX + dx);
-            const newY = Math.max(0, origY + dy);
+          if (activeDrag) {
+            let newX = Math.max(0, origX + dx);
+            let newY = Math.max(0, origY + dy);
+            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
             el.style.left = newX + 'px';
             el.style.top = newY + 'px';
+          } else if (activeResize) {
+            let newW = Math.max(80, origW + dx);
+            let newH = Math.max(80, origH + dy);
+            newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            el.style.width = newW + 'px';
+            el.style.height = newH + 'px';
           }
         };
 
-        const onEnd = async () => {
-          if (!state.editMode || (!activeDrag && !activeResize)) return;
-          activeDrag = false; activeResize = false;
+        const onEnd = async (e) => {
+          if (!activeDrag && !activeResize) return;
           const id = el.getAttribute('data-id');
           const finalX = parseInt(el.style.left) || 0;
           const finalY = parseInt(el.style.top) || 0;
@@ -1630,26 +1648,29 @@
 
           let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
           if (item) {
-            item.x = Math.round(finalX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            item.y = Math.round(finalY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            item.x = finalX;
+            item.y = finalY;
             item.width = finalW;
             item.height = finalH;
             if (isFolder(item)) await saveFolder(item);
             else if (isBubble(item)) await saveTextBubble(item);
             else await saveFile(item);
           }
+
+          activeDrag = false;
+          activeResize = false;
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onEnd);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onEnd);
         };
 
         el.addEventListener('mousedown', onStart);
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
-        el.addEventListener('touchstart', onStart, { passive: true });
-        window.addEventListener('touchmove', onMove, { passive: true });
-        window.addEventListener('touchend', onEnd);
+        el.addEventListener('touchstart', onStart, { passive: false });
       });
     }
 
-    loadData();
+    window.addEventListener('DOMContentLoaded', loadData);
   </script>
 </body>
 </html>
