@@ -784,13 +784,13 @@
         `;
       }
       if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls autoplay playsinline webkit-playsinline class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isVideo) return `<video controls autoplay playsinline webkit-playsinline preload="auto" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (isAudioFile(file)) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
             <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
             <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
-            <audio controls autoplay class="w-full" src="${mediaUrl}"></audio>
+            <audio controls autoplay preload="auto" class="w-full" src="${mediaUrl}"></audio>
           </div>
         `;
       }
@@ -1614,49 +1614,46 @@
         };
 
         const onMove = (e) => {
-          if (!activeDrag && !activeResize) return;
-          e.preventDefault();
           const touch = e.touches ? e.touches[0] : e;
           const dx = touch.clientX - startX;
           const dy = touch.clientY - startY;
-          const id = el.getAttribute('data-id');
 
           if (activeDrag) {
             let newX = Math.max(0, origX + dx);
             let newY = Math.max(0, origY + dy);
             newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
             newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.left = newX + 'px';
-            el.style.top = newY + 'px';
+            el.style.left = `${newX}px`;
+            el.style.top = `${newY}px`;
           } else if (activeResize) {
             let newW = Math.max(80, origW + dx);
             let newH = Math.max(80, origH + dy);
             newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
             newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
+            el.style.width = `${newW}px`;
+            el.style.height = `${newH}px`;
           }
         };
 
         const onEnd = async (e) => {
-          if (!activeDrag && !activeResize) return;
-          const id = el.getAttribute('data-id');
-          const finalX = parseInt(el.style.left) || 0;
-          const finalY = parseInt(el.style.top) || 0;
-          const finalW = el.offsetWidth;
-          const finalH = el.offsetHeight;
+          if (activeDrag || activeResize) {
+            const id = el.getAttribute('data-id');
+            const finalX = parseInt(el.style.left) || 0;
+            const finalY = parseInt(el.style.top) || 0;
+            const finalW = parseInt(el.style.width) || el.offsetWidth;
+            const finalH = parseInt(el.style.height) || el.offsetHeight;
 
-          let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-          if (item) {
-            item.x = finalX;
-            item.y = finalY;
-            item.width = finalW;
-            item.height = finalH;
-            if (isFolder(item)) await saveFolder(item);
-            else if (isBubble(item)) await saveTextBubble(item);
-            else await saveFile(item);
+            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (item) {
+              item.x = finalX;
+              item.y = finalY;
+              item.width = finalW;
+              item.height = finalH;
+              if (isFolder(item)) await saveFolder(item);
+              else if (isBubble(item)) await saveTextBubble(item);
+              else await saveFile(item);
+            }
           }
-
           activeDrag = false;
           activeResize = false;
           window.removeEventListener('mousemove', onMove);
@@ -1666,11 +1663,11 @@
         };
 
         el.addEventListener('mousedown', onStart);
-        el.addEventListener('touchstart', onStart, { passive: false });
+        el.addEventListener('touchstart', onStart, { passive: true });
       });
     }
 
-    window.addEventListener('DOMContentLoaded', loadData);
+    loadData();
   </script>
 </body>
 </html>
