@@ -1604,13 +1604,12 @@
             e.stopPropagation();
           } else {
             activeDrag = true;
-            origX = parseInt(el.style.left) || 0;
-            origY = parseInt(el.style.top) || 0;
+            origX = el.offsetLeft; origY = el.offsetTop;
           }
-          window.addEventListener('mousemove', onMove);
-          window.addEventListener('mouseup', onEnd);
-          window.addEventListener('touchmove', onMove, { passive: false });
-          window.addEventListener('touchend', onEnd);
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onEnd);
+          document.addEventListener('touchmove', onMove, { passive: false });
+          document.addEventListener('touchend', onEnd);
         };
 
         const onMove = (e) => {
@@ -1618,37 +1617,32 @@
           const dx = touch.clientX - startX;
           const dy = touch.clientY - startY;
 
-          if (activeDrag) {
-            let newX = Math.max(0, origX + dx);
-            let newY = Math.max(0, origY + dy);
-            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.left = `${newX}px`;
-            el.style.top = `${newY}px`;
-          } else if (activeResize) {
-            let newW = Math.max(80, origW + dx);
-            let newH = Math.max(80, origH + dy);
-            newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-            el.style.width = `${newW}px`;
-            el.style.height = `${newH}px`;
+          if (activeResize) {
+            const newW = Math.max(80, origW + dx);
+            const newH = Math.max(80, origH + dy);
+            el.style.width = newW + 'px';
+            el.style.height = newH + 'px';
+            e.preventDefault();
+          } else if (activeDrag) {
+            const rawX = origX + dx;
+            const rawY = origY + dy;
+            const snapX = Math.round(rawX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            const snapY = Math.round(rawY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            el.style.left = Math.max(0, snapX) + 'px';
+            el.style.top = Math.max(0, snapY) + 'px';
+            e.preventDefault();
           }
         };
 
         const onEnd = async (e) => {
           if (activeDrag || activeResize) {
             const id = el.getAttribute('data-id');
-            const finalX = parseInt(el.style.left) || 0;
-            const finalY = parseInt(el.style.top) || 0;
-            const finalW = parseInt(el.style.width) || el.offsetWidth;
-            const finalH = parseInt(el.style.height) || el.offsetHeight;
-
-            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
             if (item) {
-              item.x = finalX;
-              item.y = finalY;
-              item.width = finalW;
-              item.height = finalH;
+              item.x = el.offsetLeft;
+              item.y = el.offsetTop;
+              item.width = el.offsetWidth;
+              item.height = el.offsetHeight;
               if (isFolder(item)) await saveFolder(item);
               else if (isBubble(item)) await saveTextBubble(item);
               else await saveFile(item);
@@ -1656,10 +1650,10 @@
           }
           activeDrag = false;
           activeResize = false;
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('mouseup', onEnd);
-          window.removeEventListener('touchmove', onMove);
-          window.removeEventListener('touchend', onEnd);
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onEnd);
+          document.removeEventListener('touchmove', onMove);
+          document.removeEventListener('touchend', onEnd);
         };
 
         el.addEventListener('mousedown', onStart);
