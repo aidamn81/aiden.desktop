@@ -88,7 +88,8 @@
       linkModal: false,
       linkModalThumbData: null,
       appModal: false,
-      appModalThumbData: null
+      appModalThumbData: null,
+      activeUploads: []
     };
 
     const uid = () => Math.random().toString(36).substring(2, 9);
@@ -432,7 +433,30 @@
 
         <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}">
           ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
-          ${items.length === 0 ? `
+          
+          ${state.activeUploads.length > 0 ? `
+            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
+              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
+                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
+                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                ${state.activeUploads.map(up => `
+                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="truncate font-medium text-white max-w-[70%]">${up.name}</span>
+                      <span class="text-amber-400 font-bold">${up.progress}%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${items.length === 0 && state.activeUploads.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
               <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
@@ -1423,19 +1447,50 @@
       const fileList = Array.from(files);
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
+        const uploadId = uid();
+        const uploadObj = { id: uploadId, name: file.name, progress: 0 };
+        state.activeUploads.push(uploadObj);
+        render();
+
         let inferredType = getMimeType(file);
         let blobUrl = '';
         let dataUrl = '';
         let textContent = null;
 
+        const isLargeFile = file.size > 2 * 1024 * 1024; // simulate chunks if larger than 2MB
+
         if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || isVideoFile(file) || isAudioFile(file)) {
           blobUrl = URL.createObjectURL(file);
+          
+          if (isLargeFile) {
+            // Simulate chunked background progress for big videos
+            const totalChunks = 20;
+            for (let c = 1; c <= totalChunks; c++) {
+              await new Promise(r => setTimeout(r, 80));
+              const currentUpload = state.activeUploads.find(u => u.id === uploadId);
+              if (currentUpload) {
+                currentUpload.progress = Math.round((c / totalChunks) * 100);
+                render();
+              }
+            }
+          }
+          dataUrl = await fileToBase64(file);
         } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
           try { textContent = await fileToText(file); } catch (e) {}
           dataUrl = await fileToBase64(file);
         } else {
           dataUrl = await fileToBase64(file);
         }
+
+        // Finalize progress
+        const currentUpload = state.activeUploads.find(u => u.id === uploadId);
+        if (currentUpload) {
+          currentUpload.progress = 100;
+          render();
+        }
+
+        await new Promise(r => setTimeout(r, 300));
+        state.activeUploads = state.activeUploads.filter(u => u.id !== uploadId);
 
         let allExisting = [
           ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
@@ -1634,10 +1689,11 @@
             let bubble = state.textBubbles.find(b => b.id === id);
 
             if (folder) { folder.x = finalX; folder.y = finalY; folder.width = finalW; folder.height = finalH; await saveFolder(folder); }
-            if (file) { file.x = finalX; file.y = finalY; file.width = finalW; file.height = finalH; await saveFile(file); }
-            if (bubble) { bubble.x = finalX; bubble.y = finalY; bubble.width = finalW; bubble.height = finalH; await saveTextBubble(bubble); }
+            else if (file) { file.x = finalX; file.y = finalY; file.width = finalW; file.height = finalH; await saveFile(file); }
+            else if (bubble) { bubble.x = finalX; bubble.y = finalY; bubble.width = finalW; bubble.height = finalH; await saveTextBubble(bubble); }
           }
-          activeDrag = false; activeResize = false;
+          activeDrag = false;
+          activeResize = false;
           window.removeEventListener('mousemove', onMove);
           window.removeEventListener('mouseup', onEnd);
           window.removeEventListener('touchmove', onMove);
