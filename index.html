@@ -261,12 +261,8 @@
             state.files = allFiles.length > 0 ? allFiles : state.files;
             state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
 
-            for (let file of state.files) {
-              if (file.dataUrl && (isVideoFile(file) || isAudioFile(file))) {
-                await getOrCreateBlobUrl(file);
-              }
-            }
-
+            
+      
             for (let f of state.folders) await saveFolder(f);
             for (let fi of state.files) await saveFile(fi);
             for (let b of state.textBubbles) await saveTextBubble(b);
