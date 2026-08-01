@@ -108,6 +108,10 @@
 
     async function getOrCreateBlobUrl(file) {
       if (file.blobUrl) return file.blobUrl;
+      if (file.rawBlob) {
+        file.blobUrl = URL.createObjectURL(file.rawBlob);
+        return file.blobUrl;
+      }
       if (!file.dataUrl) return '';
       try {
         const res = await fetch(file.dataUrl);
@@ -120,7 +124,7 @@
     }
 
     const DB_NAME = 'aiden_files_db';
-    const DB_VERSION = 4;
+    const DB_VERSION = 5;
 
     function openDB() {
       return new Promise((resolve) => {
@@ -159,7 +163,7 @@
       }
 
       for (let file of state.files) {
-        if (file.dataUrl && (isVideoFile(file) || isAudioFile(file))) {
+        if ((isVideoFile(file) || isAudioFile(file))) {
           await getOrCreateBlobUrl(file);
         }
       }
@@ -205,6 +209,7 @@
         tx.objectStore(storeName).delete(id);
       }
     }
+
     function resetToken() {
       const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
       if (token !== null) {
@@ -261,8 +266,6 @@
             state.files = allFiles.length > 0 ? allFiles : state.files;
             state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
 
-            
-      
             for (let f of state.folders) await saveFolder(f);
             for (let fi of state.files) await saveFile(fi);
             for (let b of state.textBubbles) await saveTextBubble(b);
@@ -276,6 +279,7 @@
         const sanitizedFiles = state.files.map(file => {
           const copy = { ...file };
           delete copy.blobUrl;
+          delete copy.rawBlob;
           return copy;
         });
 
@@ -349,6 +353,7 @@
         render();
       }
     }
+
     function render() {
       const app = document.getElementById('app');
       const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
@@ -470,6 +475,7 @@
       attachDragAndResizeListeners();
       attachBulkDragListeners();
     }
+
     function getFileIcon(type, name) {
       if (type === 'link' || name.startsWith('http')) return 'link';
       if (type === 'app' || type === 'ios-app') return 'smartphone';
@@ -566,6 +572,7 @@
         `;
       }
     }
+
     function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
       if (isBubbleItem) {
         return `
@@ -677,6 +684,7 @@
         </div>
       `;
     }
+
     function renderTextEditorModal() {
       const ed = state.textEditorModal;
       if (!ed) return '';
@@ -767,14 +775,14 @@
           </div>
         `;
       }
-      if (type.startsWith('image/')) return `<img src="${file.dataUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
-      if (isVideo) return `<video controls playsinline webkit-playsinline muted autoplay loop class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (type.startsWith('image/')) return `<img src="${mediaUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
+      if (isVideo) return `<video controls playsinline webkit-playsinline class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
       if (isAudioFile(file)) {
         return `
           <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
             <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
             <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
-            <audio controls autoplay class="w-full" src="${mediaUrl}"></audio>
+            <audio controls class="w-full" src="${mediaUrl}"></audio>
           </div>
         `;
       }
@@ -783,10 +791,10 @@
           <div class="w-[98vw] h-[92vh] max-w-7xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
             <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300 shrink-0">
               <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
             </div>
             <div class="flex-1 w-full h-full bg-zinc-950 relative overflow-auto">
-              <embed src="${file.dataUrl}#toolbar=1&view=FitH" type="application/pdf" width="100%" height="100%" class="w-full h-full border-0 bg-white" />
+              <embed src="${mediaUrl}#toolbar=1&view=FitH" type="application/pdf" width="100%" height="100%" class="w-full h-full border-0 bg-white" />
             </div>
           </div>
         `;
@@ -796,10 +804,10 @@
           <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
             <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
               <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
             </div>
             <div class="flex-1 w-full h-full bg-white relative">
-              <iframe src="${file.dataUrl}" class="w-full h-full border-0"></iframe>
+              <iframe src="${mediaUrl}" class="w-full h-full border-0"></iframe>
             </div>
           </div>
         `;
@@ -809,10 +817,10 @@
           <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
             <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
               <span class="font-semibold truncate">${file.name}</span>
-              <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
             </div>
             <div class="flex-1 w-full h-full bg-zinc-950 p-4 overflow-auto">
-              <pre class="text-xs font-mono text-zinc-200 whitespace-pre-wrap select-text">${file.textContent || (file.dataUrl ? atob(file.dataUrl.split(',')[1] || '') : '')}</pre>
+              <pre class="text-xs font-mono text-zinc-200 whitespace-pre-wrap select-text">${file.textContent || ''}</pre>
             </div>
           </div>
         `;
@@ -821,7 +829,7 @@
         <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
           <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
             <span class="font-semibold truncate">${file.name}</span>
-            <a href="${file.dataUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+            <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
           </div>
           <div class="flex-1 w-full h-full bg-zinc-950 flex flex-col items-center justify-center p-8 text-center gap-4">
             <i data-lucide="file-text" class="w-16 h-16 text-amber-400"></i>
@@ -871,6 +879,7 @@
         </div>
       `;
     }
+
     function navigateQuickView(direction) {
       const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
@@ -1133,6 +1142,7 @@
       state.textEditorModal = null;
       render();
     }
+
     async function bulkDelete() {
       if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
       for (let id of state.selectedIds) {
@@ -1199,8 +1209,8 @@
           render();
           return;
         }
-        if (file.dataUrl && navigator.clipboard && window.ClipboardItem) {
-          const res = await fetch(file.dataUrl);
+        if (file.blobUrl && navigator.clipboard && window.ClipboardItem) {
+          const res = await fetch(file.blobUrl);
           const blob = await res.blob();
           await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
           alert('File copied to clipboard successfully!');
@@ -1216,7 +1226,7 @@
           return;
         }
       } catch (e) {
-        console.warn('Direct clipboard API restricted, falling back to data duplicate', e);
+        console.warn('Direct clipboard API restricted', e);
       }
 
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
@@ -1234,15 +1244,16 @@
     async function shareFile(id, isBulk = false) {
       const file = state.files.find(f => f.id === id);
       if (!file) return;
+      const mediaUrl = file.blobUrl || file.dataUrl;
       if (file.fileType === 'link' || file.fileType === 'ios-app') {
         if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: file.dataUrl });
         else alert('Sharing is not supported on this device.');
         if (!isBulk) closeMenu();
         return;
       }
-      if (navigator.canShare && file.dataUrl) {
+      if (navigator.canShare && mediaUrl) {
         try {
-          const res = await fetch(file.dataUrl);
+          const res = await fetch(mediaUrl);
           const blob = await res.blob();
           const nativeFile = new File([blob], file.name, { type: file.fileType || blob.type });
           if (navigator.canShare({ files: [nativeFile] })) {
@@ -1252,7 +1263,7 @@
           }
         } catch (e) {}
       }
-      if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: file.dataUrl });
+      if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: mediaUrl });
       else if (!isBulk) alert('Sharing is not supported on this device.');
       if (!isBulk) closeMenu();
     }
@@ -1412,15 +1423,18 @@
       const fileList = Array.from(files);
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
-        let dataUrl = await fileToBase64(file);
-        let textContent = null;
         let inferredType = getMimeType(file);
         let blobUrl = '';
+        let dataUrl = '';
+        let textContent = null;
 
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || file.name.endsWith('.mp4') || file.name.endsWith('.mov') || file.name.endsWith('.webm') || file.name.endsWith('.m4v') || file.name.endsWith('.mkv') || file.name.endsWith('.mp3') || file.name.endsWith('.m4a') || file.name.endsWith('.wav') || file.name.endsWith('.aac')) {
+        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || isVideoFile(file) || isAudioFile(file)) {
           blobUrl = URL.createObjectURL(file);
         } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md')) {
           try { textContent = await fileToText(file); } catch (e) {}
+          dataUrl = await fileToBase64(file);
+        } else {
+          dataUrl = await fileToBase64(file);
         }
 
         let allExisting = [
@@ -1579,103 +1593,63 @@
             origX = parseInt(el.style.left) || 0;
             origY = parseInt(el.style.top) || 0;
           }
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onEnd);
+          window.addEventListener('touchmove', onMove, { passive: false });
+          window.addEventListener('touchend', onEnd);
         };
 
         const onMove = (e) => {
-          if (!state.editMode || (!activeDrag && !activeResize)) return;
+          if (!activeDrag && !activeResize) return;
+          e.preventDefault();
           const touch = e.touches ? e.touches[0] : e;
-          const dx = touch.clientX - startX, dy = touch.clientY - startY;
+          const dx = touch.clientX - startX;
+          const dy = touch.clientY - startY;
+
           if (activeDrag) {
-            el.style.left = `${Math.round(Math.max(8, origX + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-            el.style.top = `${Math.round(Math.max(8, origY + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
+            const newX = Math.max(0, origX + dx);
+            const newY = Math.max(0, origY + dy);
+            const snappedX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            const snappedY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            el.style.left = `${snappedX}px`;
+            el.style.top = `${snappedY}px`;
           } else if (activeResize) {
-            el.style.width = `${Math.max(64, origW + dx)}px`;
-            el.style.height = `${Math.max(64, origH + dy)}px`;
+            const newW = Math.max(80, origW + dx);
+            const newH = Math.max(80, origH + dy);
+            el.style.width = `${newW}px`;
+            el.style.height = `${newH}px`;
           }
         };
 
-        const onEnd = () => {
-          if (!activeDrag && !activeResize) return;
-          const itemId = el.getAttribute('data-id');
-          const target = state.folders.find(f => f.id === itemId) || state.files.find(f => f.id === itemId) || state.textBubbles.find(b => b.id === itemId);
-          if (target) {
-            if (activeDrag) { target.x = parseInt(el.style.left); target.y = parseInt(el.style.top); }
-            if (activeResize) { target.width = parseInt(el.style.width); target.height = parseInt(el.style.height); }
-            if (isFolder(target)) saveFolder(target);
-            else if (isBubble(target)) saveTextBubble(target);
-            else saveFile(target);
+        const onEnd = async () => {
+          if (activeDrag || activeResize) {
+            const id = el.getAttribute('data-id');
+            const finalX = parseInt(el.style.left) || 0;
+            const finalY = parseInt(el.style.top) || 0;
+            const finalW = el.offsetWidth;
+            const finalH = el.offsetHeight;
+
+            let folder = state.folders.find(f => f.id === id);
+            let file = state.files.find(f => f.id === id);
+            let bubble = state.textBubbles.find(b => b.id === id);
+
+            if (folder) { folder.x = finalX; folder.y = finalY; folder.width = finalW; folder.height = finalH; await saveFolder(folder); }
+            if (file) { file.x = finalX; file.y = finalY; file.width = finalW; file.height = finalH; await saveFile(file); }
+            if (bubble) { bubble.x = finalX; bubble.y = finalY; bubble.width = finalW; bubble.height = finalH; await saveTextBubble(bubble); }
           }
           activeDrag = false; activeResize = false;
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onEnd);
+          window.removeEventListener('touchmove', onMove);
+          window.removeEventListener('touchend', onEnd);
         };
 
         el.addEventListener('mousedown', onStart);
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onEnd);
         el.addEventListener('touchstart', onStart, { passive: true });
-        window.addEventListener('touchmove', onMove, { passive: true });
-        window.addEventListener('touchend', onEnd);
       });
     }
 
-    function attachBulkDragListeners() {
-      const container = document.getElementById('canvas-container');
-      if (!container) return;
-
-      let isDraggingAll = false;
-      let startX, startY;
-      let initialPositions = {};
-
-      const onStart = (e) => {
-        if (!state.selectMode || state.selectedIds.length === 0) return;
-        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) return;
-        const touch = e.touches ? e.touches[0] : e;
-        startX = touch.clientX; startY = touch.clientY;
-        isDraggingAll = true;
-        initialPositions = {};
-        state.selectedIds.forEach(id => {
-          const el = document.getElementById(`item-${id}`);
-          if (el) initialPositions[id] = { x: parseInt(el.style.left) || 0, y: parseInt(el.style.top) || 0 };
-        });
-      };
-
-      const onMove = (e) => {
-        if (!isDraggingAll) return;
-        const touch = e.touches ? e.touches[0] : e;
-        const dx = touch.clientX - startX, dy = touch.clientY - startY;
-        state.selectedIds.forEach(id => {
-          const el = document.getElementById(`item-${id}`);
-          const init = initialPositions[id];
-          if (el && init) {
-            el.style.left = `${Math.round(Math.max(8, init.x + dx) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-            el.style.top = `${Math.round(Math.max(8, init.y + dy) / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE}px`;
-          }
-        });
-      };
-
-      const onEnd = () => {
-        if (!isDraggingAll) return;
-        state.selectedIds.forEach(id => {
-          const el = document.getElementById(`item-${id}`);
-          if (el) {
-            const target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-            if (target) {
-              target.x = parseInt(el.style.left); target.y = parseInt(el.style.top);
-              if (isFolder(target)) saveFolder(target);
-              else if (isBubble(target)) saveTextBubble(target);
-              else saveFile(target);
-            }
-          }
-        });
-        isDraggingAll = false;
-      };
-
-      container.addEventListener('mousedown', onStart);
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onEnd);
-      container.addEventListener('touchstart', onStart, { passive: true });
-      window.addEventListener('touchmove', onMove, { passive: true });
-      window.addEventListener('touchend', onEnd);
-    }
+    function attachBulkDragListeners() {}
 
     loadData();
   </script>
