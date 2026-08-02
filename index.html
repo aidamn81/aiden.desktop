@@ -726,9 +726,7 @@
       let embedHtml = '';
       let url = state.popupVideoUrl || '';
       
-      // Check if it's YouTube
       let ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-      // Check if it's Dailymotion
       let dmMatch = url.match(/(?:dailymotion\.com\/(?:video\/|embed\/video\/)|dai\.ly\/)([\w-]+)/);
       
       if (ytMatch && ytMatch[1]) {
@@ -1440,137 +1438,84 @@
       }
     });
 
-    async function renameItem(id, isFolderItem, isBubbleItem = false) {
-      const item = isFolderItem ? state.folders.find(f => f.id === id) : isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id);
-      if (item) {
-        const newName = prompt('Rename item:', item.name);
-        if (newName && newName.trim() !== '') {
-          item.name = newName.trim();
-          if (isFolderItem) await saveFolder(item); else if (isBubbleItem) await saveTextBubble(item); else await saveFile(item);
-          closeMenu();
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const uploadedFiles = Array.from(e.target.files);
+      if (uploadedFiles.length === 0) return;
+      handleFilesUpload(uploadedFiles);
+      e.target.value = '';
+    });
+
+    document.getElementById('photo-input').addEventListener('change', async (e) => {
+      const uploadedFiles = Array.from(e.target.files);
+      if (uploadedFiles.length === 0) return;
+      handleFilesUpload(uploadedFiles);
+      e.target.value = '';
+    });
+
+    async function handleFilesUpload(uploadedFiles) {
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        const uploadId = uid();
+        state.activeUploads.push({ id: uploadId, name: file.name, progress: 10 });
+        render();
+
+        try {
+          const base64 = await fileToBase64(file);
+          state.activeUploads = state.activeUploads.map(up => up.id === uploadId ? { ...up, progress: 70 } : up);
+          render();
+
+          let posX = 20 + ((allExisting.length + i) % 4) * 140;
+          let posY = 20 + Math.floor((allExisting.length + i) / 4) * 160;
+
+          const newFile = {
+            id: uid(),
+            name: file.name,
+            fileType: file.type || 'application/octet-stream',
+            parentId: state.currentFolderId,
+            dataUrl: base64,
+            rawBlob: file,
+            x: posX,
+            y: posY,
+            width: 112,
+            height: 144
+          };
+
+          if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md') || file.name.endsWith('.html')) {
+            try {
+              newFile.textContent = await file.text();
+            } catch (err) {}
+          }
+
+          if (isVideoFile(newFile)) {
+            await getOrCreateBlobUrl(newFile);
+          }
+
+          state.files.push(newFile);
+          await saveFile(newFile);
+        } catch (err) {
+          console.error('Upload error:', err);
+        } finally {
+          state.activeUploads = state.activeUploads.filter(up => up.id !== uploadId);
           render();
         }
       }
     }
 
-    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
-      const targetId = buildFolderSelectionPrompt();
-      if (targetId !== undefined) {
-        const actualParent = targetId;
-        const item = isFolderItem ? state.folders.find(f => f.id === id) : isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id);
-        if (item) {
-          item.parentId = actualParent; delete item.x; delete item.y;
-          if (isFolderItem) await saveFolder(item);
-          else if (isBubbleItem) await saveTextBubble(item);
-          else await saveFile(item);
-          closeMenu(); render();
-        }
-      }
-    }
-
-    function resizeByFinger(id, isFolderItem) {
-      const el = document.getElementById(`item-${id}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const handle = el.querySelector('.resize-handle');
-        if (handle) {
-          handle.classList.add('ring-4', 'ring-amber-400');
-          setTimeout(() => handle.classList.remove('ring-4', 'ring-amber-400'), 1500);
-        }
-      }
-      closeMenu();
-    }
-
-    async function snapToOriginalShape(id) {
-      const item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-      if (item) {
-        item.width = isFolder(item) ? 96 : isBubble(item) ? 140 : 112;
-        item.height = isFolder(item) ? 96 : isBubble(item) ? (Math.max(80, (item.text?.split('\n').length || 1) * 22)) : 144;
-        if (isFolder(item)) await saveFolder(item);
-        else if (isBubble(item)) await saveTextBubble(item);
-        else await saveFile(item);
-        closeMenu(); render();
-      }
-    }
-
-    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
-      if (!confirm('Are you sure you want to delete this item?')) return;
-      if (isFolderItem) {
-        state.folders = state.folders.filter(f => f.id !== id);
-        await deleteFromDB('folders', id);
-      } else if (isBubbleItem) {
-        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        await deleteFromDB('textBubbles', id);
-      } else {
-        state.files = state.files.filter(f => f.id !== id);
-        await deleteFromDB('files', id);
-      }
-      closeMenu();
-      render();
-    }
-
-    function openNewFolderModal() {
-      const name = prompt('Folder Name:', 'New Folder');
-      if (name && name.trim() !== '') {
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-
-        let targetX = 20, targetY = 20;
-        if (allExisting.length > 0) {
-          const lastItem = allExisting[allExisting.length - 1];
-          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-          const lastW = lastItem.width || 96;
-          targetX = lastX + lastW + 24;
-          targetY = lastY;
-          if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
-        }
-
-        const folder = { id: uid(), name: name.trim(), parentId: state.currentFolderId, x: targetX, y: targetY, width: 96, height: 96 };
-        state.folders.push(folder);
-        saveFolder(folder);
-        render();
-      }
-    }
-
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-      });
-    }
-
-    function fileToText(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-        reader.readAsText(file);
-      });
-    }
-
-    function getMimeType(file) {
-      if (file.type && file.type !== '') return file.type;
-      const ext = file.name.split('.').pop().toLowerCase();
-      const mimeMap = {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'wav': 'audio/wav', 'aac': 'audio/aac', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm', 'm4v': 'video/x-m4v', 'mkv': 'video/x-matroska', 'pdf': 'application/pdf', 'txt': 'text/plain', 'html': 'text/html', 'htm': 'text/html', 'json': 'application/json'};
-      return mimeMap[ext] || 'application/octet-stream';
-    }
-
-    function openLinkModal() {
-      state.linkModal = true;
-      state.linkModalThumbData = null;
-      render();
-    }
-    function closeLinkModal() {
-      state.linkModal = false;
-      state.linkModalThumbData = null;
-      render();
-    }
     async function saveLinkModal() {
       const urlInput = document.getElementById('link-url-input');
       const nameInput = document.getElementById('link-name-input');
@@ -1578,7 +1523,8 @@
         alert('Please enter a valid URL.');
         return;
       }
-      const url = urlInput.value.trim();
+      let url = urlInput.value.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
       const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : url;
 
       let allExisting = [
@@ -1586,146 +1532,26 @@
         ...state.files.filter(f => f.parentId === state.currentFolderId),
         ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
       ];
+      let posX = 20 + (allExisting.length % 4) * 140;
+      let posY = 20 + Math.floor(allExisting.length / 4) * 160;
 
-      let targetX = 20, targetY = 20;
-      if (allExisting.length > 0) {
-        const lastItem = allExisting[allExisting.length - 1];
-        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-        const lastW = lastItem.width || 112;
-        targetX = lastX + lastW + 24;
-        targetY = lastY;
-        if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
-      }
-
-      const fileObj = {
+      const newFile = {
         id: uid(),
         name: name,
         fileType: 'link',
-        dataUrl: url,
-        thumbnailData: state.linkModalThumbData,
         parentId: state.currentFolderId,
-        x: targetX,
-        y: targetY,
+        dataUrl: url,
+        thumbnailData: state.linkModalThumbData || null,
+        x: posX,
+        y: posY,
         width: 112,
         height: 144
       };
 
-      state.files.push(fileObj);
-      await saveFile(fileObj);
+      state.files.push(newFile);
+      await saveFile(newFile);
       closeLinkModal();
-      render();
-    }
-
-    function openWebVideoModal() {
-      state.webVideoModal = true;
-      state.webVideoModalThumbData = null;
-      render();
-    }
-    function closeWebVideoModal() {
-      state.webVideoModal = false;
-      state.webVideoModalThumbData = null;
-      render();
-    }
-    async function saveWebVideoModal() {
-      const urlInput = document.getElementById('web-video-url-input');
-      const nameInput = document.getElementById('web-video-name-input');
-      if (!urlInput || !urlInput.value.trim()) {
-        alert('Please enter a valid video URL or embed code.');
-        return;
-      }
-      const url = urlInput.value.trim();
-      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Web Video / Embed';
-
-      let allExisting = [
-        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-        ...state.files.filter(f => f.parentId === state.currentFolderId),
-        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-      ];
-
-      let targetX = 20, targetY = 20;
-      if (allExisting.length > 0) {
-        const lastItem = allExisting[allExisting.length - 1];
-        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-        const lastW = lastItem.width || 112;
-        targetX = lastX + lastW + 24;
-        targetY = lastY;
-        if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
-      }
-
-      const fileObj = {
-        id: uid(),
-        name: name,
-        fileType: 'web-video',
-        dataUrl: url,
-        thumbnailData: state.webVideoModalThumbData,
-        parentId: state.currentFolderId,
-        x: targetX,
-        y: targetY,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(fileObj);
-      await saveFile(fileObj);
-      closeWebVideoModal();
-      render();
-    }
-
-    function openAppModal() {
-      state.appModal = true;
-      state.appModalThumbData = null;
-      render();
-    }
-    function closeAppModal() {
-      state.appModal = false;
-      state.appModalThumbData = null;
-      render();
-    }
-    async function saveAppModal() {
-      const schemeInput = document.getElementById('app-scheme-input');
-      const nameInput = document.getElementById('app-name-input');
-      if (!schemeInput || !schemeInput.value.trim()) {
-        alert('Please enter a valid app scheme or URL.');
-        return;
-      }
-      const scheme = schemeInput.value.trim();
-      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'iOS App';
-
-      let allExisting = [
-        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-        ...state.files.filter(f => f.parentId === state.currentFolderId),
-        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-      ];
-
-      let targetX = 20, targetY = 20;
-      if (allExisting.length > 0) {
-        const lastItem = allExisting[allExisting.length - 1];
-        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-        const lastW = lastItem.width || 112;
-        targetX = lastX + lastW + 24;
-        targetY = lastY;
-        if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
-      }
-
-      const fileObj = {
-        id: uid(),
-        name: name,
-        fileType: 'ios-app',
-        dataUrl: scheme,
-        thumbnailData: state.appModalThumbData,
-        parentId: state.currentFolderId,
-        x: targetX,
-        y: targetY,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(fileObj);
-      await saveFile(fileObj);
-      closeAppModal();
+      state.linkModalThumbData = null;
       render();
     }
 
@@ -1737,6 +1563,44 @@
       }
     });
 
+    async function saveWebVideoModal() {
+      const urlInput = document.getElementById('web-video-url-input');
+      const nameInput = document.getElementById('web-video-name-input');
+      if (!urlInput || !urlInput.value.trim()) {
+        alert('Please enter a valid video URL or embed code.');
+        return;
+      }
+      let url = urlInput.value.trim();
+      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Web Video';
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+      let posX = 20 + (allExisting.length % 4) * 140;
+      let posY = 20 + Math.floor(allExisting.length / 4) * 160;
+
+      const newFile = {
+        id: uid(),
+        name: name,
+        fileType: 'web-video',
+        parentId: state.currentFolderId,
+        dataUrl: url,
+        thumbnailData: state.webVideoModalThumbData || null,
+        x: posX,
+        y: posY,
+        width: 112,
+        height: 144
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeWebVideoModal();
+      state.webVideoModalThumbData = null;
+      render();
+    }
+
     document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -1744,6 +1608,44 @@
         render();
       }
     });
+
+    async function saveAppModal() {
+      const schemeInput = document.getElementById('app-scheme-input');
+      const nameInput = document.getElementById('app-name-input');
+      if (!schemeInput || !schemeInput.value.trim()) {
+        alert('Please enter a valid app scheme or deep link URL.');
+        return;
+      }
+      let scheme = schemeInput.value.trim();
+      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'iOS App';
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+      let posX = 20 + (allExisting.length % 4) * 140;
+      let posY = 20 + Math.floor(allExisting.length / 4) * 160;
+
+      const newFile = {
+        id: uid(),
+        name: name,
+        fileType: 'ios-app',
+        parentId: state.currentFolderId,
+        dataUrl: scheme,
+        thumbnailData: state.appModalThumbData || null,
+        x: posX,
+        y: posY,
+        width: 112,
+        height: 144
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAppModal();
+      state.appModalThumbData = null;
+      render();
+    }
 
     document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -1753,6 +1655,136 @@
       }
     });
 
+    function openLinkModal() { state.linkModal = true; render(); }
+    function closeLinkModal() { state.linkModal = false; render(); }
+    function openWebVideoModal() { state.webVideoModal = true; render(); }
+    function closeWebVideoModal() { state.webVideoModal = false; render(); }
+    function openAppModal() { state.appModal = true; render(); }
+    function closeAppModal() { state.appModal = false; render(); }
+
+    function openNewFolderModal() {
+      const name = prompt("Enter new folder name:", "New Folder");
+      if (name && name.trim()) {
+        let allExisting = [
+          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+          ...state.files.filter(f => f.parentId === state.currentFolderId),
+          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+        ];
+        let posX = 20 + (allExisting.length % 4) * 140;
+        let posY = 20 + Math.floor(allExisting.length / 4) * 160;
+
+        const newFolder = {
+          id: uid(),
+          name: name.trim(),
+          parentId: state.currentFolderId,
+          x: posX,
+          y: posY,
+          width: 96,
+          height: 96
+        };
+        state.folders.push(newFolder);
+        saveFolder(newFolder);
+        render();
+      }
+    }
+
+    async function renameItem(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      if (isBubbleItem) {
+        openTextEditorModal(id);
+        return;
+      }
+      if (isFolderItem) {
+        const folder = state.folders.find(f => f.id === id);
+        if (!folder) return;
+        const newName = prompt("Rename folder:", folder.name);
+        if (newName && newName.trim()) {
+          folder.name = newName.trim();
+          await saveFolder(folder);
+          render();
+        }
+      } else {
+        const file = state.files.find(f => f.id === id);
+        if (!file) return;
+        const newName = prompt("Rename item:", file.name);
+        if (newName && newName.trim()) {
+          file.name = newName.trim();
+          await saveFile(file);
+          render();
+        }
+      }
+    }
+
+    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      const targetId = buildFolderSelectionPrompt();
+      if (targetId !== undefined) {
+        const actualParent = targetId;
+        if (isBubbleItem) {
+          const b = state.textBubbles.find(item => item.id === id);
+          if (b) { b.parentId = actualParent; await saveTextBubble(b); }
+        } else if (isFolderItem) {
+          const f = state.folders.find(item => item.id === id);
+          if (f) { f.parentId = actualParent; await saveFolder(f); }
+        } else {
+          const fi = state.files.find(item => item.id === id);
+          if (fi) { fi.parentId = actualParent; await saveFile(fi); }
+        }
+        render();
+      }
+    }
+
+    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      if (!confirm("Are you sure you want to delete this item?")) return;
+      if (isBubbleItem) {
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('textBubbles', id);
+      } else if (isFolderItem) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        await deleteFromDB('folders', id);
+      } else {
+        state.files = state.files.filter(f => f.id !== id);
+        await deleteFromDB('files', id);
+      }
+      render();
+    }
+
+    async function resizeByFinger(id, isFolderItem) {
+      closeMenu();
+      const widthInput = prompt("Enter new width in pixels (e.g. 120 - 400):", "160");
+      if (!widthInput) return;
+      const w = parseInt(widthInput.trim());
+      if (isNaN(w) || w < 60) return;
+
+      if (isFolderItem) {
+        const f = state.folders.find(item => item.id === id);
+        if (f) { f.width = w; f.height = w; await saveFolder(f); }
+      } else {
+        const b = state.textBubbles.find(item => item.id === id);
+        const fi = state.files.find(item => item.id === id);
+        if (b) { b.width = w; await saveTextBubble(b); }
+        else if (fi) {
+          fi.width = w;
+          fi.height = Math.round(w * 1.3);
+          await saveFile(fi);
+        }
+      }
+      render();
+    }
+
+    async function snapToOriginalShape(id) {
+      closeMenu();
+      const b = state.textBubbles.find(item => item.id === id);
+      const f = state.folders.find(item => item.id === id);
+      const fi = state.files.find(item => item.id === id);
+
+      if (b) { b.width = 140; b.height = 80; await saveTextBubble(b); }
+      else if (f) { f.width = 96; f.height = 96; await saveFolder(f); }
+      else if (fi) { fi.width = 112; fi.height = 144; await saveFile(fi); }
+      render();
+    }
+
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
@@ -1760,48 +1792,46 @@
       const items = container.querySelectorAll('[id^="item-"]');
       items.forEach(el => {
         const id = el.getAttribute('data-id');
-        const handle = el.querySelector('.resize-handle');
+        const resizeHandle = el.querySelector('.resize-handle');
 
-        let isResizing = false;
-        let startX, startY, startW, startH;
-
-        if (handle) {
-          handle.addEventListener('pointerdown', (e) => {
+        // Resize handler
+        if (resizeHandle) {
+          resizeHandle.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startW = el.offsetWidth;
-            startH = el.offsetHeight;
-            handle.setPointerCapture(e.pointerId);
-          });
+            e.preventDefault();
 
-          handle.addEventListener('pointermove', (e) => {
-            if (!isResizing) return;
-            e.stopPropagation();
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const newW = Math.max(80, startW + dx);
-            const newH = Math.max(80, startH + dy);
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
-          });
+            let startX = e.clientX;
+            let startY = e.clientY;
+            let startW = el.offsetWidth;
+            let startH = el.offsetHeight;
 
-          handle.addEventListener('pointerup', async (e) => {
-            if (!isResizing) return;
-            e.stopPropagation();
-            isResizing = false;
-            handle.releasePointerCapture(e.pointerId);
-            const finalW = el.offsetWidth;
-            const finalH = el.offsetHeight;
+            function onPointerMove(me) {
+              let dx = me.clientX - startX;
+              let dy = me.clientY - startY;
+              let newW = Math.max(60, startW + dx);
+              let newH = Math.max(60, startH + dy);
+              el.style.width = newW + 'px';
+              el.style.height = newH + 'px';
+            }
 
-            let folder = state.folders.find(f => f.id === id);
-            let file = state.files.find(f => f.id === id);
-            let bubble = state.textBubbles.find(b => b.id === id);
+            async function onPointerUp() {
+              window.removeEventListener('pointermove', onPointerMove);
+              window.removeEventListener('pointerup', onPointerUp);
 
-            if (folder) { folder.width = finalW; folder.height = finalH; await saveFolder(folder); }
-            if (file) { file.width = finalW; file.height = finalH; await saveFile(file); }
-            if (bubble) { bubble.width = finalW; bubble.height = finalH; await saveTextBubble(bubble); }
+              let finalW = el.offsetWidth;
+              let finalH = el.offsetHeight;
+
+              let f = state.folders.find(i => i.id === id);
+              let fi = state.files.find(i => i.id === id);
+              let b = state.textBubbles.find(i => i.id === id);
+
+              if (f) { f.width = finalW; f.height = finalH; await saveFolder(f); }
+              if (fi) { fi.width = finalW; fi.height = finalH; await saveFile(fi); }
+              if (b) { b.width = finalW; b.height = finalH; await saveTextBubble(b); }
+            }
+
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
           });
         }
       });
@@ -1814,142 +1844,92 @@
       const items = container.querySelectorAll('[id^="item-"]');
       items.forEach(el => {
         const id = el.getAttribute('data-id');
-        let isDragging = false;
-        let startX, startY, initialLeft, initialTop;
 
         el.addEventListener('pointerdown', (e) => {
-          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
-          if (!state.editMode) return;
+          if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+          if (!state.editMode && !state.selectMode) return;
 
-          isDragging = true;
-          startX = e.clientX;
-          startY = e.clientY;
-          initialLeft = el.offsetLeft;
-          initialTop = el.offsetTop;
+          e.stopPropagation();
           el.setPointerCapture(e.pointerId);
-          e.stopPropagation();
-        });
 
-        el.addEventListener('pointermove', (e) => {
-          if (!isDragging) return;
-          e.stopPropagation();
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          let newX = initialLeft + dx;
-          let newY = initialTop + dy;
+          let startX = e.clientX;
+          let startY = e.clientY;
 
-          const gridSize = CONFIG.GRID_SIZE;
-          newX = Math.round(newX / gridSize) * gridSize;
-          newY = Math.round(newY / gridSize) * gridSize;
+          let movingIds = [];
+          if (state.selectMode && state.selectedIds.includes(id)) {
+            movingIds = [...state.selectedIds];
+          } else {
+            movingIds = [id];
+            if (!state.selectedIds.includes(id)) {
+              state.selectedIds = [id];
+              render();
+            }
+          }
 
-          newX = Math.max(0, newX);
-          newY = Math.max(0, newY);
+          let initialPositions = {};
+          movingIds.forEach(mId => {
+            let mEl = document.getElementById(`item-${mId}`);
+            if (mEl) {
+              initialPositions[mId] = {
+                x: parseInt(mEl.style.left) || 0,
+                y: parseInt(mEl.style.top) || 0
+              };
+            }
+          });
 
-          el.style.left = newX + 'px';
-          el.style.top = newY + 'px';
-        });
+          function onPointerMove(me) {
+            let dx = me.clientX - startX;
+            let dy = me.clientY - startY;
 
-        el.addEventListener('pointerup', async (e) => {
-          if (!isDragging) return;
-          e.stopPropagation();
-          isDragging = false;
-          el.releasePointerCapture(e.pointerId);
+            movingIds.forEach(mId => {
+              let mEl = document.getElementById(`item-${mId}`);
+              let init = initialPositions[mId];
+              if (mEl && init) {
+                let newX = Math.max(0, init.x + dx);
+                let newY = Math.max(0, init.y + dy);
+                // Snap to grid
+                newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+                newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+                mEl.style.left = newX + 'px';
+                mEl.style.top = newY + 'px';
+              }
+            });
+          }
 
-          const finalX = el.offsetLeft;
-          const finalY = el.offsetTop;
+          async function onPointerUp(me) {
+            el.releasePointerCapture(e.pointerId);
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
 
-          let folder = state.folders.find(f => f.id === id);
-          let file = state.files.find(f => f.id === id);
-          let bubble = state.textBubbles.find(b => b.id === id);
+            let dx = me.clientX - startX;
+            let dy = me.clientY - startY;
 
-          if (folder) { folder.x = finalX; folder.y = finalY; await saveFolder(folder); }
-          if (file) { file.x = finalX; file.y = finalY; await saveFile(file); }
-          if (bubble) { bubble.x = finalX; bubble.y = finalY; await saveTextBubble(bubble); }
+            for (let mId of movingIds) {
+              let init = initialPositions[mId];
+              if (init) {
+                let newX = Math.max(0, init.x + dx);
+                let newY = Math.max(0, init.y + dy);
+                newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+                newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+
+                let f = state.folders.find(i => i.id === mId);
+                let fi = state.files.find(i => i.id === mId);
+                let b = state.textBubbles.find(i => i.id === mId);
+
+                if (f) { f.x = newX; f.y = newY; await saveFolder(f); }
+                if (fi) { fi.x = newX; fi.y = newY; await saveFile(fi); }
+                if (b) { b.x = newX; b.y = newY; await saveTextBubble(b); }
+              }
+            }
+          }
+
+          window.addEventListener('pointermove', onPointerMove);
+          window.addEventListener('pointerup', onPointerUp);
         });
       });
     }
 
-    document.getElementById('file-input').addEventListener('change', async (e) => {
-      await handleFileImport(e.target.files);
-      e.target.value = '';
-    });
-
-    document.getElementById('photo-input').addEventListener('change', async (e) => {
-      await handleFileImport(e.target.files);
-      e.target.value = '';
-    });
-
-    async function handleFileImport(files) {
-      const fileList = Array.from(files);
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        const uploadId = uid();
-        const uploadObj = { id: uploadId, name: file.name, progress: 0 };
-        state.activeUploads.push(uploadObj);
-        render();
-
-        let inferredType = getMimeType(file);
-        let blobUrl = '';
-        let dataUrl = '';
-        let textContent = null;
-
-        const isLargeFile = file.size > 2 * 1024 * 1024;
-
-        if (inferredType.startsWith('video/') || inferredType.startsWith('audio/') || isVideoFile(file) || isAudioFile(file)) {
-          blobUrl = URL.createObjectURL(file);
-        }
-
-        if (inferredType.startsWith('image/')) {
-          dataUrl = await fileToBase64(file);
-        } else if (inferredType.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.md') || file.name.endsWith('.html') || file.name.endsWith('.htm')) {
-          textContent = await fileToText(file);
-          dataUrl = 'data:' + inferredType + ';charset=utf-8,' + encodeURIComponent(textContent);
-        } else {
-          dataUrl = await fileToBase64(file);
-        }
-
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-
-        let targetX = 20, targetY = 20;
-        if (allExisting.length > 0) {
-          const lastItem = allExisting[allExisting.length - 1];
-          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
-          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
-          const lastW = lastItem.width || 112;
-          targetX = lastX + lastW + 24;
-          targetY = lastY;
-          if (targetX > 1000) { targetX = 20; targetY = lastY + 160; }
-        }
-
-        const fileObj = {
-          id: uid(),
-          name: file.name,
-          fileType: inferredType,
-          dataUrl: dataUrl,
-          blobUrl: blobUrl,
-          rawBlob: isLargeFile ? file : null,
-          textContent: textContent,
-          parentId: state.currentFolderId,
-          x: targetX,
-          y: targetY,
-          width: 112,
-          height: 144
-        };
-
-        state.activeUploads = state.activeUploads.filter(u => u.id !== uploadId);
-        state.files.push(fileObj);
-        await saveFile(fileObj);
-        render();
-      }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
+    loadData();
   </script>
 </body>
 </html>
