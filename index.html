@@ -51,7 +51,7 @@
     #modal-text-input { outline: none; }
   </style>
 </head>
-<body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
+<body id="app-body" class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
   <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
 
   <input id="file-input" type="file" multiple class="hidden" />
@@ -93,8 +93,107 @@
       appModal: false,
       appModalThumbData: null,
       activeUploads: [],
-      popupVideoUrl: null
+      popupVideoUrl: null,
+      canvasBgColor: '#000000',
+      undoStack: [],
+      redoStack: []
     };
+
+    function saveStateSnapshot() {
+      const snapshot = {
+        folders: JSON.parse(JSON.stringify(state.folders)),
+        files: JSON.parse(JSON.stringify(state.files)),
+        textBubbles: JSON.parse(JSON.stringify(state.textBubbles)),
+        canvasBgColor: state.canvasBgColor
+      };
+      state.undoStack.push(snapshot);
+      if (state.undoStack.length > 50) state.undoStack.shift();
+      state.redoStack = [];
+    }
+
+    async function undoAction() {
+      if (state.undoStack.length === 0) return;
+      const currentSnapshot = {
+        folders: JSON.parse(JSON.stringify(state.folders)),
+        files: JSON.parse(JSON.stringify(state.files)),
+        textBubbles: JSON.parse(JSON.stringify(state.textBubbles)),
+        canvasBgColor: state.canvasBgColor
+      };
+      state.redoStack.push(currentSnapshot);
+      const prev = state.undoStack.pop();
+      state.folders = prev.folders;
+      state.files = prev.files;
+      state.textBubbles = prev.textBubbles;
+      state.canvasBgColor = prev.canvasBgColor;
+
+      const db = await openDB();
+      if (db) {
+        const txFolder = db.transaction('folders', 'readwrite');
+        txFolder.objectStore('folders').clear();
+        state.folders.forEach(f => txFolder.objectStore('folders').put(f));
+
+        const txFile = db.transaction('files', 'readwrite');
+        txFile.objectStore('files').clear();
+        state.files.forEach(fi => txFile.objectStore('files').put(fi));
+
+        const txBub = db.transaction('textBubbles', 'readwrite');
+        txBub.objectStore('textBubbles').clear();
+        state.textBubbles.forEach(b => txBub.objectStore('textBubbles').put(b));
+      }
+      applyCanvasBgColor();
+      render();
+    }
+
+    async function redoAction() {
+      if (state.redoStack.length === 0) return;
+      const currentSnapshot = {
+        folders: JSON.parse(JSON.stringify(state.folders)),
+        files: JSON.parse(JSON.stringify(state.files)),
+        textBubbles: JSON.parse(JSON.stringify(state.textBubbles)),
+        canvasBgColor: state.canvasBgColor
+      };
+      state.undoStack.push(currentSnapshot);
+      const next = state.redoStack.pop();
+      state.folders = next.folders;
+      state.files = next.files;
+      state.textBubbles = next.textBubbles;
+      state.canvasBgColor = next.canvasBgColor;
+
+      const db = await openDB();
+      if (db) {
+        const txFolder = db.transaction('folders', 'readwrite');
+        txFolder.objectStore('folders').clear();
+        state.folders.forEach(f => txFolder.objectStore('folders').put(f));
+
+        const txFile = db.transaction('files', 'readwrite');
+        txFile.objectStore('files').clear();
+        state.files.forEach(fi => txFile.objectStore('files').put(fi));
+
+        const txBub = db.transaction('textBubbles', 'readwrite');
+        txBub.objectStore('textBubbles').clear();
+        state.textBubbles.forEach(b => txBub.objectStore('textBubbles').put(b));
+      }
+      applyCanvasBgColor();
+      render();
+    }
+
+    function applyCanvasBgColor() {
+      const appBody = document.getElementById('app-body');
+      if (appBody) appBody.style.backgroundColor = state.canvasBgColor;
+      const mainContainer = document.getElementById('main-scroll-container');
+      if (mainContainer) mainContainer.style.backgroundColor = state.canvasBgColor;
+    }
+
+    function changeBackgroundModal() {
+      closeHamburgerMenu();
+      const color = prompt("Choose background color (Hex code or color name, e.g. #111111, #000000, #18181b):", state.canvasBgColor);
+      if (color !== null && color.trim() !== '') {
+        saveStateSnapshot();
+        state.canvasBgColor = color.trim();
+        applyCanvasBgColor();
+        render();
+      }
+    }
 
     const uid = () => Math.random().toString(36).substring(2, 9);
     const isFolder = item => !('fileType' in item) && !('isBubble' in item);
@@ -178,6 +277,7 @@
         state.folders = [root];
         saveFolder(root);
       }
+      applyCanvasBgColor();
       render();
     }
 
@@ -375,7 +475,7 @@
       }
 
       app.innerHTML = `
-        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
+        <header class="shrink-0 z-50 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative" style="background-color: ${state.canvasBgColor};">
           <div class="flex items-center gap-2">
             <div class="flex items-center gap-1.5 shrink-0">
               <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
@@ -393,6 +493,15 @@
               <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
                 ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
               </button>
+              <div class="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 shrink-0">
+                <button onclick="undoAction()" class="p-1.5 rounded-lg ${state.undoStack.length > 0 ? 'text-zinc-200 hover:bg-zinc-800 cursor-pointer' : 'text-zinc-600 cursor-not-allowed'}" title="Undo" ${state.undoStack.length === 0 ? 'disabled' : ''}>
+                  <i data-lucide="undo-2" class="w-4 h-4"></i>
+                </button>
+                <div class="h-4 w-px bg-zinc-800"></div>
+                <button onclick="redoAction()" class="p-1.5 rounded-lg ${state.redoStack.length > 0 ? 'text-zinc-200 hover:bg-zinc-800 cursor-pointer' : 'text-zinc-600 cursor-not-allowed'}" title="Redo" ${state.redoStack.length === 0 ? 'disabled' : ''}>
+                  <i data-lucide="redo-2" class="w-4 h-4"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -423,6 +532,9 @@
               <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
               </button>
+              <button onclick="changeBackgroundModal()" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="palette" class="w-4 h-4 text-amber-400"></i> Choose background colour
+              </button>
               <div class="h-px bg-zinc-800 my-1"></div>
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
                 <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
@@ -438,7 +550,7 @@
           ` : ''}
         </header>
 
-        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
+        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container" style="background-color: ${state.canvasBgColor};">
           ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
           
           ${state.activeUploads.length > 0 ? `
@@ -533,6 +645,23 @@
       return style;
     }
 
+    function parseMarkdownText(text) {
+      if (!text) return '';
+      let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      
+      // Replace __text__ with underline
+      escaped = escaped.replace(/__(.*?)__/g, '<span style="text-decoration:underline;">$1</span>');
+      // Replace **text** with bold
+      escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight:bold;">$1</strong>');
+      // Replace *text* with italic
+      escaped = escaped.replace(/\*(.*?)\*/g, '<em style="font-style:italic;">$1</em>');
+      
+      return escaped;
+    }
+
     function renderItem(item, index) {
       const col = index % 4;
       const row = Math.floor(index / 4);
@@ -549,7 +678,7 @@
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${parseMarkdownText(item.text || 'Empty bubble')}</div>
               <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -828,9 +957,9 @@
               </div>
               <div class="h-5 w-px bg-zinc-800"></div>
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
-                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
-                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md text-zinc-300 hover:bg-zinc-800" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md text-zinc-300 hover:bg-zinc-800" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md text-zinc-300 hover:bg-zinc-800" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
               </div>
               <div class="h-5 w-px bg-zinc-800"></div>
               <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
@@ -851,9 +980,9 @@
               </div>
             </div>
 
-            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal" style="${ed.isBold ? 'font-weight:bold;' : ''}${ed.isItalic ? 'font-style:italic;' : ''}${ed.isUnderline ? 'text-decoration:underline;' : ''}${ed.fontColor ? 'color:' + ed.fontColor + ';' : ''}${ed.align ? 'text-align:' + ed.align + ';' : ''}${ed.fontSize === 'lg' ? 'font-size:16px;' : ed.fontSize === 'sm' ? 'font-size:10px;' : 'font-size:11px;'}">${ed.text || ''}</textarea>
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal" style="${ed.fontColor ? 'color:' + ed.fontColor + ';' : ''}${ed.align ? 'text-align:' + ed.align + ';' : ''}${ed.fontSize === 'lg' ? 'font-size:16px;' : ed.fontSize === 'sm' ? 'font-size:10px;' : 'font-size:11px;'}">${ed.text || ''}</textarea>
 
-            <p class="text-[10px] text-zinc-500 -mt-2">Tip: select text and tap a button to apply formatting to that selection only. With no selection it applies to the whole bubble.</p>
+            <p class="text-[10px] text-zinc-500 -mt-2">Tip: Select text in the box and tap Bold, Italic, or Underline to format only the selected text.</p>
 
             <div class="flex items-center justify-end gap-3 pt-2">
               <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
@@ -1095,9 +1224,6 @@
             id: bubble.id,
             text: bubble.text || '',
             fontSize: bubble.fontSize || 'md',
-            isBold: !!bubble.isBold,
-            isItalic: !!bubble.isItalic,
-            isUnderline: !!bubble.isUnderline,
             fontColor: bubble.fontColor || null,
             align: bubble.align || null,
             isNew: false
@@ -1108,9 +1234,6 @@
           id: null,
           text: '',
           fontSize: 'md',
-          isBold: false,
-          isItalic: false,
-          isUnderline: false,
           fontColor: null,
           align: null,
           isNew: true,
@@ -1179,14 +1302,17 @@
         ta.focus();
         ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
       } else {
-        if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
-        if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
-        if (formatKey === 'isUnderline') state.textEditorModal.isUnderline = !state.textEditorModal.isUnderline;
-        render();
-        setTimeout(() => {
-          const newTa = document.getElementById('modal-text-input');
-          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
-        }, 30);
+        let wrapToken = '';
+        if (formatKey === 'isBold') wrapToken = '**';
+        else if (formatKey === 'isItalic') wrapToken = '*';
+        else if (formatKey === 'isUnderline') wrapToken = '__';
+
+        if (wrapToken) {
+          ta.value = text.substring(0, start) + wrapToken + wrapToken + text.substring(end);
+          state.textEditorModal.text = ta.value;
+          ta.focus();
+          ta.setSelectionRange(start + wrapToken.length, start + wrapToken.length);
+        }
       }
     }
 
@@ -1199,6 +1325,7 @@
         return;
       }
 
+      saveStateSnapshot();
       const lines = textVal.split('\n').length + Math.floor(textVal.length / 22);
       const dynamicHeight = Math.max(80, lines * 22);
 
@@ -1236,9 +1363,6 @@
           width: 140,
           height: dynamicHeight,
           fontSize: ed.fontSize,
-          isBold: ed.isBold,
-          isItalic: ed.isItalic,
-          isUnderline: ed.isUnderline,
           fontColor: ed.fontColor,
           align: ed.align
         };
@@ -1250,9 +1374,6 @@
           bubble.text = textVal;
           bubble.height = dynamicHeight;
           bubble.fontSize = ed.fontSize;
-          bubble.isBold = ed.isBold;
-          bubble.isItalic = ed.isItalic;
-          bubble.isUnderline = ed.isUnderline;
           bubble.fontColor = ed.fontColor;
           bubble.align = ed.align;
           await saveTextBubble(bubble);
@@ -1277,6 +1398,7 @@
 
     async function bulkDelete() {
       if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
+      saveStateSnapshot();
       for (let id of state.selectedIds) {
         state.folders = state.folders.filter(f => f.id !== id);
         state.files = state.files.filter(f => f.id !== id);
@@ -1292,6 +1414,7 @@
     async function bulkMove() {
       const targetId = buildFolderSelectionPrompt();
       if (targetId !== undefined) {
+        saveStateSnapshot();
         const actualParent = targetId;
         for (let id of state.selectedIds) {
           let f = state.folders.find(item => item.id === id);
@@ -1309,6 +1432,7 @@
     async function bulkCopy() {
       const targetId = buildFolderSelectionPrompt();
       const actualParent = targetId !== undefined ? targetId : null;
+      saveStateSnapshot();
       for (let id of state.selectedIds) {
         let file = state.files.find(f => f.id === id);
         if (file) {
@@ -1369,6 +1493,7 @@
         console.warn('Direct clipboard API restricted', e);
       }
 
+      saveStateSnapshot();
       const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
       delete newFile.x; delete newFile.y; delete newFile.blobUrl;
       if (isVideoFile(newFile) && newFile.fileType !== 'web-video') {
@@ -1412,6 +1537,7 @@
     document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (file && state.targetFolderCoverId) {
+        saveStateSnapshot();
         const base64 = await fileToBase64(file);
         const folder = state.folders.find(f => f.id === state.targetFolderCoverId);
         if (folder) { folder.coverUrl = base64; await saveFolder(folder); render(); }
@@ -1422,61 +1548,67 @@
     document.getElementById('change-image-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (file && state.targetChangeImageId) {
+        saveStateSnapshot();
         const base64 = await fileToBase64(file);
         const item = state.files.find(f => f.id === state.targetChangeImageId);
-        if (item) {
-          item.thumbnailData = base64;
-          item.dataUrl = base64;
-          await saveFile(item);
-          render();
-        }
+        if (item) { item.thumbnailData = base64; await saveFile(item); render(); }
       }
     });
 
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.readAsDataURL(file);
         reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
     }
 
-    function renameItem(id, isFolderItem, isBubbleItem = false) {
+    async function renameItem(id, isFolderItem, isBubbleItem = false) {
       closeMenu();
-      if (isBubbleItem) {
-        const bubble = state.textBubbles.find(b => b.id === id);
-        if (bubble) {
-          openTextEditorModal(bubble.id);
+      let item = isBubbleItem ? state.textBubbles.find(b => b.id === id) : (isFolderItem ? state.folders.find(f => f.id === id) : state.files.find(f => f.id === id));
+      if (!item) return;
+      const newName = prompt(isBubbleItem ? "Edit text content:" : "Enter new name:", isBubbleItem ? item.text : item.name);
+      if (newName !== null && newName.trim() !== '') {
+        saveStateSnapshot();
+        if (isBubbleItem) {
+          item.text = newName.trim();
+          await saveTextBubble(item);
+        } else if (isFolderItem) {
+          item.name = newName.trim();
+          await saveFolder(item);
+        } else {
+          item.name = newName.trim();
+          await saveFile(item);
         }
-        return;
+        render();
       }
-      if (isFolderItem) {
-        const folder = state.folders.find(f => f.id === id);
-        if (folder) {
-          const newName = prompt('Enter new folder name:', folder.name);
-          if (newName !== null && newName.trim() !== '') {
-            folder.name = newName.trim();
-            saveFolder(folder);
-            render();
-          }
+    }
+
+    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      const targetId = buildFolderSelectionPrompt();
+      if (targetId !== undefined) {
+        saveStateSnapshot();
+        const actualParent = targetId;
+        if (isBubbleItem) {
+          let item = state.textBubbles.find(b => b.id === id);
+          if (item) { item.parentId = actualParent; await saveTextBubble(item); }
+        } else if (isFolderItem) {
+          let item = state.folders.find(f => f.id === id);
+          if (item) { item.parentId = actualParent; await saveFolder(item); }
+        } else {
+          let item = state.files.find(f => f.id === id);
+          if (item) { item.parentId = actualParent; await saveFile(item); }
         }
-      } else {
-        const file = state.files.find(f => f.id === id);
-        if (file) {
-          const newName = prompt('Enter new file name:', file.name);
-          if (newName !== null && newName.trim() !== '') {
-            file.name = newName.trim();
-            saveFile(file);
-            render();
-          }
-        }
+        render();
       }
     }
 
     async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
       closeMenu();
-      if (!confirm('Are you sure you want to delete this item?')) return;
+      if (!confirm("Are you sure you want to delete this item?")) return;
+      saveStateSnapshot();
       if (isBubbleItem) {
         state.textBubbles = state.textBubbles.filter(b => b.id !== id);
         await deleteFromDB('textBubbles', id);
@@ -1490,54 +1622,16 @@
       render();
     }
 
-    function resizeByFinger(id, isFolderItem, isBubbleItem = false) {
-      closeMenu();
-      const newW = prompt('Enter width in pixels (e.g. 120):');
-      if (newW === null) return;
-      const w = parseInt(newW);
-      if (isNaN(w) || w < 60) { alert('Invalid width.'); return; }
-
-      let h = null;
-      if (!isFolderItem) {
-        const newH = prompt('Enter height in pixels (e.g. 150):');
-        if (newH !== null) {
-          const parsedH = parseInt(newH);
-          if (!isNaN(parsedH) && parsedH >= 60) h = parsedH;
-        }
-      }
-
-      if (isBubbleItem) {
-        const b = state.textBubbles.find(item => item.id === id);
-        if (b) { b.width = w; if (h) b.height = h; saveTextBubble(b); render(); }
-      } else if (isFolderItem) {
-        const f = state.folders.find(item => item.id === id);
-        if (f) { f.width = w; f.height = w; saveFolder(f); render(); }
-      } else {
-        const fi = state.files.find(item => item.id === id);
-        if (fi) { fi.width = w; if (h) fi.height = h; saveFile(fi); render(); }
-      }
-    }
-
-    async function snapToOriginalShape(id) {
-      closeMenu();
-      let f = state.folders.find(item => item.id === id);
-      let fi = state.files.find(item => item.id === id);
-      let b = state.textBubbles.find(item => item.id === id);
-      if (f) { delete f.width; delete f.height; await saveFolder(f); }
-      if (fi) { delete fi.width; delete fi.height; await saveFile(fi); }
-      if (b) { delete b.width; delete b.height; await saveTextBubble(b); }
-      render();
-    }
-
     function openNewFolderModal() {
-      const name = prompt('Enter new folder name:', 'New Folder');
+      const name = prompt("Enter new folder name:", "New Folder");
       if (name !== null && name.trim() !== '') {
+        saveStateSnapshot();
         const newFolder = {
           id: uid(),
           name: name.trim(),
           parentId: state.currentFolderId,
-          x: 20,
-          y: 20
+          width: 96,
+          height: 96
         };
         state.folders.push(newFolder);
         saveFolder(newFolder);
@@ -1545,282 +1639,311 @@
       }
     }
 
-    async function saveLinkModal() {
-      const url = document.getElementById('link-url-input').value.trim();
-      let name = document.getElementById('link-name-input').value.trim();
-      if (!url) { alert('Please enter a URL.'); return; }
-      if (!name) name = url;
-
-      const newFile = {
-        id: uid(),
-        name: name,
-        fileType: 'link',
-        dataUrl: url,
-        thumbnailData: state.linkModalThumbData,
-        parentId: state.currentFolderId,
-        x: 40,
-        y: 40
-      };
-      state.files.push(newFile);
-      await saveFile(newFile);
-      state.linkModal = false;
+    function openLinkModal() {
+      state.linkModal = true;
       state.linkModalThumbData = null;
       render();
     }
-
-    async function saveWebVideoModal() {
-      const url = document.getElementById('web-video-url-input').value.trim();
-      let name = document.getElementById('web-video-name-input').value.trim();
-      if (!url) { alert('Please enter a video URL.'); return; }
-      if (!name) name = 'Web Video';
-
+    function closeLinkModal() {
+      state.linkModal = false;
+      render();
+    }
+    async function saveLinkModal() {
+      const urlInput = document.getElementById('link-url-input').value.trim();
+      let nameInput = document.getElementById('link-name-input').value.trim();
+      if (!urlInput) {
+        alert('Please enter a valid URL.');
+        return;
+      }
+      if (!nameInput) nameInput = urlInput;
+      saveStateSnapshot();
       const newFile = {
         id: uid(),
-        name: name,
-        fileType: 'web-video',
-        dataUrl: url,
-        thumbnailData: state.webVideoModalThumbData,
-        parentId: state.currentFolderId,
-        x: 40,
-        y: 40
+        name: nameInput,
+        fileType: 'link',
+        dataUrl: urlInput,
+        thumbnailData: state.linkModalThumbData,
+        parentId: state.currentFolderId
       };
       state.files.push(newFile);
       await saveFile(newFile);
-      state.webVideoModal = false;
+      closeLinkModal();
+      render();
+    }
+
+    function openWebVideoModal() {
+      state.webVideoModal = true;
       state.webVideoModalThumbData = null;
       render();
     }
-
-    async function saveAppModal() {
-      const scheme = document.getElementById('app-scheme-input').value.trim();
-      let name = document.getElementById('app-name-input').value.trim();
-      if (!scheme) { alert('Please enter a custom app scheme or URL.'); return; }
-      if (!name) name = 'App Shortcut';
-
+    function closeWebVideoModal() {
+      state.webVideoModal = false;
+      render();
+    }
+    async function saveWebVideoModal() {
+      const urlInput = document.getElementById('web-video-url-input').value.trim();
+      let nameInput = document.getElementById('web-video-name-input').value.trim();
+      if (!urlInput) {
+        alert('Please enter a valid video URL or embed code.');
+        return;
+      }
+      if (!nameInput) nameInput = 'Web Video';
+      saveStateSnapshot();
       const newFile = {
         id: uid(),
-        name: name,
-        fileType: 'ios-app',
-        dataUrl: scheme,
-        thumbnailData: state.appModalThumbData,
-        parentId: state.currentFolderId,
-        x: 40,
-        y: 40
+        name: nameInput,
+        fileType: 'web-video',
+        dataUrl: urlInput,
+        thumbnailData: state.webVideoModalThumbData,
+        parentId: state.currentFolderId
       };
       state.files.push(newFile);
       await saveFile(newFile);
-      state.appModal = false;
-      state.appModalThumbData = null;
+      closeWebVideoModal();
       render();
     }
 
-    function openLinkModal() { state.linkModal = true; render(); }
-    function closeLinkModal() { state.linkModal = false; state.linkModalThumbData = null; render(); }
-    function openWebVideoModal() { state.webVideoModal = true; render(); }
-    function closeWebVideoModal() { state.webVideoModal = false; state.webVideoModalThumbData = null; render(); }
-    function openAppModal() { state.appModal = true; render(); }
-    function closeAppModal() { state.appModal = false; state.appModalThumbData = null; render(); }
+    function openAppModal() {
+      state.appModal = true;
+      state.appModalThumbData = null;
+      render();
+    }
+    function closeAppModal() {
+      state.appModal = false;
+      render();
+    }
+    async function saveAppModal() {
+      const schemeInput = document.getElementById('app-scheme-input').value.trim();
+      let nameInput = document.getElementById('app-name-input').value.trim();
+      if (!schemeInput) {
+        alert('Please enter a valid app scheme or URL.');
+        return;
+      }
+      if (!nameInput) nameInput = 'iOS App';
+      saveStateSnapshot();
+      const newFile = {
+        id: uid(),
+        name: nameInput,
+        fileType: 'ios-app',
+        dataUrl: schemeInput,
+        thumbnailData: state.appModalThumbData,
+        parentId: state.currentFolderId
+      };
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAppModal();
+      render();
+    }
 
-    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
-      const f = e.target.files[0];
-      if (f) { state.linkModalThumbData = await fileToBase64(f); render(); openLinkModal(); }
-    });
-    document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
-      const f = e.target.files[0];
-      if (f) { state.webVideoModalThumbData = await fileToBase64(f); render(); openWebVideoModal(); }
-    });
-    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
-      const f = e.target.files[0];
-      if (f) { state.appModalThumbData = await fileToBase64(f); render(); openAppModal(); }
-    });
-
-    // File Upload Handler with Background Chunking
-    async function handleFilesUpload(fileList) {
-      if (!fileList || fileList.length === 0) return;
-      const filesArray = Array.from(fileList);
-      
-      for (let i = 0; i < filesArray.length; i++) {
-        const rawFile = filesArray[i];
-        const uploadId = uid();
-        const uploadObj = { id: uploadId, name: rawFile.name, progress: 10 };
-        state.activeUploads.push(uploadObj);
-        render();
-
-        try {
-          const base64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onprogress = (e) => {
-              if (e.lengthComputable) {
-                uploadObj.progress = Math.round((e.loaded / e.total) * 80);
-                render();
-              }
-            };
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(rawFile);
-          });
-
-          uploadObj.progress = 90;
-          render();
-
-          const newFile = {
-            id: uid(),
-            name: rawFile.name,
-            fileType: rawFile.type || 'application/octet-stream',
-            dataUrl: base64,
-            textContent: rawFile.type.startsWith('text/') || rawFile.name.endsWith('.txt') || rawFile.name.endsWith('.json') || rawFile.name.endsWith('.csv') || rawFile.name.endsWith('.md') ? await rawFile.text() : null,
-            parentId: state.currentFolderId,
-            x: 20 + (i * 20) % 300,
-            y: 20 + (i * 20) % 300
-          };
-
-          if (isVideoFile(newFile) || isAudioFile(newFile)) {
-            newFile.rawBlob = rawFile;
-            await getOrCreateBlobUrl(newFile);
-          }
-
-          state.files.push(newFile);
-          await saveFile(newFile);
-        } catch (err) {
-          console.error('Upload failed for file:', rawFile.name, err);
-        } finally {
-          state.activeUploads = state.activeUploads.filter(u => u.id !== uploadId);
+    function resizeByFinger(id) {
+      closeMenu();
+      const newW = prompt("Enter new width in pixels (e.g. 140, 200, 300):", "140");
+      if (newW !== null && !isNaN(newW)) {
+        saveStateSnapshot();
+        const val = parseInt(newW);
+        let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+        if (item) {
+          item.width = val;
+          if (isFolder(item)) item.height = val;
+          else if (isBubble(item)) item.height = Math.max(80, val * 0.6);
+          else item.height = Math.round(val * 1.25);
+          if (isFolder(item)) saveFolder(item);
+          else if (isBubble(item)) saveTextBubble(item);
+          else saveFile(item);
           render();
         }
       }
     }
 
-    document.getElementById('file-input').addEventListener('change', (e) => handleFilesUpload(e.target.files));
-    document.getElementById('photo-input').addEventListener('change', (e) => handleFilesUpload(e.target.files));
+    function snapToOriginalShape(id) {
+      closeMenu();
+      saveStateSnapshot();
+      let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+      if (item) {
+        if (isFolder(item)) { item.width = 96; item.height = 96; saveFolder(item); }
+        else if (isBubble(item)) { item.width = 140; item.height = 80; saveTextBubble(item); }
+        else { item.width = 112; item.height = 144; saveFile(item); }
+        render();
+      }
+    }
 
-    // Drag-and-Drop and Resize Interaction with Multi-Drag support
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      const itemEls = container.querySelectorAll('[data-id]');
-      itemEls.forEach(el => {
+      const items = container.querySelectorAll('[id^="item-"]');
+      items.forEach(el => {
         const id = el.getAttribute('data-id');
         const resizeHandle = el.querySelector('.resize-handle');
 
-        // Resize Listener
+        let isDragging = false;
+        let isResizing = false;
+        let startX, startY, initialLeft, initialTop, initialWidth, initialHeight;
+
+        el.addEventListener('pointerdown', (e) => {
+          if (!state.editMode) return;
+          if (e.target.closest('button') || e.target.closest('.resize-handle')) return;
+          isDragging = true;
+          el.setPointerCapture(e.pointerId);
+          startX = e.clientX;
+          startY = e.clientY;
+          initialLeft = el.offsetLeft;
+          initialTop = el.offsetTop;
+          e.stopPropagation();
+        });
+
         if (resizeHandle) {
           resizeHandle.addEventListener('pointerdown', (e) => {
+            if (!state.editMode) return;
+            isResizing = true;
+            resizeHandle.setPointerCapture(e.pointerId);
+            startX = e.clientX;
+            startY = e.clientY;
+            initialWidth = el.offsetWidth;
+            initialHeight = el.offsetHeight;
             e.stopPropagation();
-            e.preventDefault();
-
-            let startX = e.clientX;
-            let startY = e.clientY;
-            let startW = el.offsetWidth;
-            let startH = el.offsetHeight;
-
-            function onPointerMove(me) {
-              let dx = me.clientX - startX;
-              let dy = me.clientY - startY;
-              el.style.width = Math.max(60, startW + dx) + 'px';
-              el.style.height = Math.max(60, startH + dy) + 'px';
-            }
-
-            async function onPointerUp(me) {
-              window.removeEventListener('pointermove', onPointerMove);
-              window.removeEventListener('pointerup', onPointerUp);
-
-              let finalW = el.offsetWidth;
-              let finalH = el.offsetHeight;
-
-              let f = state.folders.find(item => item.id === id);
-              let fi = state.files.find(item => item.id === id);
-              let b = state.textBubbles.find(item => item.id === id);
-
-              if (f) { f.width = finalW; f.height = finalH; await saveFolder(f); }
-              if (fi) { fi.width = finalW; fi.height = finalH; await saveFile(fi); }
-              if (b) { b.width = finalW; b.height = finalH; await saveTextBubble(b); }
-            }
-
-            window.addEventListener('pointermove', onPointerMove);
-            window.addEventListener('pointerup', onPointerUp);
           });
         }
 
-        // Drag Listener (Supports multi-dragging selected items together)
-        el.addEventListener('pointerdown', (e) => {
-          if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
-          if (!state.editMode && !state.selectMode) return;
+        el.addEventListener('pointermove', (e) => {
+          if (isDragging) {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            let newX = Math.max(0, initialLeft + dx);
+            let newY = Math.max(0, initialTop + dy);
 
-          e.stopPropagation();
-          el.setPointerCapture(e.pointerId);
+            newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
 
-          let startX = e.clientX;
-          let startY = e.clientY;
+            el.style.left = `${newX}px`;
+            el.style.top = `${newY}px`;
+          } else if (isResizing) {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            let newW = Math.max(80, initialWidth + dx);
+            let newH = Math.max(80, initialHeight + dy);
 
-          // Find item or items to drag
-          let draggedIds = [id];
-          if (state.selectedIds.includes(id)) {
-            draggedIds = [...state.selectedIds];
+            el.style.width = `${newW}px`;
+            el.style.height = `${newH}px`;
           }
-
-          let initialPositions = {};
-          draggedIds.forEach(did => {
-            let itemEl = container.querySelector(`[data-id="${did}"]`);
-            if (itemEl) {
-              initialPositions[did] = {
-                x: parseInt(itemEl.style.left) || 0,
-                y: parseInt(itemEl.style.top) || 0,
-                el: itemEl
-              };
-            }
-          });
-
-          function onPointerMove(me) {
-            let dx = me.clientX - startX;
-            let dy = me.clientY - startY;
-
-            draggedIds.forEach(did => {
-              let pos = initialPositions[did];
-              if (pos) {
-                let newX = Math.max(0, pos.x + dx);
-                let newY = Math.max(0, pos.y + dy);
-                pos.el.style.left = newX + 'px';
-                pos.el.style.top = newY + 'px';
-              }
-            });
-          }
-
-          async function onPointerUp(me) {
-            el.releasePointerCapture(me.pointerId);
-            window.removeEventListener('pointermove', onPointerMove);
-            window.removeEventListener('pointerup', onPointerUp);
-
-            for (let did of draggedIds) {
-              let pos = initialPositions[did];
-              if (pos) {
-                let finalX = parseInt(pos.el.style.left) || 0;
-                let finalY = parseInt(pos.el.style.top) || 0;
-
-                // Snap to grid
-                finalX = Math.round(finalX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-                finalY = Math.round(finalY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-                pos.el.style.left = finalX + 'px';
-                pos.el.style.top = finalY + 'px';
-
-                let f = state.folders.find(item => item.id === did);
-                let fi = state.files.find(item => item.id === did);
-                let b = state.textBubbles.find(item => item.id === did);
-
-                if (f) { f.x = finalX; f.y = finalY; await saveFolder(f); }
-                if (fi) { fi.x = finalX; fi.y = finalY; await saveFile(fi); }
-                if (b) { b.x = finalX; b.y = finalY; await saveTextBubble(b); }
-              }
-            }
-          }
-
-          window.addEventListener('pointermove', onPointerMove);
-          window.addEventListener('pointerup', onPointerUp);
         });
+
+        const handlePointerUp = async (e) => {
+          if (isDragging) {
+            isDragging = false;
+            try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+            const finalX = el.offsetLeft;
+            const finalY = el.offsetTop;
+
+            saveStateSnapshot();
+            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (item) {
+              item.x = finalX;
+              item.y = finalY;
+              if (isFolder(item)) await saveFolder(item);
+              else if (isBubble(item)) await saveTextBubble(item);
+              else await saveFile(item);
+            }
+          }
+          if (isResizing) {
+            isResizing = false;
+            try { resizeHandle.releasePointerCapture(e.pointerId); } catch (err) {}
+            const finalW = el.offsetWidth;
+            const finalH = el.offsetHeight;
+
+            saveStateSnapshot();
+            let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+            if (item) {
+              item.width = finalW;
+              item.height = finalH;
+              if (isFolder(item)) await saveFolder(item);
+              else if (isBubble(item)) await saveTextBubble(item);
+              else await saveFile(item);
+            }
+          }
+        };
+
+        el.addEventListener('pointerup', handlePointerUp);
+        el.addEventListener('pointercancel', handlePointerUp);
       });
     }
 
-    loadData();
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const selectedFiles = e.target.files;
+      if (!selectedFiles || selectedFiles.length === 0) return;
+      saveStateSnapshot();
+      for (let file of selectedFiles) {
+        const base64 = await fileToBase64(file);
+        let textContent = '';
+        if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.html')) {
+          try { textContent = await file.text(); } catch (err) {}
+        }
+        const newFile = {
+          id: uid(),
+          name: file.name,
+          fileType: file.type || 'application/octet-stream',
+          dataUrl: base64,
+          textContent: textContent,
+          parentId: state.currentFolderId
+        };
+        if (isVideoFile(newFile) && newFile.fileType !== 'web-video') {
+          await getOrCreateBlobUrl(newFile);
+        }
+        state.files.push(newFile);
+        await saveFile(newFile);
+      }
+      render();
+    });
+
+    document.getElementById('photo-input').addEventListener('change', async (e) => {
+      const selectedFiles = e.target.files;
+      if (!selectedFiles || selectedFiles.length === 0) return;
+      saveStateSnapshot();
+      for (let file of selectedFiles) {
+        const base64 = await fileToBase64(file);
+        const newFile = {
+          id: uid(),
+          name: file.name,
+          fileType: file.type || 'image/png',
+          dataUrl: base64,
+          parentId: state.currentFolderId
+        };
+        if (isVideoFile(newFile) || isAudioFile(newFile)) {
+          await getOrCreateBlobUrl(newFile);
+        }
+        state.files.push(newFile);
+        await saveFile(newFile);
+      }
+      render();
+    });
+
+    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.appModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.linkModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.webVideoModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
   </script>
 </body>
 </html>
