@@ -54,13 +54,13 @@
 <body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
   <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
 
-  <input id="file-input" type="file" multiple class="hidden" />
-  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
-  <input id="change-image-input" type="file" accept="image/*" class="hidden" />
-  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
-  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
-  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" />
-  <input id="web-video-thumbnail-input" type="file" accept="image/*" class="hidden" />
+  <input id="file-input" type="file" multiple class="hidden" onchange="handleFileSelect(event)" />
+  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" onchange="handleFileSelect(event)" />
+  <input id="change-image-input" type="file" accept="image/*" class="hidden" onchange="handleChangeImageFile(event)" />
+  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" onchange="handleFolderCoverFile(event)" />
+  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" onchange="handleAppThumbnail(event)" />
+  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" onchange="handleLinkThumbnail(event)" />
+  <input id="web-video-thumbnail-input" type="file" accept="image/*" class="hidden" onchange="handleWebVideoThumbnail(event)" />
   <input id="restore-backup-input" type="file" accept=".html,.json" class="hidden" onchange="handleRestoreBackupFile(event)" />
 
   <script>
@@ -360,7 +360,7 @@
       }
     }
 
-    async function exportBackupToPCloud() {
+    function exportBackupToPCloud() {
       try {
         const htmlContent = document.documentElement.outerHTML;
         const blob = new Blob([htmlContent], { type: 'text/html' });
@@ -394,7 +394,6 @@
           const content = event.target.result;
           let restored = false;
 
-          // 1. Try parsing as JSON backup export
           try {
             const backupData = JSON.parse(content);
             if (backupData && (backupData.folders || backupData.files)) {
@@ -413,11 +412,8 @@
                 render();
               }
             }
-          } catch (jsonErr) {
-            // Not JSON
-          }
+          } catch (jsonErr) {}
 
-          // 2. Try parsing as an HTML file backup containing state or IndexedDB storage
           if (!restored && (file.name.endsWith('.html') || content.includes('state =') || content.includes('aiden_files_db'))) {
             alert('index.html backup file selected. To load this saved app version, please open the saved HTML file directly in your web browser.');
           } else if (!restored) {
@@ -432,7 +428,6 @@
       reader.readAsText(file);
     }
 
-    // Helper render functions
     function toggleHamburgerMenu(e) {
       if (e) e.stopPropagation();
       state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
@@ -452,6 +447,7 @@
     }
     function toggleEditMode() {
       state.editMode = !state.editMode;
+      document.body.classList.toggle('edit-mode', state.editMode);
       render();
     }
     function navigateTo(folderId) {
@@ -474,7 +470,6 @@
       }
     }
     function toggleSelectAll() {
-      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
       const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
       const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
@@ -505,6 +500,7 @@
         render();
       }
     }
+
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
     function openLinkModal() { state.linkModal = true; render(); }
@@ -514,7 +510,90 @@
     function openAppModal() { state.appModal = true; render(); }
     function closeAppModal() { state.appModal = false; render(); }
 
-    function renderItem(item, index) {
+    function handleFileSelect(e) {
+      const uploadedFiles = Array.from(e.target.files);
+      if (!uploadedFiles.length) return;
+      
+      uploadedFiles.forEach(async (file) => {
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+          const dataUrl = event.target.result;
+          const newFile = {
+            id: uid(),
+            name: file.name,
+            fileType: file.type,
+            size: file.size,
+            dataUrl: dataUrl,
+            rawBlob: file,
+            parentId: state.currentFolderId,
+            x: 48,
+            y: 48,
+            width: 96,
+            height: 96
+          };
+          state.files.push(newFile);
+          await saveFile(newFile);
+          render();
+        };
+        reader.readAsDataURL(file);
+      });
+      e.target.value = '';
+      closeUploadModal();
+    }
+
+    function handleChangeImageFile(e) {
+      const file = e.target.files[0];
+      if (!file || !state.targetChangeImageId) return;
+      const reader = new FileReader();
+      reader.onload = async function(ev) {
+        const f = state.files.find(item => item.id === state.targetChangeImageId);
+        if (f) {
+          f.dataUrl = ev.target.result;
+          f.rawBlob = file;
+          await saveFile(f);
+        }
+        state.targetChangeImageId = null;
+        render();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    function handleFolderCoverFile(e) {
+      const file = e.target.files[0];
+      if (!file || !state.targetFolderCoverId) return;
+      const reader = new FileReader();
+      reader.onload = async function(ev) {
+        const folder = state.folders.find(item => item.id === state.targetFolderCoverId);
+        if (folder) {
+          folder.coverDataUrl = ev.target.result;
+          await saveFolder(folder);
+        }
+        state.targetFolderCoverId = null;
+        render();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    function handleAppThumbnail(e) {}
+    function handleLinkThumbnail(e) {}
+    function handleWebVideoThumbnail(e) {}
+
+    function bulkCopy() { alert('Copy selected items'); }
+    function bulkMove() { alert('Move selected items'); }
+    function bulkShare() { alert('Share selected items'); }
+    function bulkDelete() {
+      if (confirm('Delete selected items?')) {
+        state.files = state.files.filter(f => !state.selectedIds.includes(f.id));
+        state.folders = state.folders.filter(f => !state.selectedIds.includes(f.id) && f.id !== 'root');
+        state.textBubbles = state.textBubbles.filter(b => !state.selectedIds.includes(b.id));
+        state.selectedIds = [];
+        render();
+      }
+    }
+
+    function renderItem(item) {
       const isSelected = state.selectedIds.includes(item.id);
       const isF = isFolder(item);
       const isB = isBubble(item);
@@ -523,22 +602,23 @@
       const w = item.width || 96;
       const h = item.height || 96;
 
+      let iconName = 'file';
+      if (isF) iconName = 'folder';
+      else if (isB) iconName = 'align-left';
+      else if (isVideoFile(item)) iconName = 'video';
+      else if (isAudioFile(item)) iconName = 'music';
+
       return `
         <div data-id="${item.id}" class="absolute flex flex-col items-center justify-center cursor-pointer group select-none ${isSelected ? 'ring-2 ring-indigo-500 rounded-2xl' : ''}" style="left: ${x}px; top: ${y}px; width: ${w}px; height: ${h}px;" onclick="handleItemClick(event, '${item.id}')">
           <div class="folder-cube bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center relative group overflow-hidden">
-            ${isF ? `
-              <div class="flex flex-col items-center justify-center p-2 text-center w-full h-full">
-                <i data-lucide="folder" class="w-10 h-10 text-amber-400 mb-1"></i>
-                <span class="text-[11px] font-semibold text-zinc-200 truncate w-full px-1">${item.name}</span>
-              </div>
-            ` : isB ? `
-              <div class="flex flex-col items-center justify-center p-2 text-center w-full h-full bg-zinc-950 text-amber-200">
-                <span class="text-[11px] font-medium line-clamp-3">${item.text || 'Note'}</span>
-              </div>
+            ${isF && item.coverDataUrl ? `
+              <img src="${item.coverDataUrl}" class="w-full h-full object-cover" />
+            ` : !isF && !isB && item.dataUrl && (item.fileType || '').startsWith('image/') ? `
+              <img src="${item.dataUrl}" class="w-full h-full object-cover" />
             ` : `
-              <div class="flex flex-col items-center justify-center p-2 text-center w-full h-full">
-                <i data-lucide="file" class="w-8 h-8 text-zinc-400 mb-1"></i>
-                <span class="text-[11px] font-medium text-zinc-300 truncate w-full px-1">${item.name}</span>
+              <div class="flex flex-col items-center justify-center p-2 text-center w-full h-full ${isB ? 'bg-zinc-950 text-amber-200' : ''}">
+                <i data-lucide="${iconName}" class="w-8 h-8 ${isF ? 'text-amber-400' : isB ? 'text-amber-300' : 'text-zinc-400'} mb-1"></i>
+                <span class="text-[11px] font-medium ${isF ? 'text-zinc-200 font-semibold' : 'text-zinc-300'} truncate w-full px-1">${isB ? (item.text || 'Note') : item.name}</span>
               </div>
             `}
           </div>
@@ -576,23 +656,32 @@
 
     function startResize(e, id) {
       e.stopPropagation();
-      // Placeholder for resizing logic
     }
 
-    function bulkCopy() { alert('Copy selected items'); }
-    function bulkMove() { alert('Move selected items'); }
-    function bulkShare() { alert('Share selected items'); }
-    function bulkDelete() {
-      if (confirm('Delete selected items?')) {
-        state.files = state.files.filter(f => !state.selectedIds.includes(f.id));
-        state.folders = state.folders.filter(f => !state.selectedIds.includes(f.id) && f.id !== 'root');
-        state.textBubbles = state.textBubbles.filter(b => !state.selectedIds.includes(b.id));
-        state.selectedIds = [];
-        render();
-      }
+    function renderUploadModal() {
+      if (!state.showUploadModal) return '';
+      return `
+        <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick="closeUploadModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-semibold text-zinc-100">Add Content</h3>
+              <button onclick="closeUploadModal()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <button onclick="document.getElementById('file-input').click()" class="flex flex-col items-center justify-center p-4 bg-zinc-800/60 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 transition">
+                <i data-lucide="file-up" class="w-6 h-6 text-indigo-400 mb-2"></i>
+                <span class="text-xs font-medium text-zinc-200">Upload Files</span>
+              </button>
+              <button onclick="openNewFolderModal(); closeUploadModal();" class="flex flex-col items-center justify-center p-4 bg-zinc-800/60 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 transition">
+                <i data-lucide="folder-plus" class="w-6 h-6 text-amber-400 mb-2"></i>
+                <span class="text-xs font-medium text-zinc-200">New Folder</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
-    function renderUploadModal() { return ''; }
     function renderLinkModal() { return ''; }
     function renderWebVideoModal() { return ''; }
     function renderAppModal() { return ''; }
@@ -600,7 +689,94 @@
     function renderTextEditorModal() { return ''; }
     function renderPopupVideoModal() { return ''; }
 
-    // Initialize application on load
+    function render() {
+      const app = document.getElementById('app');
+      if (!app) return;
+
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId) || { name: 'Aiden Files' };
+      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
+      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
+      const allItems = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
+
+      app.innerHTML = `
+        <!-- Top Navigation Bar -->
+        <header class="h-14 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur px-4 flex items-center justify-between z-30 shrink-0">
+          <div class="flex items-center space-x-3">
+            ${state.currentFolderId ? `
+              <button onclick="navigateBack()" class="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition flex items-center gap-1">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+              </button>
+            ` : `
+              <button onclick="toggleHamburgerMenu(event)" class="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+              </button>
+            `}
+            <h1 class="text-sm font-semibold tracking-wide text-zinc-100 truncate max-w-[200px] sm:max-w-xs">${currentFolder.name}</h1>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="toggleSelectMode()" class="px-3 py-1.5 text-xs font-medium rounded-lg ${state.selectMode ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'} transition">
+              ${state.selectMode ? 'Done' : 'Select'}
+            </button>
+            <button onclick="toggleEditMode()" class="px-3 py-1.5 text-xs font-medium rounded-lg ${state.editMode ? 'bg-amber-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'} transition">
+              ${state.editMode ? 'Lock' : 'Edit'}
+            </button>
+            <button onclick="openUploadModal()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow transition">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </header>
+
+        <!-- Hamburger Menu Overlay -->
+        ${state.hamburgerMenuOpen ? `
+          <div class="fixed inset-0 z-50 flex" onclick="closeHamburgerMenu()">
+            <div class="w-72 bg-zinc-950 border-r border-zinc-800 h-full flex flex-col p-4 shadow-2xl" onclick="event.stopPropagation()">
+              <div class="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
+                <span class="font-bold text-zinc-100 flex items-center gap-2"><i data-lucide="folder-kanban" class="w-5 h-5 text-indigo-400"></i> Aiden Files</span>
+                <button onclick="toggleHamburgerMenu()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+              </div>
+              <div class="space-y-1 flex-1 overflow-y-auto">
+                <button onclick="syncWithGitHub(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="cloud" class="w-4 h-4 text-indigo-400"></i> Sync with GitHub</button>
+                <button onclick="exportBackupToPCloud(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="download" class="w-4 h-4 text-emerald-400"></i> Export Backup (.html)</button>
+                <button onclick="triggerRestoreBackup(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="upload" class="w-4 h-4 text-amber-400"></i> Restore Backup</button>
+                <button onclick="resetToken(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Set GitHub Token</button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Main Workspace Area -->
+        <main class="flex-1 relative overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" onclick="closeMenu(); closeHamburgerMenu()">
+          <div class="w-full h-full relative min-h-[800px]">
+            ${allItems.map((item, index) => renderItem(item, index)).join('')}
+          </div>
+        </main>
+
+        <!-- Selection Bottom Bar -->
+        ${state.selectMode ? `
+          <footer class="h-16 border-t border-zinc-800 bg-zinc-950 px-4 flex items-center justify-between z-30 shrink-0">
+            <span class="text-xs text-zinc-400">${state.selectedIds.length} selected</span>
+            <div class="flex items-center space-x-2">
+              <button onclick="toggleSelectAll()" class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg">Select All</button>
+              <button onclick="bulkDelete()" class="px-3 py-1.5 text-xs bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg">Delete</button>
+            </div>
+          </footer>
+        ` : ''}
+
+        ${renderUploadModal()}
+        ${renderLinkModal()}
+        ${renderWebVideoModal()}
+        ${renderAppModal()}
+        ${renderQuickViewModal()}
+        ${renderTextEditorModal()}
+        ${renderPopupVideoModal()}
+      `;
+
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    }
+
     loadData();
   </script>
 </body>
