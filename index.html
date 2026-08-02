@@ -1,959 +1,1498 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="bg-black text-white select-none">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>The Gothic Archive (Formation & Snap-to-Grid)</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Aiden Files</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    :root {
-      --bg-primary: #0a060d;
-      --bg-secondary: #130b18;
-      --bg-tertiary: #1c1024;
-      --accent-purple: #8b5cf6;
-      --accent-glow: rgba(139, 92, 246, 0.25);
-      --border-gothic: rgba(139, 92, 246, 0.2);
-      --text-main: #f3e8ff;
-      --text-muted: #a78bfa;
-      --grid-color: rgba(139, 92, 246, 0.07);
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .edit-grid-bg {
+      background-size: 24px 24px;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     }
 
-    body {
-      background-color: var(--bg-primary);
-      color: var(--text-main);
-      font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    .touch-none { touch-action: none; }
+
+    .folder-cube {
+      width: 100%;
+      height: 100%;
+      border-radius: 22px;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
       overflow: hidden;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: none;
     }
+    .folder-cube:active { transform: scale(0.95); }
 
-    .gothic-grid-bg {
-      background-image: 
-        radial-gradient(circle at 50% 50%, rgba(28, 16, 36, 0.4) 0%, rgba(10, 6, 13, 0.9) 100%),
-        linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
-      background-size: 100% 100%, 40px 40px, 40px 40px;
-    }
-
-    .edit-grid-visible {
-      background-image: 
-        radial-gradient(circle at 50% 50%, rgba(28, 16, 36, 0.4) 0%, rgba(10, 6, 13, 0.9) 100%),
-        linear-gradient(to right, rgba(167, 139, 250, 0.15) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(167, 139, 250, 0.15) 1px, transparent 1px) !important;
-    }
-
-    .glass-panel {
-      background: rgba(19, 11, 24, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border-gothic);
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-    }
-
-    .gothic-scrollbar::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    .gothic-scrollbar::-webkit-scrollbar-track {
-      background: var(--bg-primary);
-    }
-    .gothic-scrollbar::-webkit-scrollbar-thumb {
-      background: var(--border-gothic);
-      border-radius: 3px;
-    }
-    .gothic-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: var(--accent-purple);
-    }
-
-    .item-card {
-      transition: box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-    .item-card:hover {
-      border-color: rgba(139, 92, 246, 0.5);
-      box-shadow: 0 4px 20px var(--accent-glow);
-    }
-    
     .resize-handle {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      width: 24px;
-      height: 24px;
-      cursor: nwse-resize;
+      width: 28px;
+      height: 28px;
+      bottom: -4px;
+      right: -4px;
+      border-top-left-radius: 12px;
+      touch-action: none;
       display: none;
-      align-items: flex-end;
-      justify-content: flex-end;
-      padding: 3px;
-      color: var(--text-muted);
-      z-index: 20;
     }
-    .edit-mode .resize-handle {
+
+    body.edit-mode .resize-handle {
       display: flex;
     }
 
-    /* Infinite canvas viewport wrapper */
-    #viewport {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      touch-action: pan-x pan-y pinch-zoom;
+    #modal-text-input:empty:before {
+      content: attr(data-placeholder);
+      color: #71717a;
+      pointer-events: none;
     }
-
-    #canvas-container {
-      position: relative;
-      width: 6000px;
-      height: 6000px;
-      transform-origin: 0 0;
-    }
+    #modal-text-input { outline: none; }
   </style>
 </head>
-<body class="w-screen h-screen relative gothic-grid-bg">
+<body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
+  <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
 
-  <!-- TOP FORMATTING BAR -->
-  <header class="absolute top-0 left-0 right-0 h-16 glass-panel z-50 flex items-center justify-between px-4 border-b border-purple-900/30">
-    <div class="flex items-center space-x-3">
-      <div class="w-10 h-10 rounded-lg bg-purple-950 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-inner">
-        <i class="fa-solid fa-book-skull text-lg"></i>
-      </div>
-      <div>
-        <h1 class="font-bold text-sm tracking-widest text-purple-200 uppercase" id="archive-title">The Gothic Archive</h1>
-        <div class="text-xs text-purple-400/70 flex items-center space-x-2">
-          <span id="breadcrumb-display">Main Desktop</span>
-          <span id="zoom-indicator">100%</span>
-        </div>
-      </div>
-    </div>
+  <input id="file-input" type="file" multiple class="hidden" />
+  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
+  <input id="change-image-input" type="file" accept="image/*" class="hidden" />
+  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
+  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
+  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" />
+  <input id="web-video-thumbnail-input" type="file" accept="image/*" class="hidden" />
 
-    <!-- FORMATTING BAR TOOLS / OPTIONS -->
-    <div class="flex items-center space-x-2 overflow-x-auto gothic-scrollbar py-1">
-      <button onclick="zoomIn()" class="p-2 rounded-lg bg-purple-950/60 border border-purple-500/30 hover:bg-purple-900/80 text-purple-300 transition text-xs flex items-center space-x-1" title="Zoom In">
-        <i class="fa-solid fa-magnifying-glass-plus"></i>
-      </button>
-      <button onclick="zoomOut()" class="p-2 rounded-lg bg-purple-950/60 border border-purple-500/30 hover:bg-purple-900/80 text-purple-300 transition text-xs flex items-center space-x-1" title="Zoom Out">
-        <i class="fa-solid fa-magnifying-glass-minus"></i>
-      </button>
-      <button onclick="resetZoom()" class="p-2 rounded-lg bg-purple-950/60 border border-purple-500/30 hover:bg-purple-900/80 text-purple-300 transition text-xs flex items-center space-x-1" title="Reset Zoom">
-        <i class="fa-solid fa-expand"></i>
-      </button>
-
-      <div class="h-5 w-px bg-purple-800/40 mx-1"></div>
-
-      <button onclick="openNewFolderModal()" class="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/30 hover:bg-purple-800/60 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-folder-plus text-purple-400"></i>
-        <span class="hidden sm:inline">New Folder</span>
-      </button>
-      <button onclick="document.getElementById('file-input').click()" class="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/30 hover:bg-purple-800/60 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-file-arrow-up text-purple-400"></i>
-        <span class="hidden sm:inline">Upload File</span>
-      </button>
-      <button onclick="openTextEditorModal()" class="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/30 hover:bg-purple-800/60 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-note-sticky text-purple-400"></i>
-        <span class="hidden sm:inline">Text Bubble</span>
-      </button>
-      <button onclick="openLinkModal()" class="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/30 hover:bg-purple-800/60 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-link text-purple-400"></i>
-        <span class="hidden sm:inline">Web Link</span>
-      </button>
-      <button onclick="openWebVideoModal()" class="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/30 hover:bg-purple-800/60 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-video text-purple-400"></i>
-        <span class="hidden sm:inline">Web Video</span>
-      </button>
-      <button onclick="openAppModal()" class="px-3 py-1.5 rounded-lg bg-purple-900/40 border border-purple-500/30 hover:bg-purple-800/60 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-mobile-screen text-purple-400"></i>
-        <span class="hidden sm:inline">iOS App</span>
-      </button>
-
-      <div class="h-5 w-px bg-purple-800/40 mx-1"></div>
-
-      <button id="edit-mode-btn" onclick="toggleEditMode()" class="px-3 py-1.5 rounded-lg bg-purple-950 border border-purple-500/50 hover:bg-purple-900 text-purple-200 transition text-xs flex items-center space-x-1.5 shadow-sm">
-        <i class="fa-solid fa-lock-open text-purple-400" id="edit-mode-icon"></i>
-        <span id="edit-mode-text">Edit: ON</span>
-      </button>
-
-      <button onclick="saveArchiveState()" class="px-3 py-1.5 rounded-lg bg-purple-950 border border-purple-500/30 hover:bg-purple-900 text-purple-200 transition text-xs flex items-center space-x-1.5" title="Save State">
-        <i class="fa-solid fa-floppy-disk text-purple-400"></i>
-        <span class="hidden md:inline">Save</span>
-      </button>
-      <button onclick="loadArchiveState()" class="px-3 py-1.5 rounded-lg bg-purple-950 border border-purple-500/30 hover:bg-purple-900 text-purple-200 transition text-xs flex items-center space-x-1.5" title="Load State">
-        <i class="fa-solid fa-folder-open text-purple-400"></i>
-        <span class="hidden md:inline">Load</span>
-      </button>
-
-      <div class="h-5 w-px bg-purple-800/40 mx-1"></div>
-
-      <button onclick="goBack()" id="back-btn" class="px-3 py-1.5 rounded-lg bg-purple-950/40 border border-purple-500/20 hover:bg-purple-900/60 text-purple-300 transition text-xs flex items-center space-x-1 disabled:opacity-40 disabled:cursor-not-allowed">
-        <i class="fa-solid fa-arrow-left"></i>
-        <span class="hidden sm:inline">Back</span>
-      </button>
-    </div>
-  </header>
-
-  <!-- HIDDEN INPUTS -->
-  <input type="file" id="file-input" class="hidden" multiple>
-  <input type="file" id="photo-input" class="hidden" accept="image/*" multiple>
-
-  <!-- INFINITE CANVAS VIEWPORT -->
-  <div id="viewport" class="pt-16">
-    <div id="canvas-container">
-      <!-- RENDERED ITEMS GO HERE -->
-    </div>
-  </div>
-
-  <!-- CONTEXT MENU MODAL / POPUP -->
-  <div id="context-menu" class="hidden absolute z-50 glass-panel rounded-xl shadow-2xl py-2 w-56 border border-purple-500/30">
-    <div id="context-menu-items" class="flex flex-col text-xs text-purple-200">
-      <!-- Injected dynamically -->
-    </div>
-  </div>
-
-  <!-- TEXT EDITOR MODAL -->
-  <div id="text-editor-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass-panel w-full max-w-2xl rounded-2xl p-6 border border-purple-500/40 flex flex-col space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-purple-900/50 pb-3">
-        <h3 class="font-bold text-purple-200 flex items-center space-x-2">
-          <i class="fa-solid fa-note-sticky text-purple-400"></i>
-          <span id="text-modal-title">Gothic Text Bubble</span>
-        </h3>
-        <button onclick="closeTextEditorModal()" class="text-purple-400 hover:text-white p-1">
-          <i class="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </div>
-      <input type="text" id="text-bubble-title" placeholder="Bubble Title..." class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-      <textarea id="text-bubble-content" rows="8" placeholder="Type your dark notes here..." class="w-full gothic-scrollbar bg-purple-950/50 border border-purple-800/50 rounded-lg p-3 text-sm text-purple-100 focus:outline-none focus:border-purple-500 resize-none"></textarea>
-      <div class="flex justify-end space-x-3 pt-2">
-        <button onclick="closeTextEditorModal()" class="px-4 py-2 rounded-lg bg-purple-950 border border-purple-800/60 text-purple-300 hover:bg-purple-900 text-xs font-semibold">Cancel</button>
-        <button onclick="saveTextBubbleModal()" class="px-4 py-2 rounded-lg bg-purple-700 border border-purple-500 text-white hover:bg-purple-600 text-xs font-semibold shadow-lg">Save Bubble</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- FILE VIEWER MODAL -->
-  <div id="file-viewer-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="glass-panel w-full max-w-5xl h-[85vh] rounded-2xl flex flex-col border border-purple-500/40 shadow-2xl overflow-hidden">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-purple-900/50 bg-purple-950/40">
-        <h3 id="viewer-title" class="font-bold text-purple-200 text-sm truncate">Viewer</h3>
-        <div class="flex items-center space-x-3">
-          <a id="viewer-download" href="#" download class="p-2 rounded-lg bg-purple-900/40 hover:bg-purple-800 text-purple-300 text-xs flex items-center space-x-1" title="Download">
-            <i class="fa-solid fa-download"></i>
-          </a>
-          <button onclick="closeFileViewer()" class="text-purple-400 hover:text-white p-2">
-            <i class="fa-solid fa-xmark text-lg"></i>
-          </button>
-        </div>
-      </div>
-      <div id="viewer-content" class="flex-1 overflow-auto p-6 flex items-center justify-center gothic-scrollbar relative">
-        <!-- Rendered file content -->
-      </div>
-    </div>
-  </div>
-
-  <!-- LINK MODAL -->
-  <div id="link-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass-panel w-full max-w-md rounded-2xl p-6 border border-purple-500/40 flex flex-col space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-purple-900/50 pb-3">
-        <h3 class="font-bold text-purple-200 flex items-center space-x-2">
-          <i class="fa-solid fa-link text-purple-400"></i>
-          <span>Add Web Link</span>
-        </h3>
-        <button onclick="closeLinkModal()" class="text-purple-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <div class="space-y-3">
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">URL</label>
-          <input type="url" id="link-url-input" placeholder="https://example.com" class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-        </div>
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">Display Name</label>
-          <input type="text" id="link-name-input" placeholder="My Bookmark" class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-        </div>
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">Custom Thumbnail (Optional)</label>
-          <input type="file" id="link-thumbnail-input" accept="image/*" class="w-full text-xs text-purple-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-900 file:text-purple-200 hover:file:bg-purple-800">
-        </div>
-      </div>
-      <div class="flex justify-end space-x-3 pt-2">
-        <button onclick="closeLinkModal()" class="px-4 py-2 rounded-lg bg-purple-950 border border-purple-800/60 text-purple-300 hover:bg-purple-900 text-xs font-semibold">Cancel</button>
-        <button onclick="saveLinkModal()" class="px-4 py-2 rounded-lg bg-purple-700 border border-purple-500 text-white hover:bg-purple-600 text-xs font-semibold shadow-lg">Add Link</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- WEB VIDEO MODAL -->
-  <div id="web-video-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass-panel w-full max-w-md rounded-2xl p-6 border border-purple-500/40 flex flex-col space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-purple-900/50 pb-3">
-        <h3 class="font-bold text-purple-200 flex items-center space-x-2">
-          <i class="fa-solid fa-video text-purple-400"></i>
-          <span>Add Web Video</span>
-        </h3>
-        <button onclick="closeWebVideoModal()" class="text-purple-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <div class="space-y-3">
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">Video URL or Embed Code</label>
-          <input type="text" id="web-video-url-input" placeholder="https://youtube.com/watch?v=..." class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-        </div>
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">Display Name</label>
-          <input type="text" id="web-video-name-input" placeholder="Gothic Cinematic" class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-        </div>
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">Custom Thumbnail (Optional)</label>
-          <input type="file" id="web-video-thumbnail-input" accept="image/*" class="w-full text-xs text-purple-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-900 file:text-purple-200 hover:file:bg-purple-800">
-        </div>
-      </div>
-      <div class="flex justify-end space-x-3 pt-2">
-        <button onclick="closeWebVideoModal()" class="px-4 py-2 rounded-lg bg-purple-950 border border-purple-800/60 text-purple-300 hover:bg-purple-900 text-xs font-semibold">Cancel</button>
-        <button onclick="saveWebVideoModal()" class="px-4 py-2 rounded-lg bg-purple-700 border border-purple-500 text-white hover:bg-purple-600 text-xs font-semibold shadow-lg">Add Video</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- APP MODAL -->
-  <div id="app-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass-panel w-full max-w-md rounded-2xl p-6 border border-purple-500/40 flex flex-col space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-purple-900/50 pb-3">
-        <h3 class="font-bold text-purple-200 flex items-center space-x-2">
-          <i class="fa-solid fa-mobile-screen text-purple-400"></i>
-          <span>Add iOS App Shortcut</span>
-        </h3>
-        <button onclick="closeAppModal()" class="text-purple-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <div class="space-y-3">
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">App Scheme / Universal Link</label>
-          <input type="text" id="app-scheme-input" placeholder="shortcut:// or https://..." class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-        </div>
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">App Name</label>
-          <input type="text" id="app-name-input" placeholder="My App" class="w-full bg-purple-950/50 border border-purple-800/50 rounded-lg px-3 py-2 text-sm text-purple-100 focus:outline-none focus:border-purple-500">
-        </div>
-        <div>
-          <label class="text-xs text-purple-300 mb-1 block">App Icon / Thumbnail</label>
-          <input type="file" id="app-thumbnail-input" accept="image/*" class="w-full text-xs text-purple-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-900 file:text-purple-200 hover:file:bg-purple-800">
-        </div>
-      </div>
-      <div class="flex justify-end space-x-3 pt-2">
-        <button onclick="closeAppModal()" class="px-4 py-2 rounded-lg bg-purple-950 border border-purple-800/60 text-purple-300 hover:bg-purple-900 text-xs font-semibold">Cancel</button>
-        <button onclick="saveAppModal()" class="px-4 py-2 rounded-lg bg-purple-700 border border-purple-500 text-white hover:bg-purple-600 text-xs font-semibold shadow-lg">Add App</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- TOAST NOTIFICATION -->
-  <div id="toast" class="fixed bottom-6 right-6 z-50 glass-panel px-4 py-3 rounded-xl border border-purple-500/50 text-xs text-purple-200 shadow-2xl transition-all duration-300 translate-y-20 opacity-0 flex items-center space-x-2">
-    <i class="fa-solid fa-circle-check text-purple-400"></i>
-    <span id="toast-msg">Action completed</span>
-  </div>
-
-  <!-- MAIN SCRIPT -->
   <script>
     const CONFIG = {
-      GRID_SIZE: 40
+      ghRepo: 'aidamn81/aidenfiles',
+      ghPath: 'aiden_meta.json',
+      GRID_SIZE: 24
     };
 
     let state = {
-      currentFolderId: 'root',
-      folderPath: [],
-      editMode: true,
-      zoomLevel: 1,
+      editMode: false,
+      selectMode: false,
+      selectedIds: [],
+      currentFolderId: null,
       folders: [],
       files: [],
       textBubbles: [],
-      activeUploads: [],
+      ghToken: localStorage.getItem('af_gh_token') || '',
+      isSyncing: false,
+      activeMenuId: null,
+      hamburgerMenuOpen: false,
+      targetChangeImageId: null,
+      targetFolderCoverId: null,
+      quickViewFileId: null,
+      showUploadModal: false,
+      textEditorModal: null,
       linkModal: false,
-      webVideoModal: false,
-      appModal: false,
       linkModalThumbData: null,
+      webVideoModal: false,
       webVideoModalThumbData: null,
-      appModalThumbData: null
+      appModal: false,
+      appModalThumbData: null,
+      activeUploads: [],
+      popupVideoUrl: null
     };
 
-    let db = null;
+    const uid = () => Math.random().toString(36).substring(2, 9);
+    const isFolder = item => !('fileType' in item) && !('isBubble' in item);
+    const isBubble = item => item.isBubble === true;
 
-    // IndexedDB Initialization
-    function initDB() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open('GothicArchiveDB', 2);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          db = request.result;
-          resolve(db);
-        };
-        request.onupgradeneeded = (e) => {
-          const database = e.target.result;
-          if (!database.objectStoreNames.contains('folders')) database.createObjectStore('folders', { keyPath: 'id' });
-          if (!database.objectStoreNames.contains('files')) database.createObjectStore('files', { keyPath: 'id' });
-          if (!database.objectStoreNames.contains('textBubbles')) database.createObjectStore('textBubbles', { keyPath: 'id' });
-        };
-      });
+    function isVideoFile(file) {
+      const t = file.fileType || '';
+      const n = file.name || '';
+      return t.startsWith('video/') || t === 'web-video' || n.endsWith('.mp4') || n.endsWith('.mov') || n.endsWith('.webm') || n.endsWith('.m4v') || n.endsWith('.mkv');
+    }
+    function isAudioFile(file) {
+      const t = file.fileType || '';
+      const n = file.name || '';
+      return t.startsWith('audio/') || n.endsWith('.mp3') || n.endsWith('.m4a') || n.endsWith('.wav') || n.endsWith('.aac');
     }
 
-    async function loadDataFromDB() {
-      if (!db) await initDB();
+    async function getOrCreateBlobUrl(file) {
+      if (file.blobUrl) return file.blobUrl;
+      if (file.rawBlob) {
+        file.blobUrl = URL.createObjectURL(file.rawBlob);
+        return file.blobUrl;
+      }
+      if (!file.dataUrl) return '';
+      try {
+        const res = await fetch(file.dataUrl);
+        const blob = await res.blob();
+        file.blobUrl = URL.createObjectURL(blob);
+        return file.blobUrl;
+      } catch (e) {
+        return file.dataUrl;
+      }
+    }
+
+    const DB_NAME = 'aiden_files_db';
+    const DB_VERSION = 5;
+
+    function openDB() {
       return new Promise((resolve) => {
-        const transaction = db.transaction(['folders', 'files', 'textBubbles'], 'readonly');
-        let fLoad = [], fiLoad = [], tLoad = [];
-
-        transaction.objectStore('folders').getAll().onsuccess = (e) => { fLoad = e.target.result; };
-        transaction.objectStore('files').getAll().onsuccess = (e) => { fiLoad = e.target.result; };
-        transaction.objectStore('textBubbles').getAll().onsuccess = (e) => { tLoad = e.target.result; };
-
-        transaction.oncomplete = () => {
-          resolve({ folders: fLoad, files: fiLoad, textBubbles: tLoad });
-        };
+        try {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('folders')) db.createObjectStore('folders', { keyPath: 'id' });
+            if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'id' });
+            if (!db.objectStoreNames.contains('textBubbles')) db.createObjectStore('textBubbles', { keyPath: 'id' });
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        } catch (e) { resolve(null); }
       });
     }
 
-    async function saveToDB(storeName, item) {
-      if (!db) await initDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction([storeName], 'readwrite');
-        const store = transaction.objectStore(storeName);
-        store.put(item);
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-      });
+    async function loadData() {
+      const db = await openDB();
+      if (db) {
+        state.folders = await new Promise(res => {
+          const tx = db.transaction('folders', 'readonly');
+          const req = tx.objectStore('folders').getAll();
+          req.onsuccess = () => res(req.result || []);
+        });
+        state.files = await new Promise(res => {
+          const tx = db.transaction('files', 'readonly');
+          const req = tx.objectStore('files').getAll();
+          req.onsuccess = () => res(req.result || []);
+        });
+        state.textBubbles = await new Promise(res => {
+          const tx = db.transaction('textBubbles', 'readonly');
+          const req = tx.objectStore('textBubbles').getAll();
+          req.onsuccess = () => res(req.result || []);
+        });
+      }
+
+      for (let file of state.files) {
+        if ((isVideoFile(file) || isAudioFile(file)) && file.fileType !== 'web-video') {
+          await getOrCreateBlobUrl(file);
+        }
+      }
+
+      if (state.folders.length === 0) {
+        const root = { id: 'root', name: 'Aiden Files', parentId: null, width: 96, height: 96 };
+        state.folders = [root];
+        saveFolder(root);
+      }
+      render();
+    }
+
+    async function saveFolder(folder) {
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction('folders', 'readwrite');
+        tx.objectStore('folders').put(folder);
+      }
+    }
+
+    async function saveFile(file) {
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction('files', 'readwrite');
+        const fileToSave = { ...file };
+        delete fileToSave.blobUrl;
+        tx.objectStore('files').put(fileToSave);
+      }
+    }
+
+    async function saveTextBubble(bubble) {
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction('textBubbles', 'readwrite');
+        tx.objectStore('textBubbles').put(bubble);
+      }
     }
 
     async function deleteFromDB(storeName, id) {
-      if (!db) await initDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction([storeName], 'readwrite');
-        const store = transaction.objectStore(storeName);
-        store.delete(id);
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-      });
-    }
-
-    async function saveFolder(folder) { await saveToDB('folders', folder); }
-    async function saveFile(file) { await saveToDB('files', file); }
-    async function saveTextBubble(bubble) { await saveToDB('textBubbles', bubble); }
-
-    async function loadData() {
-      try {
-        const data = await loadDataFromDB();
-        if (data.folders.length > 0 || data.files.length > 0 || data.textBubbles.length > 0) {
-          state.folders = data.folders;
-          state.files = data.files;
-          state.textBubbles = data.textBubbles;
-        } else {
-          // Default initial items
-          state.folders = [
-            { id: 'root', name: 'Main Desktop', parentId: null, x: 0, y: 0, width: 96, height: 96 },
-            { id: 'f1', name: 'Grimoire', parentId: 'root', x: 40, y: 40, width: 96, height: 96 }
-          ];
-          state.files = [
-            { id: 'fi1', name: 'Welcome.txt', fileType: 'text/plain', textContent: 'Welcome to The Gothic Archive.\nYour sanctuary for dark romance, code, and creative freedom.', parentId: 'root', x: 160, y: 40, width: 112, height: 144 }
-          ];
-          state.textBubbles = [
-            { id: 'tb1', name: 'Sanctuary Note', content: 'Remember to stay grounded and embrace the aesthetics.', parentId: 'root', x: 300, y: 40, width: 140, height: 80 }
-          ];
-          for (let f of state.folders) await saveFolder(f);
-          for (let fi of state.files) await saveFile(fi);
-          for (let tb of state.textBubbles) await saveTextBubble(tb);
-        }
-      } catch (err) {
-        console.error('Error loading DB', err);
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).delete(id);
       }
+    }
+
+    function resetToken() {
+      const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
+      if (token !== null) {
+        state.ghToken = token.trim();
+        localStorage.setItem('af_gh_token', state.ghToken);
+        alert('New token saved successfully!');
+        syncWithGitHub();
+      }
+    }
+
+    async function syncWithGitHub(forcePull = false) {
+      if (!state.ghToken) {
+        resetToken();
+        if (!state.ghToken) return;
+      }
+
+      state.isSyncing = true;
       render();
+
+      try {
+        let cleanToken = state.ghToken.replace(/^(token|Bearer)\s+/i, '').trim();
+        const authHeader = `token ${cleanToken}`;
+        const headers = {
+          'Authorization': authHeader,
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        };
+
+        const metaUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/aiden_meta.json`;
+
+        if (forcePull) {
+          const getRes = await fetch(metaUrl, { headers });
+          if (getRes.ok) {
+            const getJson = await getRes.json();
+            const manifest = JSON.parse(decodeURIComponent(escape(atob(getJson.content))));
+
+            let allFolders = [];
+            let allFiles = [];
+            let allBubbles = [];
+
+            for (let chunkFileName of manifest.chunks) {
+              const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
+              const chunkRes = await fetch(chunkUrl, { headers });
+              if (chunkRes.ok) {
+                const chunkJson = await chunkRes.json();
+                const chunkData = JSON.parse(decodeURIComponent(escape(atob(chunkJson.content))));
+                if (chunkData.folders) allFolders.push(...chunkData.folders);
+                if (chunkData.files) allFiles.push(...chunkData.files);
+                if (chunkData.textBubbles) allBubbles.push(...chunkData.textBubbles);
+              }
+            }
+
+            state.folders = allFolders.length > 0 ? allFolders : state.folders;
+            state.files = allFiles.length > 0 ? allFiles : state.files;
+            state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
+
+            for (let f of state.folders) await saveFolder(f);
+            for (let fi of state.files) await saveFile(fi);
+            for (let b of state.textBubbles) await saveTextBubble(b);
+            alert('Synced chunks down from Cloud successfully!');
+            state.isSyncing = false;
+            render();
+            return;
+          }
+        }
+
+        const sanitizedFiles = state.files.map(file => {
+          const copy = { ...file };
+          delete copy.blobUrl;
+          delete copy.rawBlob;
+          return copy;
+        });
+
+        const CHUNK_SIZE = 15;
+        const fileChunks = [];
+        for (let i = 0; i < sanitizedFiles.length; i += CHUNK_SIZE) {
+          fileChunks.push(sanitizedFiles.slice(i, i + CHUNK_SIZE));
+        }
+        if (fileChunks.length === 0) fileChunks.push([]);
+
+        const chunkFileNames = [];
+
+        for (let index = 0; index < fileChunks.length; index++) {
+          const chunkFileName = `chunk_${index}.json`;
+          chunkFileNames.push(chunkFileName);
+          const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
+
+          let chunkSha = null;
+          const existingChunkRes = await fetch(chunkUrl, { headers });
+          if (existingChunkRes.ok) {
+            const existingData = await existingChunkRes.json();
+            chunkSha = existingData.sha;
+          }
+
+          const chunkPayloadData = {
+            folders: index === 0 ? state.folders : [],
+            files: fileChunks[index],
+            textBubbles: index === 0 ? state.textBubbles : []
+          };
+
+          const chunkPutPayload = {
+            message: `Sync Aiden Files Chunk ${index}`,
+            content: btoa(unescape(encodeURIComponent(JSON.stringify(chunkPayloadData)))),
+            ...(chunkSha && { sha: chunkSha })
+          };
+
+          let putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
+          if (putRes.status === 500) {
+            await new Promise(r => setTimeout(r, 1500));
+            putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
+          }
+          if (!putRes.ok) {
+            throw new Error(`Failed to upload chunk ${index} (status ${putRes.status})`);
+          }
+        }
+
+        let metaSha = null;
+        const existingMetaRes = await fetch(metaUrl, { headers });
+        if (existingMetaRes.ok) {
+          const metaJson = await existingMetaRes.json();
+          metaSha = metaJson.sha;
+        }
+
+        const metaManifest = { chunks: chunkFileNames, updatedAt: new Date().toISOString() };
+        const metaPutPayload = {
+          message: 'Update Aiden Files Manifest',
+          content: btoa(unescape(encodeURIComponent(JSON.stringify(metaManifest)))),
+          ...(metaSha && { sha: metaSha })
+        };
+
+        const metaPutRes = await fetch(metaUrl, { method: 'PUT', headers, body: JSON.stringify(metaPutPayload) });
+        if (!metaPutRes.ok) {
+          throw new Error('Failed to update manifest file on GitHub.');
+        }
+
+        alert('Chunked Sync Successful! Cloud backup updated safely without server errors.');
+      } catch (err) {
+        alert('Sync error: ' + err.message);
+      } finally {
+        state.isSyncing = false;
+        render();
+      }
     }
 
-    function uid() {
-      return 'id_' + Math.random().toString(36.substring(2, 9)) + Date.now().toString(36);
-    }
-
-    function showToast(msg) {
-      const toast = document.getElementById('toast');
-      const msgEl = document.getElementById('toast-msg');
-      msgEl.textContent = msg;
-      toast.classList.remove('translate-y-20', 'opacity-0');
-      setTimeout(() => {
-        toast.classList.add('translate-y-20', 'opacity-0');
-      }, 3000);
-    }
-
-    // Zoom Functions
-    function zoomIn() {
-      state.zoomLevel = Math.min(2.5, state.zoomLevel + 0.15);
-      applyZoom();
-    }
-    function zoomOut() {
-      state.zoomLevel = Math.max(0.4, state.zoomLevel - 0.15);
-      applyZoom();
-    }
-    function resetZoom() {
-      state.zoomLevel = 1;
-      applyZoom();
-    }
-    function applyZoom() {
-      const container = document.getElementById('canvas-container');
-      container.style.transform = `scale(${state.zoomLevel})`;
-      document.getElementById('zoom-indicator').textContent = Math.round(state.zoomLevel * 100) + '%';
-    }
-
-    // Toggle Edit Mode
-    function toggleEditMode() {
-      state.editMode = !state.editMode;
-      const btnIcon = document.getElementById('edit-mode-icon');
-      const btnText = document.getElementById('edit-mode-text');
-      const body = document.body;
+    function render() {
+      const app = document.getElementById('app');
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
+      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
+      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
+      const allChildrenSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
 
       if (state.editMode) {
-        btnIcon.className = 'fa-solid fa-lock-open text-purple-400';
-        btnText.textContent = 'Edit: ON';
-        body.classList.add('edit-grid-visible');
-        showToast('Edit Mode Enabled: Drag, Resize & Snap Active');
+        document.body.classList.add('edit-mode');
       } else {
-        btnIcon.className = 'fa-solid fa-lock text-purple-400';
-        btnText.textContent = 'Edit: OFF';
-        body.classList.remove('edit-grid-visible');
-        showToast('Edit Mode Locked');
+        document.body.classList.remove('edit-mode');
       }
-      render();
-    }
 
-    // Navigation & Breadcrumbs
-    function openFolder(folderId) {
-      const folder = state.folders.find(f => f.id === folderId);
-      if (!folder) return;
-      state.folderPath.push({ id: state.currentFolderId, name: document.getElementById('breadcrumb-display').textContent });
-      state.currentFolderId = folderId;
-      document.getElementById('breadcrumb-display').textContent = folder.name;
-      document.getElementById('back-btn').disabled = false;
-      render();
-    }
-
-    function goBack() {
-      if (state.folderPath.length === 0) return;
-      const prev = state.folderPath.pop();
-      state.currentFolderId = prev.id;
-      document.getElementById('breadcrumb-display').textContent = prev.name;
-      if (state.folderPath.length === 0) {
-        document.getElementById('back-btn').disabled = true;
-      }
-      render();
-    }
-
-    // File Helpers
-    function isFolder(item) { return item.fileType === undefined && item.content === undefined; }
-    function isBubble(item) { return item.content !== undefined; }
-    function isImageFile(item) {
-      return item.fileType && (item.fileType.startsWith('image/') || item.name.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i));
-    }
-    function isVideoFile(item) {
-      return item.fileType && (item.fileType.startsWith('video/') || item.name.match(/\.(mp4|webm|ogg|mov)$/i));
-    }
-    function isAudioFile(item) {
-      return item.fileType && (item.fileType.startsWith('audio/') || item.name.match(/\.(mp3|wav|ogg|m4a)$/i));
-    }
-
-    const blobUrlCache = new Map();
-    async function getOrCreateBlobUrl(fileItem) {
-      if (!fileItem.rawBlob && fileItem.dataUrl && fileItem.dataUrl.startsWith('data:')) {
-        try {
-          const res = await fetch(fileItem.dataUrl);
-          fileItem.rawBlob = await res.blob();
-        } catch(e) {}
-      }
-      if (!fileItem.rawBlob) return fileItem.dataUrl;
-      if (blobUrlCache.has(fileItem.id)) return blobUrlCache.get(fileItem.id);
-      const url = URL.createObjectURL(fileItem.rawBlob);
-      blobUrlCache.set(fileItem.id, url);
-      return url;
-    }
-
-    // RENDER SYSTEM
-    function render() {
-      const container = document.getElementById('canvas-container');
-      container.innerHTML = '';
-
-      const currentFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
-      const currentFiles = state.files.filter(f => f.parentId === state.currentFolderId);
-      const currentBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
-
-      // Render Folders
-      currentFolders.forEach(folder => {
-        const el = document.createElement('div');
-        el.className = 'absolute item-card glass-panel rounded-2xl flex flex-col items-center justify-center p-3 cursor-pointer group';
-        el.setAttribute('data-id', folder.id);
-        el.style.left = (folder.x !== undefined ? folder.x : 20) + 'px';
-        el.style.top = (folder.y !== undefined ? folder.y : 20) + 'px';
-        el.style.width = (folder.width || 96) + 'px';
-        el.style.height = (folder.height || 96) + 'px';
-
-        el.innerHTML = `
-          <div class="text-3xl text-purple-400 mb-1 group-hover:scale-110 transition-transform">
-            <i class="fa-solid fa-folder"></i>
+      app.innerHTML = `
+        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+              </button>
+              ${state.currentFolderId !== null ? `
+                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                  <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                  <span>Back</span>
+                </button>
+              ` : ''}
+              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.selectMode ? 'Cancel' : 'Select'}
+              </button>
+              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
+              </button>
+            </div>
           </div>
-          <span class="text-xs text-purple-200 text-center truncate w-full px-1">${folder.name}</span>
-          <div class="resize-handle"><i class="fa-solid fa-caret-down text-[10px]"></i></div>
-        `;
 
-        el.addEventListener('dblclick', () => openFolder(folder.id));
-        el.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          openContextMenu(e, folder.id, true, false);
-        });
-        container.appendChild(el);
-      });
-
-      // Render Files
-      currentFiles.forEach(file => {
-        const el = document.createElement('div');
-        el.className = 'absolute item-card glass-panel rounded-2xl flex flex-col items-center justify-between p-3 cursor-pointer group overflow-hidden';
-        el.setAttribute('data-id', file.id);
-        el.style.left = (file.x !== undefined ? file.x : 20) + 'px';
-        el.style.top = (file.y !== undefined ? file.y : 20) + 'px';
-        el.style.width = (file.width || 112) + 'px';
-        el.style.height = (file.height || 144) + 'px';
-
-        let iconHtml = '<i class="fa-solid fa-file text-2xl text-purple-400"></i>';
-        if (isImageFile(file) && file.dataUrl) {
-          iconHtml = `<div class="w-full h-20 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center"><img src="${file.dataUrl}" class="w-full h-full object-cover"></div>`;
-        } else if (file.fileType === 'link') {
-          if (file.thumbnailData) {
-            iconHtml = `<div class="w-full h-20 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center"><img src="${file.thumbnailData}" class="w-full h-full object-cover"></div>`;
-          } else {
-            iconHtml = '<div class="w-10 h-10 rounded-full bg-purple-950 border border-purple-500/40 flex items-center justify-center text-purple-300"><i class="fa-solid fa-link text-lg"></i></div>';
-          }
-        } else if (file.fileType === 'web-video') {
-          if (file.thumbnailData) {
-            iconHtml = `<div class="w-full h-20 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center"><img src="${file.thumbnailData}" class="w-full h-full object-cover"></div>`;
-          } else {
-            iconHtml = '<div class="w-10 h-10 rounded-full bg-purple-950 border border-purple-500/40 flex items-center justify-center text-purple-300"><i class="fa-solid fa-video text-lg"></i></div>';
-          }
-        } else if (file.fileType === 'ios-app') {
-          if (file.thumbnailData) {
-            iconHtml = `<div class="w-12 h-12 rounded-xl overflow-hidden bg-black/40 flex items-center justify-center shadow-md"><img src="${file.thumbnailData}" class="w-full h-full object-cover"></div>`;
-          } else {
-            iconHtml = '<div class="w-12 h-12 rounded-xl bg-purple-950 border border-purple-500/40 flex items-center justify-center text-purple-300"><i class="fa-solid fa-mobile-screen text-lg"></i></div>';
-          }
-        } else if (isVideoFile(file)) {
-          iconHtml = '<div class="w-10 h-10 rounded-full bg-purple-950 border border-purple-500/40 flex items-center justify-center text-purple-300"><i class="fa-solid fa-film text-lg"></i></div>';
-        } else if (isAudioFile(file)) {
-          iconHtml = '<div class="w-10 h-10 rounded-full bg-purple-950 border border-purple-500/40 flex items-center justify-center text-purple-300"><i class="fa-solid fa-music text-lg"></i></div>';
-        }
-
-        el.innerHTML = `
-          ${iconHtml}
-          <span class="text-xs text-purple-200 text-center truncate w-full px-1 mt-1">${file.name}</span>
-          <div class="resize-handle"><i class="fa-solid fa-caret-down text-[10px]"></i></div>
-        `;
-
-        el.addEventListener('dblclick', () => openFileViewer(file));
-        el.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          openContextMenu(e, file.id, false, false);
-        });
-        container.appendChild(el);
-      });
-
-      // Render Text Bubbles
-      currentBubbles.forEach(bubble => {
-        const el = document.createElement('div');
-        el.className = 'absolute item-card glass-panel rounded-2xl flex flex-col p-3 cursor-pointer group overflow-hidden border border-purple-500/30';
-        el.setAttribute('data-id', bubble.id);
-        el.style.left = (bubble.x !== undefined ? bubble.x : 20) + 'px';
-        el.style.top = (bubble.y !== undefined ? bubble.y : 20) + 'px';
-        el.style.width = (bubble.width || 140) + 'px';
-        el.style.height = (bubble.height || 80) + 'px';
-
-        el.innerHTML = `
-          <div class="flex items-center justify-between border-b border-purple-900/40 pb-1 mb-1">
-            <span class="font-bold text-xs text-purple-300 truncate">${bubble.name || 'Note'}</span>
-            <i class="fa-solid fa-note-sticky text-[10px] text-purple-400"></i>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
+              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
+              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
+            </div>
           </div>
-          <div class="text-[11px] text-purple-200/80 overflow-hidden flex-1">${bubble.content || ''}</div>
-          <div class="resize-handle"><i class="fa-solid fa-caret-down text-[10px]"></i></div>
-        `;
 
-        el.addEventListener('dblclick', () => openTextEditorModal(bubble.id));
-        el.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          openContextMenu(e, bubble.id, false, true);
-        });
-        container.appendChild(el);
-      });
+          ${state.hamburgerMenuOpen ? `
+            <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
+              <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
+              </button>
+              <button onclick="openNewFolderModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
+              </button>
+              <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
+              </button>
+              <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
+              </button>
+              <button onclick="openWebVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
+              </button>
+              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
+              </button>
+              <div class="h-px bg-zinc-800 my-1"></div>
+              <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
+                <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
+              </button>
+              <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
+              </button>
+              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
+              </button>
+            </div>
+          ` : ''}
+        </header>
 
-      attachDragAndResizeListeners();
-    }
+        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
+          ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
+          
+          ${state.activeUploads.length > 0 ? `
+            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
+              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
+                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
+                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                ${state.activeUploads.map(up => `
+                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="truncate font-medium text-white max-w-[70%]">${up.name}</span>
+                      <span class="text-amber-400 font-bold">${up.progress}%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
 
-    // CONTEXT MENU
-    function openContextMenu(e, id, isFolderItem, isBubbleItem) {
-      const menu = document.getElementById('context-menu');
-      const itemsContainer = document.getElementById('context-menu-items');
-      menu.style.left = e.clientX + 'px';
-      menu.style.top = e.clientY + 'px';
-      menu.classList.remove('hidden');
+          ${items.length === 0 && state.activeUploads.length === 0 ? `
+            <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
+              <span>Folder is empty</span>
+              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
+              </button>
+            </div>
+          ` : `
+            <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
+              ${items.map((item, index) => renderItem(item, index)).join('')}
+            </div>
+          `}
+        </main>
 
-      let html = `
-        <button onclick="resizeByFinger('${id}', ${isFolderItem})" class="px-4 py-2 hover:bg-purple-900/60 text-left flex items-center space-x-2">
-          <i class="fa-solid fa-expand text-purple-400 w-4"></i><span>Resize by finger</span>
-        </button>
-        <button onclick="snapToOriginalShape('${id}')" class="px-4 py-2 hover:bg-purple-900/60 text-left flex items-center space-x-2">
-          <i class="fa-solid fa-compress text-purple-400 w-4"></i><span>Snap to original shape</span>
-        </button>
-        <button onclick="renameItem('${id}', ${isFolderItem}, ${isBubbleItem})" class="px-4 py-2 hover:bg-purple-900/60 text-left flex items-center space-x-2">
-          <i class="fa-solid fa-pen text-purple-400 w-4"></i><span>Rename</span>
-        </button>
-        <button onclick="moveToFolder('${id}', ${isFolderItem}, ${isBubbleItem})" class="px-4 py-2 hover:bg-purple-900/60 text-left flex items-center space-x-2">
-          <i class="fa-solid fa-folder-tree text-purple-400 w-4"></i><span>Move to folder</span>
-        </button>
-        <button onclick="deleteItemConfirm('${id}', ${isFolderItem}, ${isBubbleItem})" class="px-4 py-2 hover:bg-red-950/60 text-left flex items-center space-x-2 text-red-300">
-          <i class="fa-solid fa-trash text-red-400 w-4"></i><span>Delete with confirmation</span>
-        </button>
+        ${state.selectMode ? `
+          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-4 flex-wrap justify-center">
+            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0">
+              <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
+              ${allChildrenSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            ${state.selectedIds.length > 0 ? `
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
+              <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move to folder</button>
+              <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+              <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        ${state.showUploadModal ? renderUploadModal() : ''}
+        ${state.linkModal ? renderLinkModal() : ''}
+        ${state.webVideoModal ? renderWebVideoModal() : ''}
+        ${state.appModal ? renderAppModal() : ''}
+        ${state.quickViewFileId ? renderQuickViewModal() : ''}
+        ${state.textEditorModal ? renderTextEditorModal() : ''}
+        ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
       `;
 
-      if (!isFolderItem && !isBubbleItem) {
-        html += `
-          <button onclick="changeImage('${id}')" class="px-4 py-2 hover:bg-purple-900/60 text-left flex items-center space-x-2">
-            <i class="fa-solid fa-image text-purple-400 w-4"></i><span>Change the image</span>
-          </button>
+      if (window.lucide) window.lucide.createIcons();
+      attachDragAndResizeListeners();
+      attachBulkDragListeners();
+    }
+
+    function getFileIcon(type, name) {
+      if (type === 'link' || name.startsWith('http')) return 'link';
+      if (type === 'web-video') return 'video';
+      if (type === 'app' || type === 'ios-app') return 'smartphone';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.mkv')) return 'video';
+      if (type.startsWith('audio/')) return 'music';
+      if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
+      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.html') || name.endsWith('.json') || name.endsWith('.csv')) return 'file-text';
+      if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'file-spreadsheet';
+      return 'file';
+    }
+
+    function bubbleInlineStyle(item) {
+      let style = '';
+      if (item.fontSize === 'lg') style += 'font-size:16px;';
+      else if (item.fontSize === 'sm') style += 'font-size:10px;';
+      else style += 'font-size:11px;';
+      if (item.isBold) style += 'font-weight:bold;';
+      if (item.isItalic) style += 'font-style:italic;';
+      if (item.isUnderline) style += 'text-decoration:underline;';
+      if (item.fontColor) style += `color:${item.fontColor};`;
+      if (item.align) style += `text-align:${item.align};`;
+      return style;
+    }
+
+    function renderItem(item, index) {
+      const col = index % 4;
+      const row = Math.floor(index / 4);
+      const posX = item.x !== undefined ? item.x : (20 + col * 140);
+      const posY = item.y !== undefined ? item.y : (20 + row * 160);
+      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
+      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
+      const folder = isFolder(item);
+      const bubble = isBubble(item);
+      const isMenuOpen = state.activeMenuId === item.id;
+      const isSelected = state.selectedIds.includes(item.id);
+
+      if (bubble) {
+        return `
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
+              <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
+            </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, false, true) : ''}
+          </div>
+        `;
+      } else if (folder) {
+        return `
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
+            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
+              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[20px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
+              <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
+              <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md">${item.name}</span>
+            </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, true) : ''}
+          </div>
+        `;
+      } else {
+        const type = item.fileType || '';
+        const isImage = type.startsWith('image/');
+        const isVideo = isVideoFile(item);
+        const isWebVideo = type === 'web-video';
+        const isLink = type === 'link';
+        const isApp = type === 'app' || type === 'ios-app';
+        const imgSrc = item.thumbnailData || item.dataUrl;
+        const icon = getFileIcon(type, item.name);
+
+        return `
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
+              <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
+                ${(isImage || ((isApp || isLink || isWebVideo) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                  <div class="flex flex-col items-center gap-1 text-zinc-400">
+                    <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
+                    ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
+                    ${isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Web Video</span>' : ''}
+                    ${isApp ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">iOS App</span>' : ''}
+                    ${isVideo && !isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
+                    ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
+                    ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
+                    ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
+                  </div>
+                `}
+                <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+                <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
+                <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md">${item.name}</span>
+              </div>
+            </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, false) : ''}
+          </div>
         `;
       }
-
-      itemsContainer.innerHTML = html;
     }
 
-    function closeMenu() {
-      document.getElementById('context-menu').classList.add('hidden');
-    }
-    window.addEventListener('click', closeMenu);
-
-    // Context Menu Actions
-    async function changeImage(id) {
-      closeMenu();
-      const file = state.files.find(f => f.id === id);
-      if (!file) return;
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async (e) => {
-        const f = e.target.files[0];
-        if (f) {
-          file.dataUrl = await fileToBase64(f);
-          file.rawBlob = f;
-          await saveFile(file);
-          render();
-          showToast('Image updated');
-        }
-      };
-      input.click();
-    }
-
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function renameItem(id, isFolderItem, isBubbleItem = false) {
-      closeMenu();
+    function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
       if (isBubbleItem) {
-        openTextEditorModal(id);
+        return `
+          <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
+            <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <button type="button" onclick="renameItem('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          </div>
+        `;
+      }
+      return `
+        <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+          ${isFolderItem ? `
+            <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
+            <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="moveToFolder('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          ` : `
+            <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
+            <button type="button" onclick="openTextEditorModal(null, '${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
+            <button type="button" onclick="copySingleFileClipboard('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Copy to Clipboard</button>
+            <button type="button" onclick="shareFile('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="share" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> iOS Share</button>
+            <button type="button" onclick="triggerChangeImage('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change Image</button>
+            <button type="button" onclick="renameItem('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="moveToFolder('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          `}
+        </div>
+      `;
+    }
+
+    function renderUploadModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeUploadModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Item</h3>
+            <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
+            <div class="flex flex-col gap-2.5 mt-2">
+              <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
+              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
+              <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
+              <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video / Embed</button>
+              <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
+              <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
+              <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
+            </div>
+            <button onclick="closeUploadModal()" class="text-xs text-zinc-500 hover:text-zinc-300 mt-2 font-medium">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLinkModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeLinkModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Web Link</h3>
+            <p class="text-xs text-zinc-400">Enter the URL and an optional display thumbnail.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="link-name-input" type="text" placeholder="Site Name (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Display Thumbnail</span>
+                <button type="button" onclick="document.getElementById('link-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.linkModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.linkModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.linkModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeLinkModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveLinkModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add Link</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderWebVideoModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeWebVideoModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Web Video / Embed</h3>
+            <p class="text-xs text-zinc-400">Enter a direct video URL, YouTube, Videa, Dailymotion link or embed code.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="web-video-url-input" type="text" placeholder="https://youtube.com/... or embed link" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="web-video-name-input" type="text" placeholder="Video Title (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Video Thumbnail</span>
+                <button type="button" onclick="document.getElementById('web-video-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.webVideoModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.webVideoModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.webVideoModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeWebVideoModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveWebVideoModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add Video</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPopupVideoModal() {
+      let embedHtml = '';
+      let url = state.popupVideoUrl || '';
+      
+      let ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      let dmMatch = url.match(/(?:dailymotion\.com\/(?:video\/|embed\/video\/)|dai\.ly\/)([\w-]+)/);
+      
+      if (ytMatch && ytMatch[1]) {
+        embedHtml = `<iframe class="w-full h-full" src="https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+      } else if (dmMatch && dmMatch[1]) {
+        embedHtml = `<iframe class="w-full h-full" src="https://www.dailymotion.com/embed/video/${dmMatch[1]}?autoplay=1" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+      } else if (url.includes('<iframe') || url.includes('<object')) {
+        embedHtml = url;
+      } else {
+        embedHtml = `<video id="popup-video-element" controls autoplay playsinline webkit-playsinline class="w-full h-full object-contain" src="${url}"></video>`;
+      }
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onclick="closePopupVideo()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden w-full max-w-3xl flex flex-col shadow-2xl relative" onclick="event.stopPropagation()">
+            <div class="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-bold text-amber-400 flex items-center gap-2"><i data-lucide="video" class="w-4 h-4"></i> Pop-up Video Player / Embed</span>
+              <button onclick="closePopupVideo()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="relative w-full bg-black flex items-center justify-center aspect-video">
+              ${embedHtml}
+            </div>
+            <div class="bg-zinc-950 px-4 py-3 border-t border-zinc-800 flex items-center justify-between text-xs">
+              <span class="text-zinc-400">Stream or Embed Player</span>
+              <button onclick="closePopupVideo()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl flex items-center gap-2">
+                Close Player
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function toggleVideoPip() {
+      const vid = document.getElementById('popup-video-element');
+      if (!vid) return;
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else if (vid.requestPictureInPicture) {
+          await vid.requestPictureInPicture();
+        } else {
+          alert('Picture-in-Picture is not supported in this browser.');
+        }
+      } catch (e) {
+        alert('PiP mode could not be activated: ' + e.message);
+      }
+    }
+
+    function renderAppModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAppModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add iOS Device App</h3>
+            <p class="text-xs text-zinc-400">Enter the custom iOS URL scheme or App Store deep link (e.g., <code class="text-amber-400">photos-redirect://</code> or <code class="text-amber-400">shortcuts://</code>).</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
+                <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.appModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.appModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.appModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeAppModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveAppModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add App</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return '';
+
+      const colorSwatches = ['#ffffff', '#fbbf24', '#f87171', '#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fdba74', '#000000'];
+      const aligns = [
+        { key: 'left', icon: 'align-left' },
+        { key: 'center', icon: 'align-center' },
+        { key: 'right', icon: 'align-right' }
+      ];
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 class="text-sm font-bold text-white">${ed.isNew ? 'New Text Bubble' : 'Edit Text Bubble'}</h3>
+              <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                ${aligns.map(a => `
+                  <button type="button" onclick="applyTextEditorFormat('align', '${a.key}')" class="p-1.5 rounded-md ${ed.align === a.key ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Align ${a.key}"><i data-lucide="${a.icon}" class="w-4 h-4"></i></button>
+                `).join('')}
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <label class="cursor-pointer relative" title="Font colour">
+                  <input type="color" value="${ed.fontColor || '#ffffff'}" oninput="applyTextEditorFormat('fontColor', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <span class="p-1.5 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="palette" class="w-4 h-4" style="color:${ed.fontColor || '#ffffff'}"></i></span>
+                </label>
+                ${colorSwatches.map(c => `
+                  <button type="button" onclick="applyTextEditorFormat('fontColor', '${c}')" class="w-5 h-5 rounded-full border ${ed.fontColor === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
+                `).join('')}
+                <button type="button" onclick="applyTextEditorFormat('fontColor', null)" class="p-1.5 rounded-md text-zinc-400 hover:bg-zinc-800" title="Reset colour"><i data-lucide="eraser" class="w-4 h-4"></i></button>
+              </div>
+            </div>
+
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal" style="${ed.isBold ? 'font-weight:bold;' : ''}${ed.isItalic ? 'font-style:italic;' : ''}${ed.isUnderline ? 'text-decoration:underline;' : ''}${ed.fontColor ? 'color:' + ed.fontColor + ';' : ''}${ed.align ? 'text-align:' + ed.align + ';' : ''}${ed.fontSize === 'lg' ? 'font-size:16px;' : ed.fontSize === 'sm' ? 'font-size:10px;' : 'font-size:11px;'}">${ed.text || ''}</textarea>
+
+            <p class="text-[10px] text-zinc-500 -mt-2">Tip: select text and tap a button to apply formatting to that selection only. With no selection it applies to the whole bubble.</p>
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveTextEditorModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Bubble</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderQuickViewContent(file) {
+      const type = file.fileType || '';
+      const name = file.name || '';
+      const mediaUrl = file.blobUrl || file.dataUrl;
+      const isVideo = isVideoFile(file);
+      const isLink = type === 'link';
+      const isApp = type === 'app' || type === 'ios-app';
+
+      if (isLink) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full shadow-2xl text-center">
+            <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="link" class="w-8 h-8"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
+            <a href="${file.dataUrl}" target="_blank" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20"><i data-lucide="external-link" class="w-4 h-4"></i> Open Web Link</a>
+          </div>
+        `;
+      }
+      if (isApp) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full shadow-2xl text-center">
+            <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="smartphone" class="w-8 h-8"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">Launch App: ${file.name}</span>
+            <p class="text-xs text-zinc-400">Scheme: <code class="text-amber-400">${file.dataUrl}</code></p>
+            <a href="${file.dataUrl}" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20"><i data-lucide="external-link" class="w-4 h-4"></i> Open on iOS Device</a>
+          </div>
+        `;
+      }
+      if (type.startsWith('image/')) return `<img src="${mediaUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
+      if (isVideo) return `<video controls playsinline webkit-playsinline class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isAudioFile(file)) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
+            <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
+            <audio controls class="w-full" src="${mediaUrl}"></audio>
+          </div>
+        `;
+      }
+      if (type === 'application/pdf' || name.endsWith('.pdf')) {
+        return `
+          <div class="w-[98vw] h-[92vh] max-w-7xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300 shrink-0">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-zinc-950 relative overflow-auto">
+              <embed src="${mediaUrl}#toolbar=1&view=FitH" type="application/pdf" width="100%" height="100%" class="w-full h-full border-0 bg-white" />
+            </div>
+          </div>
+        `;
+      }
+      if (name.endsWith('.html') || name.endsWith('.htm') || type === 'text/html') {
+        return `
+          <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-white relative">
+              <iframe src="${mediaUrl}" class="w-full h-full border-0"></iframe>
+            </div>
+          </div>
+        `;
+      }
+      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.json') || name.endsWith('.csv') || name.endsWith('.md')) {
+        return `
+          <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-zinc-950 p-4 overflow-auto">
+              <pre class="text-xs font-mono text-zinc-200 whitespace-pre-wrap select-text">${file.textContent || ''}</pre>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+          <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+            <span class="font-semibold truncate">${file.name}</span>
+            <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+          </div>
+          <div class="flex-1 w-full h-full bg-zinc-950 flex flex-col items-center justify-center p-8 text-center gap-4">
+            <i data-lucide="file-text" class="w-16 h-16 text-amber-400"></i>
+            <span class="text-sm font-semibold text-zinc-200">${file.name}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderQuickViewModal() {
+      const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
+      const file = currentFolderFiles[currentIndex];
+      if (!file) return '';
+
+      const hasPrev = currentIndex > 0;
+      const hasNext = currentIndex < currentFolderFiles.length - 1;
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
+          <div class="flex items-center justify-between text-zinc-300 pt-2 px-4 shrink-0" onclick="event.stopPropagation()">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold truncate max-w-[200px]">${file.name}</span>
+              <span class="text-xs text-zinc-500">(${currentIndex + 1} of ${currentFolderFiles.length})</span>
+            </div>
+            <button onclick="closeQuickView()" class="p-2 bg-zinc-900 border border-zinc-800 rounded-full hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+          </div>
+          <div class="flex-1 flex items-center justify-center overflow-hidden my-2 px-2 relative" onclick="event.stopPropagation()">
+            ${hasPrev ? `
+              <button onclick="navigateQuickView(-1)" class="absolute left-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Previous Media">
+                <i data-lucide="chevron-left" class="w-6 h-6"></i>
+              </button>
+            ` : ''}
+            ${renderQuickViewContent(file)}
+            ${hasNext ? `
+              <button onclick="navigateQuickView(1)" class="absolute right-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Next Media">
+                <i data-lucide="chevron-right" class="w-6 h-6"></i>
+              </button>
+            ` : ''}
+          </div>
+          <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 flex items-center justify-center gap-8 text-xs font-semibold text-zinc-200 shrink-0" onclick="event.stopPropagation()">
+            <button onclick="copySingleFileClipboard('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="copy" class="w-5 h-5"></i> Copy</button>
+            <button onclick="moveToFolder('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="folder-output" class="w-5 h-5"></i> Move to folder</button>
+            <button onclick="shareFile('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="share" class="w-5 h-5"></i> Share</button>
+            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 text-red-400 hover:text-red-300"><i data-lucide="trash-2" class="w-5 h-5"></i> Delete</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function navigateQuickView(direction) {
+      const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
+      if (currentIndex === -1) return;
+      const newIndex = currentIndex + direction;
+      if (newIndex >= 0 && newIndex < currentFolderFiles.length) {
+        state.quickViewFileId = currentFolderFiles[newIndex].id;
+        render();
+      }
+    }
+
+    function toggleSelectMode() { state.selectMode = !state.selectMode; state.selectedIds = []; closeMenu(); closeHamburgerMenu(); render(); }
+    function toggleSelectAll() {
+      const items = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+      const allSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
+      state.selectedIds = allSelected ? [] : items.map(item => item.id);
+      render();
+    }
+
+    function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
+      if (state.selectMode) {
+        state.selectedIds = state.selectedIds.includes(id) ? state.selectedIds.filter(i => i !== id) : [...state.selectedIds, id];
+        render();
         return;
       }
-      let item = isFolderItem ? state.folders.find(f => f.id === id) : state.files.find(f => f.id === id);
-      if (!item) return;
-      const newName = prompt('Enter new name:', item.name);
-      if (newName !== null && newName.trim() !== '') {
-        item.name = newName.trim();
-        if (isFolderItem) await saveFolder(item);
-        else await saveFile(item);
-        render();
-      }
-    }
-
-    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
-      closeMenu();
-      let item = isFolderItem ? state.folders.find(f => f.id === id) : (isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id));
-      if (!item) return;
-
-      let msg = "Select destination folder:\n- Main Desktop (root)\n";
-      const allFolders = state.folders.filter(f => f.id !== 'root' && f.id !== id);
-      allFolders.forEach(f => {
-        msg += `- ${f.name} (ID: ${f.id})\n`;
-      });
-      const input = prompt(msg + "\nEnter the Folder ID or type 'root' for Main Desktop:", "root");
-      if (input === null) return;
-      const actualParent = (input.trim() === '' || input.trim().toLowerCase() === 'root') ? null : input.trim();
-      item.parentId = actualParent;
-
-      if (isFolderItem) await saveFolder(item);
-      else if (isBubbleItem) await saveTextBubble(item);
-      else await saveFile(item);
-      render();
-    }
-
-    function resizeByFinger(id, isFolderItem) {
-      closeMenu();
-      const item = isFolderItem ? state.folders.find(f => f.id === id) : state.files.find(f => f.id === id);
-      if (!item) return;
-      const w = prompt('Enter width in pixels (e.g. 120, 180, 240):', item.width || (isFolderItem ? 96 : 112));
-      const h = prompt('Enter height in pixels (e.g. 120, 180, 240):', item.height || (isFolderItem ? 96 : 144));
-      if (w !== null && h !== null) {
-        item.width = parseInt(w) || (isFolderItem ? 96 : 112);
-        item.height = parseInt(h) || (isFolderItem ? 96 : 144);
-        if (isFolderItem) saveFolder(item);
-        else saveFile(item);
-        render();
-      }
-    }
-
-    async function snapToOriginalShape(id) {
-      closeMenu();
-      let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-      if (!item) return;
-      if (isFolder(item)) {
-        item.width = 96; item.height = 96;
-        await saveFolder(item);
-      } else if (isBubble(item)) {
-        item.width = 140; item.height = 80;
-        await saveTextBubble(item);
-      } else {
-        item.width = 112; item.height = 144;
-        await saveFile(item);
-      }
-      render();
-    }
-
-    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
-      closeMenu();
-      let item = isFolderItem ? state.folders.find(f => f.id === id) : (isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id));
-      if (!item) return;
-      if (!confirm(`Are you sure you want to delete "${item.name || 'this item'}"?`)) return;
-
-      state.folders = state.folders.filter(f => f.id !== id);
-      state.files = state.files.filter(f => f.id !== id);
-      state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-
-      await deleteFromDB('folders', id);
-      await deleteFromDB('files', id);
-      await deleteFromDB('textBubbles', id);
-      render();
-      showToast('Item deleted');
-    }
-
-    function openNewFolderModal() {
-      const name = prompt('Enter new folder name:', 'New Folder');
-      if (name && name.trim()) {
-        let allExisting = [
-          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
-          ...state.files.filter(f => f.parentId === state.currentFolderId),
-          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
-        ];
-        let posX = 20, posY = 20;
-        if (allExisting.length > 0) {
-          const last = allExisting[allExisting.length - 1];
-          posX = (last.x !== undefined ? last.x : 20) + (last.width || 96) + 24;
-          posY = last.y !== undefined ? last.y : 20;
-          if (posX > 1000) { posX = 20; posY += 160; }
+      if (isFolderItem) navigateTo(id);
+      else if (isBubbleItem) openTextEditorModal(id);
+      else {
+        const file = state.files.find(f => f.id === id);
+        if (file && file.fileType === 'web-video') {
+          state.popupVideoUrl = file.dataUrl;
+          render();
+        } else if (file && (file.fileType === 'link' || file.fileType === 'ios-app')) {
+          window.open(file.dataUrl, '_blank');
+        } else {
+          openQuickView(id);
         }
-        const newFolder = {
-          id: uid(),
-          name: name.trim(),
-          parentId: state.currentFolderId,
-          x: posX,
-          y: posY,
-          width: 96,
-          height: 96
-        };
-        state.folders.push(newFolder);
-        saveFolder(newFolder);
+      }
+    }
+
+    function openUploadModal() { state.showUploadModal = true; render(); }
+    function closeUploadModal() { state.showUploadModal = false; render(); }
+    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    function closeQuickView() { state.quickViewFileId = null; render(); }
+    function closePopupVideo() { state.popupVideoUrl = null; render(); }
+    function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    function navigateBack() {
+      if (state.currentFolderId === null) return;
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      if (currentFolder) {
+        state.currentFolderId = currentFolder.parentId;
+      } else {
+        state.currentFolderId = null;
+      }
+      closeMenu();
+      closeHamburgerMenu();
+      render();
+    }
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      closeMenu();
+      closeHamburgerMenu();
+      render();
+    }
+    function toggleMenu(e, id) {
+      e.stopPropagation();
+      state.activeMenuId = state.activeMenuId === id ? null : id;
+      render();
+    }
+    function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
+
+    function toggleHamburgerMenu(e) {
+      e.stopPropagation();
+      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
+      render();
+    }
+    function closeHamburgerMenu() {
+      if (state.hamburgerMenuOpen) {
+        state.hamburgerMenuOpen = false;
         render();
       }
     }
 
-    // Text Bubble Modal & Editing
-    let activeBubbleId = null;
-    function openTextEditorModal(bubbleId = null) {
-      activeBubbleId = bubbleId;
-      const modal = document.getElementById('text-editor-modal');
-      const titleInput = document.getElementById('text-bubble-title');
-      const contentInput = document.getElementById('text-bubble-content');
-      const titleModal = document.getElementById('text-modal-title');
+    function forcePullCloudData() { syncWithGitHub(true); }
 
+    function openTextEditorModal(bubbleId = null, referenceItemId = null) {
+      closeMenu();
+      closeHamburgerMenu();
       if (bubbleId) {
         const bubble = state.textBubbles.find(b => b.id === bubbleId);
         if (bubble) {
-          titleModal.textContent = 'Edit Text Bubble';
-          titleInput.value = bubble.name || '';
-          contentInput.value = bubble.content || '';
+          state.textEditorModal = {
+            id: bubble.id,
+            text: bubble.text || '',
+            fontSize: bubble.fontSize || 'md',
+            isBold: !!bubble.isBold,
+            isItalic: !!bubble.isItalic,
+            isUnderline: !!bubble.isUnderline,
+            fontColor: bubble.fontColor || null,
+            align: bubble.align || null,
+            isNew: false
+          };
         }
       } else {
-        titleModal.textContent = 'Gothic Text Bubble';
-        titleInput.value = '';
-        contentInput.value = '';
+        state.textEditorModal = {
+          id: null,
+          text: '',
+          fontSize: 'md',
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          fontColor: null,
+          align: null,
+          isNew: true,
+          referenceItemId: referenceItemId
+        };
       }
-      modal.classList.remove('hidden');
+      render();
+      setTimeout(() => {
+        const ta = document.getElementById('modal-text-input');
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+      }, 50);
     }
 
     function closeTextEditorModal() {
-      document.getElementById('text-editor-modal').classList.add('hidden');
-      activeBubbleId = null;
+      state.textEditorModal = null;
+      render();
     }
 
-    async function saveTextBubbleModal() {
-      const title = document.getElementById('text-bubble-title').value.trim() || 'Note';
-      const content = document.getElementById('text-bubble-content').value;
+    function updateTextEditorContent(val) {
+      if (state.textEditorModal) {
+        state.textEditorModal.text = val;
+      }
+    }
 
-      if (activeBubbleId) {
-        const bubble = state.textBubbles.find(b => b.id === activeBubbleId);
-        if (bubble) {
-          bubble.name = title;
-          bubble.content = content;
-          await saveTextBubble(bubble);
-        }
+    function applyTextEditorFormat(formatKey, value = null) {
+      if (!state.textEditorModal) return;
+      const ta = document.getElementById('modal-text-input');
+      if (!ta) return;
+
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = ta.value;
+      const hasSelection = start !== end;
+
+      if (formatKey === 'fontSize') {
+        state.textEditorModal.fontSize = value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'align') {
+        state.textEditorModal.align = state.textEditorModal.align === value ? null : value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'fontColor') {
+        state.textEditorModal.fontColor = value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+
+      if (hasSelection) {
+        const selectedText = text.substring(start, end);
+        let wrapped = selectedText;
+        if (formatKey === 'isBold') wrapped = `**${selectedText}**`;
+        else if (formatKey === 'isItalic') wrapped = `*${selectedText}*`;
+        else if (formatKey === 'isUnderline') wrapped = `__${selectedText}__`;
+
+        ta.value = text.substring(0, start) + wrapped + text.substring(end);
+        state.textEditorModal.text = ta.value;
+        ta.focus();
+        ta.setSelectionRange(start + wrapped.length, start + wrapped.length);
       } else {
+        if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
+        if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
+        if (formatKey === 'isUnderline') state.textEditorModal.isUnderline = !state.textEditorModal.isUnderline;
+        render();
+        setTimeout(() => {
+          const newTa = document.getElementById('modal-text-input');
+          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
+        }, 30);
+      }
+    }
+
+    async function saveTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+      const textVal = ed.text.trim();
+      if (!textVal) {
+        alert('Please enter some text for the bubble.');
+        return;
+      }
+
+      const lines = textVal.split('\n').length + Math.floor(textVal.length / 22);
+      const dynamicHeight = Math.max(80, lines * 22);
+
+      if (ed.isNew) {
         let allExisting = [
           ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
           ...state.files.filter(f => f.parentId === state.currentFolderId),
           ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
         ];
+
         let posX = 20, posY = 20;
-        if (allExisting.length > 0) {
-          const last = allExisting[allExisting.length - 1];
-          posX = (last.x !== undefined ? last.x : 20) + (last.width || 140) + 24;
-          posY = last.y !== undefined ? last.y : 20;
+        if (ed.referenceItemId) {
+          const refItem = allExisting.find(i => i.id === ed.referenceItemId);
+          if (refItem && refItem.x !== undefined && refItem.y !== undefined) {
+            posX = refItem.x + (refItem.width || 140) + 24;
+            posY = refItem.y;
+          }
+        } else if (allExisting.length > 0) {
+          const lastItem = allExisting[allExisting.length - 1];
+          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+          const lastW = lastItem.width || 140;
+          posX = lastX + lastW + 24;
+          posY = lastY;
+          if (posX > 1000) { posX = 20; posY = lastY + 160; }
         }
-        const newBubble = {
+
+        const bubble = {
           id: uid(),
-          name: title,
-          content: content,
+          isBubble: true,
+          text: textVal,
           parentId: state.currentFolderId,
           x: posX,
           y: posY,
           width: 140,
-          height: 80
+          height: dynamicHeight,
+          fontSize: ed.fontSize,
+          isBold: ed.isBold,
+          isItalic: ed.isItalic,
+          isUnderline: ed.isUnderline,
+          fontColor: ed.fontColor,
+          align: ed.align
         };
-        state.textBubbles.push(newBubble);
-        await saveTextBubble(newBubble);
+        state.textBubbles.push(bubble);
+        await saveTextBubble(bubble);
+      } else {
+        const bubble = state.textBubbles.find(b => b.id === ed.id);
+        if (bubble) {
+          bubble.text = textVal;
+          bubble.height = dynamicHeight;
+          bubble.fontSize = ed.fontSize;
+          bubble.isBold = ed.isBold;
+          bubble.isItalic = ed.isItalic;
+          bubble.isUnderline = ed.isUnderline;
+          bubble.fontColor = ed.fontColor;
+          bubble.align = ed.align;
+          await saveTextBubble(bubble);
+        }
       }
-      closeTextEditorModal();
+
+      state.textEditorModal = null;
       render();
-      showToast('Text bubble saved');
     }
 
-    // Link, Video & App Modals
-    function openLinkModal() { state.linkModal = true; state.linkModalThumbData = null; document.getElementById('link-modal').classList.remove('hidden'); }
-    function closeLinkModal() { state.linkModal = false; state.linkModalThumbData = null; document.getElementById('link-modal').classList.add('hidden'); }
+    function buildFolderSelectionPrompt() {
+      let msg = "Select destination folder:\n- Main Desktop (root)\n";
+      const allFolders = state.folders.filter(f => f.id !== 'root');
+      allFolders.forEach(f => {
+        msg += `- ${f.name} (ID: ${f.id})\n`;
+      });
+      const input = prompt(msg + "\nEnter the Folder ID or type 'root' for Main Desktop:", "root");
+      if (input === null) return null;
+      if (input.trim() === '' || input.trim().toLowerCase() === 'root') return null;
+      return input.trim();
+    }
+
+    async function bulkDelete() {
+      if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
+      for (let id of state.selectedIds) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        state.files = state.files.filter(f => f.id !== id);
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('folders', id);
+        await deleteFromDB('files', id);
+        await deleteFromDB('textBubbles', id);
+      }
+      state.selectedIds = [];
+      render();
+    }
+
+    async function bulkMove() {
+      const targetId = buildFolderSelectionPrompt();
+      if (targetId !== undefined) {
+        const actualParent = targetId;
+        for (let id of state.selectedIds) {
+          let f = state.folders.find(item => item.id === id);
+          let fi = state.files.find(item => item.id === id);
+          let b = state.textBubbles.find(item => item.id === id);
+          if (f) { f.parentId = actualParent; await saveFolder(f); }
+          if (fi) { fi.parentId = actualParent; await saveFile(fi); }
+          if (b) { b.parentId = actualParent; await saveTextBubble(b); }
+        }
+        state.selectedIds = [];
+        render();
+      }
+    }
+
+    async function bulkCopy() {
+      const targetId = buildFolderSelectionPrompt();
+      const actualParent = targetId !== undefined ? targetId : null;
+      for (let id of state.selectedIds) {
+        let file = state.files.find(f => f.id === id);
+        if (file) {
+          const newFile = { ...file, id: uid(), name: file.name + ' (Copy)', parentId: actualParent };
+          delete newFile.x; delete newFile.y; delete newFile.blobUrl;
+          if (isVideoFile(newFile) && newFile.fileType !== 'web-video') await getOrCreateBlobUrl(newFile);
+          state.files.push(newFile);
+          await saveFile(newFile);
+        }
+        let folder = state.folders.find(f => f.id === id);
+        if (folder) {
+          const newFolder = { ...folder, id: uid(), name: folder.name + ' (Copy)', parentId: actualParent };
+          delete newFolder.x; delete newFolder.y;
+          state.folders.push(newFolder);
+          await saveFolder(newFolder);
+        }
+      }
+      alert(`Successfully copied ${state.selectedIds.length} items!`);
+      state.selectedIds = [];
+      render();
+    }
+
+    async function bulkShare() {
+      for (let id of state.selectedIds) {
+        await shareFile(id, true);
+      }
+    }
+
+    async function copySingleFileClipboard(id) {
+      const file = state.files.find(f => f.id === id);
+      if (!file) return;
+
+      try {
+        if ((file.fileType === 'link' || file.fileType === 'ios-app' || file.fileType === 'web-video') && navigator.clipboard) {
+          await navigator.clipboard.writeText(file.dataUrl);
+          alert('URL scheme/link copied to clipboard successfully!');
+          closeMenu();
+          render();
+          return;
+        }
+        if (file.blobUrl && navigator.clipboard && window.ClipboardItem) {
+          const res = await fetch(file.blobUrl);
+          const blob = await res.blob();
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          alert('File copied to clipboard successfully!');
+          closeMenu();
+          render();
+          return;
+        }
+        if (file.textContent && navigator.clipboard) {
+          await navigator.clipboard.writeText(file.textContent);
+          alert('Text content copied to clipboard successfully!');
+          closeMenu();
+          render();
+          return;
+        }
+      } catch (e) {
+        console.warn('Direct clipboard API restricted', e);
+      }
+
+      const newFile = { ...file, id: uid(), name: file.name + ' (Copy)' };
+      delete newFile.x; delete newFile.y; delete newFile.blobUrl;
+      if (isVideoFile(newFile) && newFile.fileType !== 'web-video') {
+        await getOrCreateBlobUrl(newFile);
+      }
+      state.files.push(newFile);
+      await saveFile(newFile);
+      alert('Copied file successfully inside Aiden Files!');
+      closeMenu();
+      render();
+    }
+
+    async function shareFile(id, isBulk = false) {
+      const file = state.files.find(f => f.id === id);
+      if (!file) return;
+      const mediaUrl = file.blobUrl || file.dataUrl;
+      if (file.fileType === 'link' || file.fileType === 'ios-app' || file.fileType === 'web-video') {
+        if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: file.dataUrl });
+        else alert('Sharing is not supported on this device.');
+        if (!isBulk) closeMenu();
+        return;
+      }
+      if (navigator.canShare && mediaUrl) {
+        try {
+          const res = await fetch(mediaUrl);
+          const blob = await res.blob();
+          const nativeFile = new File([blob], file.name, { type: file.fileType || blob.type });
+          if (navigator.canShare({ files: [nativeFile] })) {
+            await navigator.share({ files: [nativeFile], title: file.name });
+            if (!isBulk) closeMenu();
+            return;
+          }
+        } catch (e) {}
+      }
+      if (navigator.share) await navigator.share({ title: file.name, text: file.name, url: mediaUrl });
+      else if (!isBulk) alert('Sharing is not supported on this device.');
+      if (!isBulk) closeMenu();
+    }
+
+    function triggerFolderCover(id) { state.targetFolderCoverId = id; document.getElementById('folder-cover-input').click(); closeMenu(); }
+    document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file && state.targetFolderCoverId) {
+        const base64 = await fileToBase64(file);
+        const folder = state.folders.find(f => f.id === state.targetFolderCoverId);
+        if (folder) { folder.coverUrl = base64; await saveFolder(folder); render(); }
+      }
+    });
+
+    function triggerChangeImage(id) { state.targetChangeImageId = id; document.getElementById('change-image-input').click(); closeMenu(); }
+    document.getElementById('change-image-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file && state.targetChangeImageId) {
+        const base64 = await fileToBase64(file);
+        const item = state.files.find(f => f.id === state.targetChangeImageId);
+        if (item) {
+          if (item.fileType === 'ios-app' || item.fileType === 'link' || item.fileType === 'web-video') {
+            item.thumbnailData = base64;
+          } else {
+            item.dataUrl = base64;
+            if (isVideoFile(item) && item.fileType !== 'web-video') { item.blobUrl = ''; await getOrCreateBlobUrl(item); }
+          }
+          await saveFile(item);
+          render();
+        }
+      }
+    });
+
+    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.linkModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.webVideoModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.appModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    function openLinkModal() {
+      state.linkModal = true;
+      state.linkModalThumbData = null;
+      render();
+    }
+    function closeLinkModal() {
+      state.linkModal = false;
+      state.linkModalThumbData = null;
+      render();
+    }
     async function saveLinkModal() {
       const urlInput = document.getElementById('link-url-input');
       const nameInput = document.getElementById('link-name-input');
-      if (!urlInput || !urlInput.value.trim()) { alert('Please enter a valid URL.'); return; }
+      if (!urlInput) return;
       let url = urlInput.value.trim();
-      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
-      let name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : url;
+      if (!url) {
+        alert('Please enter a valid URL.');
+        return;
+      }
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) {
+        try {
+          const parsed = new URL(url);
+          name = parsed.hostname;
+        } catch (e) {
+          name = 'Web Link';
+        }
+      }
 
       let allExisting = [
         ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
@@ -962,12 +1501,13 @@
       ];
       let posX = 20, posY = 20;
       if (allExisting.length > 0) {
-        const last = allExisting[allExisting.length - 1];
-        posX = (last.x !== undefined ? last.x : 20) + (last.width || 112) + 24;
-        posY = last.y !== undefined ? last.y : 20;
+        const lastItem = allExisting[allExisting.length - 1];
+        posX = (lastItem.x !== undefined ? lastItem.x : 20) + (lastItem.width || 112) + 24;
+        posY = lastItem.y !== undefined ? lastItem.y : 20;
+        if (posX > 1000) { posX = 20; posY = lastItem.y + 160; }
       }
 
-      const newFile = {
+      const fileObj = {
         id: uid(),
         name: name,
         fileType: 'link',
@@ -979,21 +1519,33 @@
         width: 112,
         height: 144
       };
-      state.files.push(newFile);
-      await saveFile(newFile);
+      state.files.push(fileObj);
+      await saveFile(fileObj);
       closeLinkModal();
       render();
-      showToast('Web link added');
     }
 
-    function openWebVideoModal() { state.webVideoModal = true; state.webVideoModalThumbData = null; document.getElementById('web-video-modal').classList.remove('hidden'); }
-    function closeWebVideoModal() { state.webVideoModal = false; state.webVideoModalThumbData = null; document.getElementById('web-video-modal').classList.add('hidden'); }
+    function openWebVideoModal() {
+      state.webVideoModal = true;
+      state.webVideoModalThumbData = null;
+      render();
+    }
+    function closeWebVideoModal() {
+      state.webVideoModal = false;
+      state.webVideoModalThumbData = null;
+      render();
+    }
     async function saveWebVideoModal() {
       const urlInput = document.getElementById('web-video-url-input');
       const nameInput = document.getElementById('web-video-name-input');
-      if (!urlInput || !urlInput.value.trim()) { alert('Please enter a video URL or embed code.'); return; }
+      if (!urlInput) return;
       let url = urlInput.value.trim();
-      let name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Web Video';
+      if (!url) {
+        alert('Please enter a video link or embed.');
+        return;
+      }
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) name = 'Web Video';
 
       let allExisting = [
         ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
@@ -1002,12 +1554,13 @@
       ];
       let posX = 20, posY = 20;
       if (allExisting.length > 0) {
-        const last = allExisting[allExisting.length - 1];
-        posX = (last.x !== undefined ? last.x : 20) + (last.width || 112) + 24;
-        posY = last.y !== undefined ? last.y : 20;
+        const lastItem = allExisting[allExisting.length - 1];
+        posX = (lastItem.x !== undefined ? lastItem.x : 20) + (lastItem.width || 112) + 24;
+        posY = lastItem.y !== undefined ? lastItem.y : 20;
+        if (posX > 1000) { posX = 20; posY = lastItem.y + 160; }
       }
 
-      const newFile = {
+      const fileObj = {
         id: uid(),
         name: name,
         fileType: 'web-video',
@@ -1019,21 +1572,33 @@
         width: 112,
         height: 144
       };
-      state.files.push(newFile);
-      await saveFile(newFile);
+      state.files.push(fileObj);
+      await saveFile(fileObj);
       closeWebVideoModal();
       render();
-      showToast('Web video added');
     }
 
-    function openAppModal() { state.appModal = true; state.appModalThumbData = null; document.getElementById('app-modal').classList.remove('hidden'); }
-    function closeAppModal() { state.appModal = false; state.appModalThumbData = null; document.getElementById('app-modal').classList.add('hidden'); }
+    function openAppModal() {
+      state.appModal = true;
+      state.appModalThumbData = null;
+      render();
+    }
+    function closeAppModal() {
+      state.appModal = false;
+      state.appModalThumbData = null;
+      render();
+    }
     async function saveAppModal() {
       const schemeInput = document.getElementById('app-scheme-input');
       const nameInput = document.getElementById('app-name-input');
-      if (!schemeInput || !schemeInput.value.trim()) { alert('Please enter an app scheme or deep link URL.'); return; }
+      if (!schemeInput) return;
       let scheme = schemeInput.value.trim();
-      let name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'iOS App';
+      if (!scheme) {
+        alert('Please enter an app URL scheme.');
+        return;
+      }
+      let name = nameInput ? nameInput.value.trim() : '';
+      if (!name) name = 'iOS App';
 
       let allExisting = [
         ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
@@ -1042,12 +1607,13 @@
       ];
       let posX = 20, posY = 20;
       if (allExisting.length > 0) {
-        const last = allExisting[allExisting.length - 1];
-        posX = (last.x !== undefined ? last.x : 20) + (last.width || 112) + 24;
-        posY = last.y !== undefined ? last.y : 20;
+        const lastItem = allExisting[allExisting.length - 1];
+        posX = (lastItem.x !== undefined ? lastItem.x : 20) + (lastItem.width || 112) + 24;
+        posY = lastItem.y !== undefined ? lastItem.y : 20;
+        if (posX > 1000) { posX = 20; posY = lastItem.y + 160; }
       }
 
-      const newFile = {
+      const fileObj = {
         id: uid(),
         name: name,
         fileType: 'ios-app',
@@ -1059,165 +1625,183 @@
         width: 112,
         height: 144
       };
-      state.files.push(newFile);
-      await saveFile(newFile);
+      state.files.push(fileObj);
+      await saveFile(fileObj);
       closeAppModal();
       render();
-      showToast('iOS app shortcut added');
     }
 
-    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) state.linkModalThumbData = await fileToBase64(file);
-    });
-    document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) state.webVideoModalThumbData = await fileToBase64(file);
-    });
-    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) state.appModalThumbData = await fileToBase64(file);
-    });
-
-    // File Viewer
-    async function openFileViewer(file) {
-      const modal = document.getElementById('file-viewer-modal');
-      document.getElementById('viewer-title').textContent = file.name;
-      const contentContainer = document.getElementById('viewer-content');
-      const downloadBtn = document.getElementById('viewer-download');
-
-      const blobUrl = await getOrCreateBlobUrl(file);
-      downloadBtn.href = blobUrl;
-      downloadBtn.download = file.name;
-
-      let html = '';
-      if (file.fileType === 'link') {
-        html = `<div class="text-center space-y-4">
-          <p class="text-purple-200">Open external link:</p>
-          <a href="${file.dataUrl}" target="_blank" class="px-6 py-3 rounded-xl bg-purple-700 hover:bg-purple-600 text-white font-semibold inline-block shadow-lg">${file.dataUrl}</a>
-        </div>`;
-      } else if (file.fileType === 'web-video') {
-        html = `<div class="w-full h-full flex items-center justify-center">
-          <iframe src="${file.dataUrl}" class="w-full h-[500px] rounded-xl border border-purple-500/30" allowfullscreen></iframe>
-        </div>`;
-      } else if (file.fileType === 'ios-app') {
-        html = `<div class="text-center space-y-4">
-          <p class="text-purple-200">Launch iOS App / Shortcut:</p>
-          <a href="${file.dataUrl}" class="px-6 py-3 rounded-xl bg-purple-700 hover:bg-purple-600 text-white font-semibold inline-block shadow-lg">Open ${file.name}</a>
-        </div>`;
-      } else if (isImageFile(file)) {
-        html = `<img src="${blobUrl}" class="max-w-full max-h-full object-contain rounded-lg">`;
-      } else if (isVideoFile(file)) {
-        html = `<video src="${blobUrl}" controls class="max-w-full max-h-full rounded-lg"></video>`;
-      } else if (isAudioFile(file)) {
-        html = `<audio src="${blobUrl}" controls class="w-96"></audio>`;
-      } else if (file.textContent !== undefined) {
-        html = `<pre class="w-full h-full text-xs text-purple-200 font-mono whitespace-pre-wrap p-4 bg-purple-950/40 rounded-xl border border-purple-900/50">${file.textContent}</pre>`;
-      } else {
-        html = `<div class="text-center space-y-4">
-          <p class="text-purple-300">Preview not available for this file type.</p>
-          <a href="${blobUrl}" download="${file.name}" class="px-6 py-3 rounded-xl bg-purple-700 text-white font-semibold inline-block">Download File</a>
-        </div>`;
-      }
-
-      contentContainer.innerHTML = html;
-      modal.classList.remove('hidden');
-    }
-
-    function closeFileViewer() {
-      document.getElementById('file-viewer-modal').classList.add('hidden');
-      document.getElementById('viewer-content').innerHTML = '';
-    }
-
-    // Save & Load State File Export/Import
-    function saveArchiveState() {
-      const data = {
-        folders: state.folders,
-        files: state.files.map(f => ({ ...f, rawBlob: undefined })),
-        textBubbles: state.textBubbles
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'gothic-archive-backup.json';
-      a.click();
-      showToast('Archive backup saved');
-    }
-
-    function loadArchiveState() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        try {
-          const text = await file.text();
-          const data = JSON.parse(text);
-          if (data.folders && data.files && data.textBubbles) {
-            state.folders = data.folders;
-            state.files = data.files;
-            state.textBubbles = data.textBubbles;
-            
-            // Clear & repopulate DB
-            if (!db) await initDB();
-            const tx = db.transaction(['folders', 'files', 'textBubbles'], 'readwrite');
-            tx.objectStore('folders').clear();
-            tx.objectStore('files').clear();
-            tx.objectStore('textBubbles').clear();
-
-            for (let f of state.folders) await saveFolder(f);
-            for (let fi of state.files) await saveFile(fi);
-            for (let tb of state.textBubbles) await saveTextBubble(tb);
-
-            state.currentFolderId = 'root';
-            state.folderPath = [];
-            document.getElementById('breadcrumb-display').textContent = 'Main Desktop';
-            document.getElementById('back-btn').disabled = true;
-
-            render();
-            showToast('Archive loaded successfully');
-          }
-        } catch (err) {
-          alert('Invalid backup file.');
-        }
-      };
-      input.click();
-    }
-
-    // File Upload Handler
-    async function handleFilesUpload(fileList) {
-      if (!fileList || fileList.length === 0) return;
+    async function openNewFolderModal() {
+      const name = prompt('Enter new folder name:', 'New Folder');
+      if (!name) return;
       let allExisting = [
         ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
         ...state.files.filter(f => f.parentId === state.currentFolderId),
         ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
       ];
+      let posX = 20, posY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        posX = (lastItem.x !== undefined ? lastItem.x : 20) + (lastItem.width || 96) + 24;
+        posY = lastItem.y !== undefined ? lastItem.y : 20;
+        if (posX > 1000) { posX = 20; posY = lastItem.y + 160; }
+      }
 
-      for (let i = 0; i < fileList.length; i++) {
-        const f = fileList[i];
+      const newFolder = {
+        id: uid(),
+        name: name.trim(),
+        parentId: state.currentFolderId,
+        x: posX,
+        y: posY,
+        width: 96,
+        height: 96
+      };
+      state.folders.push(newFolder);
+      await saveFolder(newFolder);
+      render();
+    }
+
+    async function renameItem(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      if (isBubbleItem) {
+        openTextEditorModal(id);
+        return;
+      }
+      if (isFolderItem) {
+        const folder = state.folders.find(f => f.id === id);
+        if (!folder) return;
+        const newName = prompt('Rename folder:', folder.name);
+        if (newName !== null && newName.trim() !== '') {
+          folder.name = newName.trim();
+          await saveFolder(folder);
+          render();
+        }
+      } else {
+        const file = state.files.find(f => f.id === id);
+        if (!file) return;
+        const newName = prompt('Rename file:', file.name);
+        if (newName !== null && newName.trim() !== '') {
+          file.name = newName.trim();
+          await saveFile(file);
+          render();
+        }
+      }
+    }
+
+    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      const targetId = buildFolderSelectionPrompt();
+      if (targetId !== undefined) {
+        const actualParent = targetId;
+        if (isBubbleItem) {
+          const b = state.textBubbles.find(item => item.id === id);
+          if (b) { b.parentId = actualParent; await saveTextBubble(b); }
+        } else if (isFolderItem) {
+          const f = state.folders.find(item => item.id === id);
+          if (f) { f.parentId = actualParent; await saveFolder(f); }
+        } else {
+          const fi = state.files.find(item => item.id === id);
+          if (fi) { fi.parentId = actualParent; await saveFile(fi); }
+        }
+        render();
+      }
+    }
+
+    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      if (!confirm('Are you sure you want to delete this item?')) return;
+      if (isBubbleItem) {
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('textBubbles', id);
+      } else if (isFolderItem) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        await deleteFromDB('folders', id);
+      } else {
+        state.files = state.files.filter(f => f.id !== id);
+        await deleteFromDB('files', id);
+      }
+      render();
+    }
+
+    function resizeByFinger(id, isFolderItem) {
+      closeMenu();
+      state.editMode = true;
+      render();
+      setTimeout(() => {
+        const el = document.getElementById(`item-${id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+          el.classList.add('ring-4', 'ring-yellow-400', 'transition-all');
+          setTimeout(() => el.classList.remove('ring-4', 'ring-yellow-400'), 1500);
+        }
+      }, 100);
+      alert('Edit Mode is now ON. Drag the bottom-right corner handle on the item to resize it freely by finger.');
+    }
+
+    async function snapToOriginalShape(id) {
+      closeMenu();
+      let f = state.folders.find(item => item.id === id);
+      let fi = state.files.find(item => item.id === id);
+      let b = state.textBubbles.find(item => item.id === id);
+
+      if (f) { f.width = 96; f.height = 96; await saveFolder(f); }
+      if (fi) { fi.width = 112; fi.height = 144; await saveFile(fi); }
+      if (b) {
+        b.width = 140;
+        const lines = (b.text || '').split('\n').length + Math.floor((b.text || '').length / 22);
+        b.height = Math.max(80, lines * 22);
+        await saveTextBubble(b);
+      }
+      render();
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const uploadedFiles = e.target.files;
+      if (!uploadedFiles || uploadedFiles.length === 0) return;
+
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        const upId = uid();
+        state.activeUploads.push({ id: upId, name: file.name, progress: 10 });
+        render();
+
         try {
-          const base64 = await fileToBase64(f);
+          const base64 = await fileToBase64(file);
+          state.activeUploads = state.activeUploads.map(u => u.id === upId ? { ...u, progress: 60 } : u);
+          render();
+
           let textContent = '';
-          if (f.type.startsWith('text/') || f.name.match(/\.(txt|html|json|csv|md)$/i)) {
-            try { textContent = await f.text(); } catch (err) {}
+          if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.html') || file.name.endsWith('.json') || file.name.endsWith('.csv')) {
+            try { textContent = await file.text(); } catch (err) {}
           }
 
+          let allExisting = [
+            ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+            ...state.files.filter(f => f.parentId === state.currentFolderId),
+            ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+          ];
           let posX = 20, posY = 20;
           if (allExisting.length > 0) {
-            const last = allExisting[allExisting.length - 1];
-            posX = (last.x !== undefined ? last.x : 20) + (last.width || 112) + 24;
-            posY = last.y !== undefined ? last.y : 20;
-            if (posX > 1000) { posX = 20; posY += 160; }
+            const lastItem = allExisting[allExisting.length - 1];
+            posX = (lastItem.x !== undefined ? lastItem.x : 20) + (lastItem.width || 112) + 24;
+            posY = lastItem.y !== undefined ? lastItem.y : 20;
+            if (posX > 1000) { posX = 20; posY = lastItem.y + 160; }
           }
 
           const newFile = {
             id: uid(),
-            name: f.name,
-            fileType: f.type || 'application/octet-stream',
+            name: file.name,
+            fileType: file.type || 'application/octet-stream',
             dataUrl: base64,
-            rawBlob: f,
             textContent: textContent,
             parentId: state.currentFolderId,
             x: posX,
@@ -1225,119 +1809,199 @@
             width: 112,
             height: 144
           };
-
+          if (isVideoFile(newFile) && newFile.fileType !== 'web-video') {
+            await getOrCreateBlobUrl(newFile);
+          }
           state.files.push(newFile);
           await saveFile(newFile);
-          allExisting.push(newFile);
+
+          state.activeUploads = state.activeUploads.filter(u => u.id !== upId);
+          render();
         } catch (err) {
-          console.error('Upload error', err);
+          alert('Upload failed: ' + err.message);
+          state.activeUploads = state.activeUploads.filter(u => u.id !== upId);
+          render();
         }
       }
-      render();
-      showToast('Files uploaded');
-    }
+    });
 
-    document.getElementById('file-input').addEventListener('change', (e) => handleFilesUpload(e.target.files));
+    document.getElementById('photo-input').addEventListener('change', async (e) => {
+      const uploadedFiles = e.target.files;
+      if (!uploadedFiles || uploadedFiles.length === 0) return;
 
-    // Drag, Resize & Snap-to-Grid implementation
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const file = uploadedFiles[i];
+        const upId = uid();
+        state.activeUploads.push({ id: upId, name: file.name, progress: 10 });
+        render();
+
+        try {
+          const base64 = await fileToBase64(file);
+          state.activeUploads = state.activeUploads.map(u => u.id === upId ? { ...u, progress: 60 } : u);
+          render();
+
+          let allExisting = [
+            ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+            ...state.files.filter(f => f.parentId === state.currentFolderId),
+            ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+          ];
+          let posX = 20, posY = 20;
+          if (allExisting.length > 0) {
+            const lastItem = allExisting[allExisting.length - 1];
+            posX = (lastItem.x !== undefined ? lastItem.x : 20) + (lastItem.width || 112) + 24;
+            posY = lastItem.y !== undefined ? lastItem.y : 20;
+            if (posX > 1000) { posX = 20; posY = lastItem.y + 160; }
+          }
+
+          const newFile = {
+            id: uid(),
+            name: file.name,
+            fileType: file.type || 'image/png',
+            dataUrl: base64,
+            parentId: state.currentFolderId,
+            x: posX,
+            y: posY,
+            width: 112,
+            height: 144
+          };
+          if (isVideoFile(newFile) && newFile.fileType !== 'web-video') {
+            await getOrCreateBlobUrl(newFile);
+          }
+          state.files.push(newFile);
+          await saveFile(newFile);
+
+          state.activeUploads = state.activeUploads.filter(u => u.id !== upId);
+          render();
+        } catch (err) {
+          alert('Upload failed: ' + err.message);
+          state.activeUploads = state.activeUploads.filter(u => u.id !== upId);
+          render();
+        }
+      }
+    });
+
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      const itemsElems = container.querySelectorAll('[data-id]');
-      itemsElems.forEach(elem => {
-        const id = elem.getAttribute('data-id');
-        let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
-        if (!item) return;
+      const items = container.querySelectorAll('[data-id]');
+      items.forEach(el => {
+        const id = el.getAttribute('data-id');
+        const resizeHandle = el.querySelector('.resize-handle');
 
-        const resizeHandle = elem.querySelector('.resize-handle');
-
-        let isDragging = false;
         let isResizing = false;
-        let startX = 0, startY = 0;
-        let initialX = item.x || 20;
-        let initialY = item.y || 20;
-        let initialW = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
-        let initialH = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
+        let startW = 0, startH = 0, startX = 0, startY = 0;
 
         if (resizeHandle) {
           resizeHandle.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
             if (!state.editMode) return;
+            e.stopPropagation();
             isResizing = true;
             startX = e.clientX;
             startY = e.clientY;
-            initialW = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
-            initialH = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
+            startW = el.offsetWidth;
+            startH = el.offsetHeight;
             resizeHandle.setPointerCapture(e.pointerId);
           });
 
           resizeHandle.addEventListener('pointermove', (e) => {
             if (!isResizing) return;
             e.stopPropagation();
-            const dx = (e.clientX - startX) / state.zoomLevel;
-            const dy = (e.clientY - startY) / state.zoomLevel;
-            const newW = Math.max(80, initialW + dx);
-            const newH = Math.max(60, initialH + dy);
-            item.width = newW;
-            item.height = newH;
-            elem.style.width = newW + 'px';
-            elem.style.height = newH + 'px';
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const newW = Math.max(80, startW + dx);
+            const newH = Math.max(80, startH + dy);
+            el.style.width = newW + 'px';
+            el.style.height = newH + 'px';
           });
 
           resizeHandle.addEventListener('pointerup', async (e) => {
             if (!isResizing) return;
+            e.stopPropagation();
             isResizing = false;
             resizeHandle.releasePointerCapture(e.pointerId);
-            if (isFolder(item)) await saveFolder(item);
-            else if (isBubble(item)) await saveTextBubble(item);
-            else await saveFile(item);
+
+            const finalW = el.offsetWidth;
+            const finalH = el.offsetHeight;
+
+            let f = state.folders.find(item => item.id === id);
+            let fi = state.files.find(item => item.id === id);
+            let b = state.textBubbles.find(item => item.id === id);
+
+            if (f) { f.width = finalW; f.height = finalH; await saveFolder(f); }
+            if (fi) { fi.width = finalW; fi.height = finalH; await saveFile(fi); }
+            if (b) { b.width = finalW; b.height = finalH; await saveTextBubble(b); }
           });
         }
+      });
+    }
 
-        elem.addEventListener('pointerdown', (e) => {
+    function attachBulkDragListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+
+      const items = container.querySelectorAll('[data-id]');
+      items.forEach(el => {
+        const id = el.getAttribute('data-id');
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialLeft = 0, initialTop = 0;
+
+        el.addEventListener('pointerdown', (e) => {
           if (!state.editMode) return;
-          if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
+          e.stopPropagation();
+
           isDragging = true;
           startX = e.clientX;
           startY = e.clientY;
-          initialX = item.x !== undefined ? item.x : 20;
-          initialY = item.y !== undefined ? item.y : 20;
-          elem.setPointerCapture(e.pointerId);
-          elem.style.zIndex = 100;
+          initialLeft = el.offsetLeft;
+          initialTop = el.offsetTop;
+          el.setPointerCapture(e.pointerId);
+          el.style.zIndex = 100;
         });
 
-        elem.addEventListener('pointermove', (e) => {
-          if (!isDragging || !state.editMode) return;
-          e.stopPropagation();
-          const dx = (e.clientX - startX) / state.zoomLevel;
-          const dy = (e.clientY - startY) / state.zoomLevel;
-          let nx = Math.max(0, initialX + dx);
-          let ny = Math.max(0, initialY + dy);
-          
-          // Soft Snap-to-Grid Calculation
-          nx = Math.round(nx / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-          ny = Math.round(ny / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-
-          item.x = nx;
-          item.y = ny;
-          elem.style.left = nx + 'px';
-          elem.style.top = ny + 'px';
-        });
-
-        elem.addEventListener('pointerup', async (e) => {
+        el.addEventListener('pointermove', (e) => {
           if (!isDragging) return;
+          e.stopPropagation();
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+
+          let newX = initialLeft + dx;
+          let newY = initialTop + dy;
+
+          newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+          newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+
+          newX = Math.max(10, newX);
+          newY = Math.max(10, newY);
+
+          el.style.left = newX + 'px';
+          el.style.top = newY + 'px';
+        });
+
+        el.addEventListener('pointerup', async (e) => {
+          if (!isDragging) return;
+          e.stopPropagation();
           isDragging = false;
-          elem.style.zIndex = '';
-          elem.releasePointerCapture(e.pointerId);
-          if (isFolder(item)) await saveFolder(item);
-          else if (isBubble(item)) await saveTextBubble(item);
-          else await saveFile(item);
+          el.releasePointerCapture(e.pointerId);
+          el.style.zIndex = '';
+
+          const finalX = el.offsetLeft;
+          const finalY = el.offsetTop;
+
+          let f = state.folders.find(item => item.id === id);
+          let fi = state.files.find(item => item.id === id);
+          let b = state.textBubbles.find(item => item.id === id);
+
+          if (f) { f.x = finalX; f.y = finalY; await saveFolder(f); }
+          if (fi) { fi.x = finalX; fi.y = finalY; await saveFile(fi); }
+          if (b) { b.x = finalX; b.y = finalY; await saveTextBubble(b); }
         });
       });
     }
 
-    window.addEventListener('DOMContentLoaded', loadData);
+    loadData();
   </script>
 </body>
 </html>
