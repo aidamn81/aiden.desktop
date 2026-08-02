@@ -54,14 +54,13 @@
 <body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
   <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
 
-  <input id="file-input" type="file" multiple class="hidden" onchange="handleFileSelect(event)" />
-  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" onchange="handleFileSelect(event)" />
-  <input id="change-image-input" type="file" accept="image/*" class="hidden" onchange="handleChangeImageFile(event)" />
-  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" onchange="handleFolderCoverFile(event)" />
-  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" onchange="handleAppThumbnail(event)" />
-  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" onchange="handleLinkThumbnail(event)" />
-  <input id="web-video-thumbnail-input" type="file" accept="image/*" class="hidden" onchange="handleWebVideoThumbnail(event)" />
-  <input id="restore-backup-input" type="file" accept=".html,.json" class="hidden" onchange="handleRestoreBackupFile(event)" />
+  <input id="file-input" type="file" multiple class="hidden" />
+  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
+  <input id="change-image-input" type="file" accept="image/*" class="hidden" />
+  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
+  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
+  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" />
+  <input id="web-video-thumbnail-input" type="file" accept="image/*" class="hidden" />
 
   <script>
     const CONFIG = {
@@ -360,78 +359,753 @@
       }
     }
 
-    function exportBackupToPCloud() {
-      try {
-        const htmlContent = document.documentElement.outerHTML;
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `index.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    function render() {
+      const app = document.getElementById('app');
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
+      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
+      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
+      const allChildrenSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
 
-        alert('index.html exported successfully! Save this file into your PCloud folder ("Desktop app backup"): https://e.pcloud.link/publink/show?code=kZmWky7ZBoAafpewSaROjw27N8bFvVY9d9qV');
-      } catch (err) {
-        alert('Export error: ' + err.message);
+      if (state.editMode) {
+        document.body.classList.add('edit-mode');
+      } else {
+        document.body.classList.remove('edit-mode');
+      }
+
+      app.innerHTML = `
+        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+              </button>
+              ${state.currentFolderId !== null ? `
+                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                  <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                  <span>Back</span>
+                </button>
+              ` : ''}
+              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.selectMode ? 'Cancel' : 'Select'}
+              </button>
+              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
+              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
+              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
+            </div>
+          </div>
+
+          ${state.hamburgerMenuOpen ? `
+            <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
+              <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
+              </button>
+              <button onclick="openNewFolderModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
+              </button>
+              <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
+              </button>
+              <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
+              </button>
+              <button onclick="openWebVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
+              </button>
+              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
+              </button>
+              <div class="h-px bg-zinc-800 my-1"></div>
+              <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
+                <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
+              </button>
+              <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
+              </button>
+              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
+              </button>
+            </div>
+          ` : ''}
+        </header>
+
+        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
+          ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
+          
+          ${state.activeUploads.length > 0 ? `
+            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
+              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
+                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
+                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                ${state.activeUploads.map(up => `
+                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="truncate font-medium text-white max-w-[70%]" title="${up.name}">${up.name}</span>
+                      <span class="text-amber-400 font-bold">${up.progress}%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${items.length === 0 && state.activeUploads.length === 0 ? `
+            <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
+              <span>Folder is empty</span>
+              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
+              </button>
+            </div>
+          ` : `
+            <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
+              ${items.map((item, index) => renderItem(item, index)).join('')}
+            </div>
+          `}
+        </main>
+
+        ${state.selectMode ? `
+          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-4 flex-wrap justify-center">
+            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0">
+              <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
+              ${allChildrenSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            ${state.selectedIds.length > 0 ? `
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
+              <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move to folder</button>
+              <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+              <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        ${state.showUploadModal ? renderUploadModal() : ''}
+        ${state.linkModal ? renderLinkModal() : ''}
+        ${state.webVideoModal ? renderWebVideoModal() : ''}
+        ${state.appModal ? renderAppModal() : ''}
+        ${state.quickViewFileId ? renderQuickViewModal() : ''}
+        ${state.textEditorModal ? renderTextEditorModal() : ''}
+        ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
+      `;
+
+      if (window.lucide) window.lucide.createIcons();
+      attachDragAndResizeListeners();
+    }
+
+    function getFileIcon(type, name) {
+      if (type === 'link' || name.startsWith('http')) return 'link';
+      if (type === 'web-video') return 'video';
+      if (type === 'app' || type === 'ios-app') return 'smartphone';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.mkv')) return 'video';
+      if (type.startsWith('audio/')) return 'music';
+      if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
+      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.html') || name.endsWith('.json') || name.endsWith('.csv')) return 'file-text';
+      if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'file-spreadsheet';
+      return 'file';
+    }
+
+    function bubbleInlineStyle(item) {
+      let style = '';
+      if (item.fontFamily) style += `font-family:${item.fontFamily};`;
+      if (item.fontSize === 'lg') style += 'font-size:16px;';
+      else if (item.fontSize === 'sm') style += 'font-size:10px;';
+      else style += 'font-size:11px;';
+      if (item.isBold) style += 'font-weight:bold;';
+      if (item.isItalic) style += 'font-style:italic;';
+      if (item.isUnderline) style += 'text-decoration:underline;';
+      if (item.fontColor) style += `color:${item.fontColor};`;
+      if (item.bgColour) style += `background-color:${item.bgColour};`;
+      if (item.align) style += `text-align:${item.align};`;
+      return style;
+    }
+
+    function renderItem(item, index) {
+      const col = index % 4;
+      const row = Math.floor(index / 4);
+      const posX = item.x !== undefined ? item.x : (20 + col * 140);
+      const posY = item.y !== undefined ? item.y : (20 + row * 160);
+      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
+      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
+      const folder = isFolder(item);
+      const bubble = isBubble(item);
+      const isMenuOpen = state.activeMenuId === item.id;
+      const isSelected = state.selectedIds.includes(item.id);
+
+      if (bubble) {
+        let bubbleCustomBg = item.bgColour ? `background-color:${item.bgColour};` : '';
+        return `
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden" style="${bubbleCustomBg}">
+              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
+              <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
+            </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, false, true) : ''}
+          </div>
+        `;
+      } else if (folder) {
+        return `
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
+            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
+              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[20px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
+              <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
+              <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
+            </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, true) : ''}
+          </div>
+        `;
+      } else {
+        const type = item.fileType || '';
+        const isImage = type.startsWith('image/');
+        const isVideo = isVideoFile(item);
+        const isWebVideo = type === 'web-video';
+        const isLink = type === 'link';
+        const isApp = type === 'app' || type === 'ios-app';
+        const imgSrc = item.thumbnailData || item.dataUrl;
+        const icon = getFileIcon(type, item.name);
+
+        return `
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
+              <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
+                ${(isImage || ((isApp || isLink || isWebVideo) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                  <div class="flex flex-col items-center gap-1 text-zinc-400">
+                    <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
+                    ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
+                    ${isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Web Video</span>' : ''}
+                    ${isApp ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">iOS App</span>' : ''}
+                    ${isVideo && !isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
+                    ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
+                    ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
+                    ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
+                  </div>
+                `}
+                <div class="absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+                <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
+                <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
+              </div>
+            </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize flex items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, false) : ''}
+          </div>
+        `;
       }
     }
 
-    function triggerRestoreBackup() {
-      document.getElementById('restore-backup-input').click();
+    function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
+      if (isBubbleItem) {
+        return `
+          <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
+            <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <button type="button" onclick="renameItem('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          </div>
+        `;
+      }
+      return `
+        <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+          ${isFolderItem ? `
+            <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
+            <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="moveToFolder('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          ` : `
+            <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
+            <button type="button" onclick="openTextEditorModal(null, '${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
+            <button type="button" onclick="copySingleFileClipboard('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Copy to Clipboard</button>
+            <button type="button" onclick="shareFile('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="share" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> iOS Share</button>
+            <button type="button" onclick="triggerChangeImage('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change Image</button>
+            <button type="button" onclick="renameItem('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="moveToFolder('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          `}
+        </div>
+      `;
     }
 
-    async function handleRestoreBackupFile(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+    function renderUploadModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeUploadModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Item</h3>
+            <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
+            <div class="flex flex-col gap-2.5 mt-2">
+              <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
+              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
+              <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
+              <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video / Embed</button>
+              <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
+              <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
+              <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
+            </div>
+            <button onclick="closeUploadModal()" class="text-xs text-zinc-500 hover:text-zinc-300 mt-2 font-medium">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
 
-      const reader = new FileReader();
-      reader.onload = async function(event) {
-        try {
-          const content = event.target.result;
-          let restored = false;
+    function renderLinkModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeLinkModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Web Link</h3>
+            <p class="text-xs text-zinc-400">Enter the URL and an optional display thumbnail.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="link-name-input" type="text" placeholder="Site Name (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Display Thumbnail</span>
+                <button type="button" onclick="document.getElementById('link-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.linkModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.linkModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.linkModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeLinkModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveLinkModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add Link</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
-          try {
-            const backupData = JSON.parse(content);
-            if (backupData && (backupData.folders || backupData.files)) {
-              if (confirm('Restoring this JSON backup will overwrite your current local workspace. Proceed?')) {
-                state.folders = backupData.folders || [];
-                state.files = backupData.files || [];
-                state.textBubbles = backupData.textBubbles || [];
-                state.currentFolderId = null;
+    function renderWebVideoModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeWebVideoModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Web Video / Embed</h3>
+            <p class="text-xs text-zinc-400">Enter a direct video URL, YouTube, Videa, Dailymotion link or embed code.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="web-video-url-input" type="text" placeholder="https://youtube.com/... or embed link" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="web-video-name-input" type="text" placeholder="Video Title (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Video Thumbnail</span>
+                <button type="button" onclick="document.getElementById('web-video-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.webVideoModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.webVideoModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.webVideoModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeWebVideoModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveWebVideoModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add Video</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
-                for (let f of state.folders) await saveFolder(f);
-                for (let fi of state.files) await saveFile(fi);
-                for (let b of state.textBubbles) await saveTextBubble(b);
+    function renderPopupVideoModal() {
+      let embedHtml = '';
+      let url = state.popupVideoUrl || '';
+      
+      let ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      let dmMatch = url.match(/(?:dailymotion\.com\/(?:video\/|embed\/video\/)|dai\.ly\/)([\w-]+)/);
+      
+      if (ytMatch && ytMatch[1]) {
+        embedHtml = `<iframe class="w-full h-full" src="https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+      } else if (dmMatch && dmMatch[1]) {
+        embedHtml = `<iframe class="w-full h-full" src="https://www.dailymotion.com/embed/video/${dmMatch[1]}?autoplay=1" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+      } else if (url.includes('<iframe') || url.includes('<object')) {
+        embedHtml = url;
+      } else {
+        embedHtml = `<video id="popup-video-element" controls autoplay playsinline webkit-playsinline class="w-full h-full object-contain" src="${url}"></video>`;
+      }
 
-                restored = true;
-                alert('Backup data restored successfully!');
-                render();
-              }
-            }
-          } catch (jsonErr) {}
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onclick="closePopupVideo()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden w-full max-w-3xl flex flex-col shadow-2xl relative" onclick="event.stopPropagation()">
+            <div class="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-bold text-amber-400 flex items-center gap-2"><i data-lucide="video" class="w-4 h-4"></i> Pop-up Video Player / Embed</span>
+              <button onclick="closePopupVideo()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="relative w-full bg-black flex items-center justify-center aspect-video">
+              ${embedHtml}
+            </div>
+            <div class="bg-zinc-950 px-4 py-3 border-t border-zinc-800 flex items-center justify-between text-xs">
+              <span class="text-zinc-400">Stream or Embed Player</span>
+              <button onclick="closePopupVideo()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl flex items-center gap-2">
+                Close Player
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
-          if (!restored && (file.name.endsWith('.html') || content.includes('state =') || content.includes('aiden_files_db'))) {
-            alert('index.html backup file selected. To load this saved app version, please open the saved HTML file directly in your web browser.');
-          } else if (!restored) {
-            throw new Error('Unrecognized backup file format.');
-          }
-        } catch (err) {
-          alert('Failed to restore backup: ' + err.message);
-        } finally {
-          e.target.value = '';
+    async function toggleVideoPip() {
+      const vid = document.getElementById('popup-video-element');
+      if (!vid) return;
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else if (vid.requestPictureInPicture) {
+          await vid.requestPictureInPicture();
+        } else {
+          alert('Picture-in-Picture is not supported in this browser.');
         }
-      };
-      reader.readAsText(file);
+      } catch (e) {
+        alert('PiP mode could not be activated: ' + e.message);
+      }
     }
+
+    function renderAppModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAppModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add iOS Device App</h3>
+            <p class="text-xs text-zinc-400">Enter the custom iOS URL scheme or App Store deep link (e.g., <code class="text-amber-400">photos-redirect://</code> or <code class="text-amber-400">shortcuts://</code>).</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
+                <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.appModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.appModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.appModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeAppModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveAppModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add App</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return '';
+
+      const colorSwatches = ['#ffffff', '#fbbf24', '#f87171', '#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fdba74', '#000000'];
+      const bgSwatches = ['#09090b', '#18181b', '#27272a', '#7f1d1d', '#14532d', '#1e3a8a', '#581c87', '#701a75', '#78350f'];
+      const fonts = [
+        { name: 'Sans-Serif', value: 'system-ui, -apple-system, sans-serif' },
+        { name: 'Serif', value: 'Georgia, Cambria, "Times New Roman", Times, serif' },
+        { name: 'Monospace', value: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' },
+        { name: 'Display', value: '"Impact", Charcoal, sans-serif' }
+      ];
+      const aligns = [
+        { key: 'left', icon: 'align-left' },
+        { key: 'center', icon: 'align-center' },
+        { key: 'right', icon: 'align-right' }
+      ];
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 class="text-sm font-bold text-white">${ed.isNew ? 'New Text Bubble' : 'Edit Text Bubble'}</h3>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="textEditorUndo()" ${ed.historyIndex <= 0 ? 'disabled' : ''} class="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-full text-zinc-300" title="Undo"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                <button type="button" onclick="textEditorRedo()" ${ed.historyIndex >= ed.history.length - 1 ? 'disabled' : ''} class="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-full text-zinc-300" title="Redo"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
+                <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 ml-1"><i data-lucide="x" class="w-4 h-4"></i></button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <select onchange="applyTextEditorFormat('fontFamily', this.value)" class="bg-zinc-950 text-zinc-200 text-xs px-2 py-1 rounded-md border border-zinc-800 outline-none cursor-pointer">
+                  ${fonts.map(f => `<option value="${f.value}" ${ed.fontFamily === f.value ? 'selected' : ''}>${f.name}</option>`).join('')}
+                </select>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                ${aligns.map(a => `
+                  <button type="button" onclick="applyTextEditorFormat('align', '${a.key}')" class="p-1.5 rounded-md ${ed.align === a.key ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Align ${a.key}"><i data-lucide="${a.icon}" class="w-4 h-4"></i></button>
+                `).join('')}
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 items-center">
+                <span class="text-[10px] text-zinc-400 font-bold px-1">Text:</span>
+                <label class="cursor-pointer relative" title="Text colour">
+                  <input type="color" value="${ed.fontColor || '#ffffff'}" oninput="applyTextEditorFormat('fontColor', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <span class="p-1 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="palette" class="w-4 h-4" style="color:${ed.fontColor || '#ffffff'}"></i></span>
+                </label>
+                ${colorSwatches.slice(0, 4).map(c => `
+                  <button type="button" onclick="applyTextEditorFormat('fontColor', '${c}')" class="w-4 h-4 rounded-full border ${ed.fontColor === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
+                `).join('')}
+                <button type="button" onclick="applyTextEditorFormat('fontColor', null)" class="p-1 rounded-md text-zinc-400 hover:bg-zinc-800" title="Reset text colour"><i data-lucide="eraser" class="w-3.5 h-3.5"></i></button>
+              </div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 items-center">
+                <span class="text-[10px] text-zinc-400 font-bold px-1">Bg:</span>
+                <label class="cursor-pointer relative" title="Background colour">
+                  <input type="color" value="${ed.bgColour || '#18181b'}" oninput="applyTextEditorFormat('bgColour', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <span class="p-1 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="paint-bucket" class="w-4 h-4" style="color:${ed.bgColour || '#fbbf24'}"></i></span>
+                </label>
+                ${bgSwatches.slice(0, 4).map(c => `
+                  <button type="button" onclick="applyTextEditorFormat('bgColour', '${c}')" class="w-4 h-4 rounded-full border ${ed.bgColour === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
+                `).join('')}
+                <button type="button" onclick="applyTextEditorFormat('bgColour', null)" class="p-1 rounded-md text-zinc-400 hover:bg-zinc-800" title="Default background"><i data-lucide="eraser" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+
+            <textarea id="modal-text-input" oninput="updateTextEditorContent(this.value)" placeholder="Type your text note here..." class="w-full h-36 border border-zinc-800 rounded-2xl p-3 text-white resize-none outline-none focus:border-amber-500 text-sm font-normal shadow-inner" style="${ed.bgColour ? 'background-color:' + ed.bgColour + ';' : 'background-color:#09090b;'}${ed.fontFamily ? 'font-family:' + ed.fontFamily + ';' : ''}${ed.isBold ? 'font-weight:bold;' : ''}${ed.isItalic ? 'font-style:italic;' : ''}${ed.isUnderline ? 'text-decoration:underline;' : ''}${ed.fontColor ? 'color:' + ed.fontColor + ';' : ''}${ed.align ? 'text-align:' + ed.align + ';' : ''}${ed.fontSize === 'lg' ? 'font-size:16px;' : ed.fontSize === 'sm' ? 'font-size:10px;' : 'font-size:11px;'}">${ed.text || ''}</textarea>
+
+            <p class="text-[10px] text-zinc-500 -mt-2">Tip: select text and tap bold or color to apply formatting to that selection only.</p>
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button onclick="closeTextEditorModal()" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveTextEditorModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Bubble</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderQuickViewContent(file) {
+      const type = file.fileType || '';
+      const name = file.name || '';
+      const mediaUrl = file.blobUrl || file.dataUrl;
+      const isVideo = isVideoFile(file);
+      const isLink = type === 'link';
+      const isApp = type === 'app' || type === 'ios-app';
+
+      if (isLink) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full shadow-2xl text-center">
+            <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="link" class="w-8 h-8"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
+            <a href="${file.dataUrl}" target="_blank" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20"><i data-lucide="external-link" class="w-4 h-4"></i> Open Web Link</a>
+          </div>
+        `;
+      }
+      if (isApp) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-md w-full shadow-2xl text-center">
+            <div class="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="smartphone" class="w-8 h-8"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">Launch App: ${file.name}</span>
+            <p class="text-xs text-zinc-400">Scheme: <code class="text-amber-400">${file.dataUrl}</code></p>
+            <a href="${file.dataUrl}" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20"><i data-lucide="external-link" class="w-4 h-4"></i> Open on iOS Device</a>
+          </div>
+        `;
+      }
+      if (type.startsWith('image/')) return `<img src="${mediaUrl}" class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl" />`;
+      if (isVideo) return `<video controls playsinline webkit-playsinline class="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain rounded-2xl shadow-2xl bg-black" src="${mediaUrl}"></video>`;
+      if (isAudioFile(file)) {
+        return `
+          <div class="flex flex-col items-center gap-6 p-8 bg-zinc-900 border border-zinc-800 rounded-3xl max-w-sm w-full shadow-2xl text-center">
+            <div class="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-400"><i data-lucide="music" class="w-10 h-10"></i></div>
+            <span class="text-sm font-semibold text-zinc-200 max-w-full truncate">${file.name}</span>
+            <audio controls class="w-full" src="${mediaUrl}"></audio>
+          </div>
+        `;
+      }
+      if (type === 'application/pdf' || name.endsWith('.pdf')) {
+        return `
+          <div class="w-[98vw] h-[92vh] max-w-7xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300 shrink-0">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download Full PDF</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-zinc-950 relative overflow-auto">
+              <embed src="${mediaUrl}#toolbar=1&view=FitH" type="application/pdf" width="100%" height="100%" class="w-full h-full border-0 bg-white" />
+            </div>
+          </div>
+        `;
+      }
+      if (name.endsWith('.html') || name.endsWith('.htm') || type === 'text/html') {
+        return `
+          <div class="w-[95vw] h-[85vh] max-w-5xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-white relative">
+              <iframe src="${mediaUrl}" class="w-full h-full border-0"></iframe>
+            </div>
+          </div>
+        `;
+      }
+      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.json') || name.endsWith('.csv') || name.endsWith('.md')) {
+        return `
+          <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-semibold truncate">${file.name}</span>
+              <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+            </div>
+            <div class="flex-1 w-full h-full bg-zinc-950 p-4 overflow-auto">
+              <pre class="text-xs font-mono text-zinc-200 whitespace-pre-wrap select-text">${file.textContent || ''}</pre>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="w-[95vw] h-[85vh] max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
+          <div class="bg-zinc-950 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+            <span class="font-semibold truncate">${file.name}</span>
+            <a href="${mediaUrl}" download="${file.name}" class="px-3 py-1 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 flex items-center gap-1.5"><i data-lucide="download" class="w-3.5 h-3.5"></i> Download File</a>
+          </div>
+          <div class="flex-1 w-full h-full bg-zinc-950 flex flex-col items-center justify-center p-8 text-center gap-4">
+            <i data-lucide="file-text" class="w-16 h-16 text-amber-400"></i>
+            <span class="text-sm font-semibold text-zinc-200">${file.name}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderQuickViewModal() {
+      const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
+      const file = currentFolderFiles[currentIndex];
+      if (!file) return '';
+
+      const hasPrev = currentIndex > 0;
+      const hasNext = currentIndex < currentFolderFiles.length - 1;
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col justify-between p-4" onclick="closeQuickView()">
+          <div class="flex items-center justify-between text-zinc-300 pt-2 px-4 shrink-0" onclick="event.stopPropagation()">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold truncate max-w-[200px]">${file.name}</span>
+              <span class="text-xs text-zinc-500">(${currentIndex + 1} of ${currentFolderFiles.length})</span>
+            </div>
+            <button onclick="closeQuickView()" class="p-2 bg-zinc-900 border border-zinc-800 rounded-full hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+          </div>
+          <div class="flex-1 flex items-center justify-center overflow-hidden my-2 px-2 relative" onclick="event.stopPropagation()">
+            ${hasPrev ? `
+              <button onclick="navigateQuickView(-1)" class="absolute left-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Previous Media">
+                <i data-lucide="chevron-left" class="w-6 h-6"></i>
+              </button>
+            ` : ''}
+            ${renderQuickViewContent(file)}
+            ${hasNext ? `
+              <button onclick="navigateQuickView(1)" class="absolute right-4 z-20 p-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white rounded-full shadow-xl backdrop-blur-md transition-transform active:scale-95" title="Next Media">
+                <i data-lucide="chevron-right" class="w-6 h-6"></i>
+              </button>
+            ` : ''}
+          </div>
+          <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 flex items-center justify-center gap-8 text-xs font-semibold text-zinc-200 shrink-0" onclick="event.stopPropagation()">
+            <button onclick="copySingleFileClipboard('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="copy" class="w-5 h-5"></i> Copy</button>
+            <button onclick="moveToFolder('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="folder-output" class="w-5 h-5"></i> Move to folder</button>
+            <button onclick="shareFile('${file.id}')" class="flex flex-col items-center gap-1 hover:text-amber-400"><i data-lucide="share" class="w-5 h-5"></i> Share</button>
+            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="flex flex-col items-center gap-1 text-red-400 hover:text-red-300"><i data-lucide="trash-2" class="w-5 h-5"></i> Delete</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function navigateQuickView(direction) {
+      const currentFolderFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const currentIndex = currentFolderFiles.findIndex(f => f.id === state.quickViewFileId);
+      if (currentIndex === -1) return;
+      const newIndex = currentIndex + direction;
+      if (newIndex >= 0 && newIndex < currentFolderFiles.length) {
+        state.quickViewFileId = currentFolderFiles[newIndex].id;
+        render();
+      }
+    }
+
+    function toggleSelectMode() { state.selectMode = !state.selectMode; state.selectedIds = []; closeMenu(); closeHamburgerMenu(); render(); }
+    function toggleSelectAll() {
+      const items = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+      const allSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
+      state.selectedIds = allSelected ? [] : items.map(item => item.id);
+      render();
+    }
+
+    function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
+      if (state.selectMode) {
+        state.selectedIds = state.selectedIds.includes(id) ? state.selectedIds.filter(i => i !== id) : [...state.selectedIds, id];
+        render();
+        return;
+      }
+      if (isFolderItem) navigateTo(id);
+      else if (isBubbleItem) openTextEditorModal(id);
+      else {
+        const file = state.files.find(f => f.id === id);
+        if (file && file.fileType === 'web-video') {
+          state.popupVideoUrl = file.dataUrl;
+          render();
+        } else if (file && (file.fileType === 'link' || file.fileType === 'ios-app')) {
+          window.open(file.dataUrl, '_blank');
+        } else {
+          openQuickView(id);
+        }
+      }
+    }
+
+    function openUploadModal() { state.showUploadModal = true; render(); }
+    function closeUploadModal() { state.showUploadModal = false; render(); }
+    function openQuickView(id) { state.quickViewFileId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    function closeQuickView() { state.quickViewFileId = null; render(); }
+    function closePopupVideo() { state.popupVideoUrl = null; render(); }
+    function navigateTo(id) { state.currentFolderId = id; closeMenu(); closeHamburgerMenu(); render(); }
+    function navigateBack() {
+      if (state.currentFolderId === null) return;
+      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+      if (currentFolder) {
+        state.currentFolderId = currentFolder.parentId;
+      } else {
+        state.currentFolderId = null;
+      }
+      closeMenu();
+      closeHamburgerMenu();
+      render();
+    }
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      closeMenu();
+      closeHamburgerMenu();
+      render();
+    }
+    function toggleMenu(e, id) {
+      e.stopPropagation();
+      state.activeMenuId = state.activeMenuId === id ? null : id;
+      render();
+    }
+    function closeMenu() { if (state.activeMenuId) { state.activeMenuId = null; render(); } }
 
     function toggleHamburgerMenu(e) {
-      if (e) e.stopPropagation();
+      e.stopPropagation();
       state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
-      state.activeMenuId = null;
       render();
     }
     function closeHamburgerMenu() {
@@ -440,344 +1114,423 @@
         render();
       }
     }
-    function toggleSelectMode() {
-      state.selectMode = !state.selectMode;
-      if (!state.selectMode) state.selectedIds = [];
-      render();
-    }
-    function toggleEditMode() {
-      state.editMode = !state.editMode;
-      document.body.classList.toggle('edit-mode', state.editMode);
-      render();
-    }
-    function navigateTo(folderId) {
-      state.currentFolderId = folderId;
-      state.selectedIds = [];
-      render();
-    }
-    function navigateBack() {
-      if (state.currentFolderId) {
-        const current = state.folders.find(f => f.id === state.currentFolderId);
-        state.currentFolderId = current ? current.parentId : null;
-        state.selectedIds = [];
-        render();
-      }
-    }
-    function closeMenu() {
-      if (state.activeMenuId) {
-        state.activeMenuId = null;
-        render();
-      }
-    }
-    function toggleSelectAll() {
-      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
-      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
-      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
-      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
-      const allSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
-      if (allSelected) {
-        state.selectedIds = [];
-      } else {
-        state.selectedIds = items.map(i => i.id);
-      }
-      render();
-    }
 
-    function openNewFolderModal() {
-      const name = prompt('Enter folder name:', 'New Folder');
-      if (name) {
-        const newFolder = {
-          id: uid(),
-          name: name.trim(),
-          parentId: state.currentFolderId,
-          x: 48,
-          y: 48,
-          width: 96,
-          height: 96
-        };
-        state.folders.push(newFolder);
-        saveFolder(newFolder);
-        render();
-      }
-    }
+    function forcePullCloudData() { syncWithGitHub(true); }
 
-    function openUploadModal() { state.showUploadModal = true; render(); }
-    function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openLinkModal() { state.linkModal = true; render(); }
-    function closeLinkModal() { state.linkModal = false; render(); }
-    function openWebVideoModal() { state.webVideoModal = true; render(); }
-    function closeWebVideoModal() { state.webVideoModal = false; render(); }
-    function openAppModal() { state.appModal = true; render(); }
-    function closeAppModal() { state.appModal = false; render(); }
-
-    function handleFileSelect(e) {
-      const uploadedFiles = Array.from(e.target.files);
-      if (!uploadedFiles.length) return;
-      
-      uploadedFiles.forEach(async (file) => {
-        const reader = new FileReader();
-        reader.onload = async function(event) {
-          const dataUrl = event.target.result;
-          const newFile = {
-            id: uid(),
-            name: file.name,
-            fileType: file.type,
-            size: file.size,
-            dataUrl: dataUrl,
-            rawBlob: file,
-            parentId: state.currentFolderId,
-            x: 48,
-            y: 48,
-            width: 96,
-            height: 96
+    function openTextEditorModal(bubbleId = null, referenceItemId = null) {
+      closeMenu();
+      closeHamburgerMenu();
+      if (bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === bubbleId);
+        if (bubble) {
+          const initialText = bubble.text || '';
+          state.textEditorModal = {
+            id: bubble.id,
+            text: initialText,
+            fontSize: bubble.fontSize || 'md',
+            fontFamily: bubble.fontFamily || 'system-ui, -apple-system, sans-serif',
+            isBold: !!bubble.isBold,
+            isItalic: !!bubble.isItalic,
+            isUnderline: !!bubble.isUnderline,
+            fontColor: bubble.fontColor || null,
+            bgColour: bubble.bgColour || null,
+            align: bubble.align || null,
+            isNew: false,
+            history: [initialText],
+            historyIndex: 0
           };
-          state.files.push(newFile);
-          await saveFile(newFile);
-          render();
+        }
+      } else {
+        state.textEditorModal = {
+          id: null,
+          text: '',
+          fontSize: 'md',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          fontColor: null,
+          bgColour: null,
+          align: null,
+          isNew: true,
+          referenceItemId: referenceItemId,
+          history: [''],
+          historyIndex: 0
         };
-        reader.readAsDataURL(file);
-      });
-      e.target.value = '';
-      closeUploadModal();
-    }
-
-    function handleChangeImageFile(e) {
-      const file = e.target.files[0];
-      if (!file || !state.targetChangeImageId) return;
-      const reader = new FileReader();
-      reader.onload = async function(ev) {
-        const f = state.files.find(item => item.id === state.targetChangeImageId);
-        if (f) {
-          f.dataUrl = ev.target.result;
-          f.rawBlob = file;
-          await saveFile(f);
+      }
+      render();
+      setTimeout(() => {
+        const ta = document.getElementById('modal-text-input');
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
         }
-        state.targetChangeImageId = null;
-        render();
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
+      }, 50);
     }
 
-    function handleFolderCoverFile(e) {
-      const file = e.target.files[0];
-      if (!file || !state.targetFolderCoverId) return;
-      const reader = new FileReader();
-      reader.onload = async function(ev) {
-        const folder = state.folders.find(item => item.id === state.targetFolderCoverId);
-        if (folder) {
-          folder.coverDataUrl = ev.target.result;
-          await saveFolder(folder);
-        }
-        state.targetFolderCoverId = null;
-        render();
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
+    function closeTextEditorModal() {
+      state.textEditorModal = null;
+      render();
     }
 
-    function handleAppThumbnail(e) {}
-    function handleLinkThumbnail(e) {}
-    function handleWebVideoThumbnail(e) {}
+    function pushTextHistory(newText) {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+      if (ed.history[ed.historyIndex] === newText) return;
+      ed.history = ed.history.slice(0, ed.historyIndex + 1);
+      ed.history.push(newText);
+      ed.historyIndex = ed.history.length - 1;
+      ed.text = newText;
+    }
 
-    function bulkCopy() { alert('Copy selected items'); }
-    function bulkMove() { alert('Move selected items'); }
-    function bulkShare() { alert('Share selected items'); }
-    function bulkDelete() {
-      if (confirm('Delete selected items?')) {
-        state.files = state.files.filter(f => !state.selectedIds.includes(f.id));
-        state.folders = state.folders.filter(f => !state.selectedIds.includes(f.id) && f.id !== 'root');
-        state.textBubbles = state.textBubbles.filter(b => !state.selectedIds.includes(b.id));
-        state.selectedIds = [];
-        render();
+    function updateTextEditorContent(val) {
+      if (state.textEditorModal) {
+        pushTextHistory(val);
       }
     }
 
-    function renderItem(item) {
-      const isSelected = state.selectedIds.includes(item.id);
-      const isF = isFolder(item);
-      const isB = isBubble(item);
-      const x = item.x || 48;
-      const y = item.y || 48;
-      const w = item.width || 96;
-      const h = item.height || 96;
-
-      let iconName = 'file';
-      if (isF) iconName = 'folder';
-      else if (isB) iconName = 'align-left';
-      else if (isVideoFile(item)) iconName = 'video';
-      else if (isAudioFile(item)) iconName = 'music';
-
-      return `
-        <div data-id="${item.id}" class="absolute flex flex-col items-center justify-center cursor-pointer group select-none ${isSelected ? 'ring-2 ring-indigo-500 rounded-2xl' : ''}" style="left: ${x}px; top: ${y}px; width: ${w}px; height: ${h}px;" onclick="handleItemClick(event, '${item.id}')">
-          <div class="folder-cube bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center relative group overflow-hidden">
-            ${isF && item.coverDataUrl ? `
-              <img src="${item.coverDataUrl}" class="w-full h-full object-cover" />
-            ` : !isF && !isB && item.dataUrl && (item.fileType || '').startsWith('image/') ? `
-              <img src="${item.dataUrl}" class="w-full h-full object-cover" />
-            ` : `
-              <div class="flex flex-col items-center justify-center p-2 text-center w-full h-full ${isB ? 'bg-zinc-950 text-amber-200' : ''}">
-                <i data-lucide="${iconName}" class="w-8 h-8 ${isF ? 'text-amber-400' : isB ? 'text-amber-300' : 'text-zinc-400'} mb-1"></i>
-                <span class="text-[11px] font-medium ${isF ? 'text-zinc-200 font-semibold' : 'text-zinc-300'} truncate w-full px-1">${isB ? (item.text || 'Note') : item.name}</span>
-              </div>
-            `}
-          </div>
-          ${state.editMode ? `
-            <div class="resize-handle absolute bg-amber-500 text-black flex items-center justify-center rounded-tl-xl shadow-lg cursor-nwse-resize" onpointerdown="startResize(event, '${item.id}')">
-              <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
-            </div>
-          ` : ''}
-        </div>
-      `;
+    function textEditorUndo() {
+      const ed = state.textEditorModal;
+      if (!ed || ed.historyIndex <= 0) return;
+      ed.historyIndex--;
+      ed.text = ed.history[ed.historyIndex];
+      render();
+      setTimeout(() => {
+        const ta = document.getElementById('modal-text-input');
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      }, 30);
     }
 
-    function handleItemClick(e, id) {
-      e.stopPropagation();
-      if (state.selectMode) {
-        if (state.selectedIds.includes(id)) {
-          state.selectedIds = state.selectedIds.filter(i => i !== id);
-        } else {
-          state.selectedIds.push(id);
-        }
+    function textEditorRedo() {
+      const ed = state.textEditorModal;
+      if (!ed || ed.historyIndex >= ed.history.length - 1) return;
+      ed.historyIndex++;
+      ed.text = ed.history[ed.historyIndex];
+      render();
+      setTimeout(() => {
+        const ta = document.getElementById('modal-text-input');
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      }, 30);
+    }
+
+    function applyTextEditorFormat(formatKey, value = null) {
+      if (!state.textEditorModal) return;
+      const ta = document.getElementById('modal-text-input');
+      if (!ta) return;
+
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = ta.value;
+      const hasSelection = start !== end;
+
+      if (formatKey === 'fontSize') {
+        state.textEditorModal.fontSize = value;
         render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
         return;
       }
-      const folder = state.folders.find(f => f.id === id);
-      if (folder) {
-        navigateTo(folder.id);
-      } else {
-        const file = state.files.find(f => f.id === id);
-        if (file) {
-          state.quickViewFileId = file.id;
+      if (formatKey === 'fontFamily') {
+        state.textEditorModal.fontFamily = value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'align') {
+        state.textEditorModal.align = state.textEditorModal.align === value ? null : value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'bgColour') {
+        state.textEditorModal.bgColour = value;
+        render();
+        setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+        return;
+      }
+      if (formatKey === 'fontColor') {
+        if (hasSelection) {
+          const selectedText = text.substring(start, end);
+          let wrapped = value ? `<span style="color:${value};">${selectedText}</span>` : selectedText;
+          const newText = text.substring(0, start) + wrapped + text.substring(end);
+          pushTextHistory(newText);
           render();
+          setTimeout(() => {
+            const n = document.getElementById('modal-text-input');
+            if (n) { n.focus(); n.setSelectionRange(start, start + wrapped.length); }
+          }, 30);
+          return;
+        } else {
+          state.textEditorModal.fontColor = value;
+          render();
+          setTimeout(() => { const n = document.getElementById('modal-text-input'); if (n) { n.focus(); n.setSelectionRange(start, end); } }, 30);
+          return;
         }
       }
-    }
 
-    function startResize(e, id) {
-      e.stopPropagation();
-    }
+      if (hasSelection) {
+        const selectedText = text.substring(start, end);
+        let wrapped = selectedText;
+        if (formatKey === 'isBold') {
+          wrapped = `<strong>${selectedText}</strong>`;
+        } else if (formatKey === 'isItalic') {
+          wrapped = `<em>${selectedText}</em>`;
+        } else if (formatKey === 'isUnderline') {
+          wrapped = `<u>${selectedText}</u>`;
+        }
 
-    function renderUploadModal() {
-      if (!state.showUploadModal) return '';
-      return `
-        <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick="closeUploadModal()">
-          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl" onclick="event.stopPropagation()">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-semibold text-zinc-100">Add Content</h3>
-              <button onclick="closeUploadModal()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <button onclick="document.getElementById('file-input').click()" class="flex flex-col items-center justify-center p-4 bg-zinc-800/60 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 transition">
-                <i data-lucide="file-up" class="w-6 h-6 text-indigo-400 mb-2"></i>
-                <span class="text-xs font-medium text-zinc-200">Upload Files</span>
-              </button>
-              <button onclick="openNewFolderModal(); closeUploadModal();" class="flex flex-col items-center justify-center p-4 bg-zinc-800/60 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 transition">
-                <i data-lucide="folder-plus" class="w-6 h-6 text-amber-400 mb-2"></i>
-                <span class="text-xs font-medium text-zinc-200">New Folder</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function renderLinkModal() { return ''; }
-    function renderWebVideoModal() { return ''; }
-    function renderAppModal() { return ''; }
-    function renderQuickViewModal() { return ''; }
-    function renderTextEditorModal() { return ''; }
-    function renderPopupVideoModal() { return ''; }
-
-    function render() {
-      const app = document.getElementById('app');
-      if (!app) return;
-
-      const currentFolder = state.folders.find(f => f.id === state.currentFolderId) || { name: 'Aiden Files' };
-      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
-      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
-      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
-      const allItems = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
-
-      app.innerHTML = `
-        <!-- Top Navigation Bar -->
-        <header class="h-14 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur px-4 flex items-center justify-between z-30 shrink-0">
-          <div class="flex items-center space-x-3">
-            ${state.currentFolderId ? `
-              <button onclick="navigateBack()" class="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition flex items-center gap-1">
-                <i data-lucide="arrow-left" class="w-5 h-5"></i>
-              </button>
-            ` : `
-              <button onclick="toggleHamburgerMenu(event)" class="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-900 transition">
-                <i data-lucide="menu" class="w-5 h-5"></i>
-              </button>
-            `}
-            <h1 class="text-sm font-semibold tracking-wide text-zinc-100 truncate max-w-[200px] sm:max-w-xs">${currentFolder.name}</h1>
-          </div>
-          <div class="flex items-center space-x-2">
-            <button onclick="toggleSelectMode()" class="px-3 py-1.5 text-xs font-medium rounded-lg ${state.selectMode ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'} transition">
-              ${state.selectMode ? 'Done' : 'Select'}
-            </button>
-            <button onclick="toggleEditMode()" class="px-3 py-1.5 text-xs font-medium rounded-lg ${state.editMode ? 'bg-amber-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'} transition">
-              ${state.editMode ? 'Lock' : 'Edit'}
-            </button>
-            <button onclick="openUploadModal()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow transition">
-              <i data-lucide="plus" class="w-4 h-4"></i>
-            </button>
-          </div>
-        </header>
-
-        <!-- Hamburger Menu Overlay -->
-        ${state.hamburgerMenuOpen ? `
-          <div class="fixed inset-0 z-50 flex" onclick="closeHamburgerMenu()">
-            <div class="w-72 bg-zinc-950 border-r border-zinc-800 h-full flex flex-col p-4 shadow-2xl" onclick="event.stopPropagation()">
-              <div class="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
-                <span class="font-bold text-zinc-100 flex items-center gap-2"><i data-lucide="folder-kanban" class="w-5 h-5 text-indigo-400"></i> Aiden Files</span>
-                <button onclick="toggleHamburgerMenu()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-              </div>
-              <div class="space-y-1 flex-1 overflow-y-auto">
-                <button onclick="syncWithGitHub(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="cloud" class="w-4 h-4 text-indigo-400"></i> Sync with GitHub</button>
-                <button onclick="exportBackupToPCloud(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="download" class="w-4 h-4 text-emerald-400"></i> Export Backup (.html)</button>
-                <button onclick="triggerRestoreBackup(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="upload" class="w-4 h-4 text-amber-400"></i> Restore Backup</button>
-                <button onclick="resetToken(); toggleHamburgerMenu();" class="w-full text-left px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-900 flex items-center gap-3"><i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Set GitHub Token</button>
-              </div>
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Main Workspace Area -->
-        <main class="flex-1 relative overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" onclick="closeMenu(); closeHamburgerMenu()">
-          <div class="w-full h-full relative min-h-[800px]">
-            ${allItems.map((item, index) => renderItem(item, index)).join('')}
-          </div>
-        </main>
-
-        <!-- Selection Bottom Bar -->
-        ${state.selectMode ? `
-          <footer class="h-16 border-t border-zinc-800 bg-zinc-950 px-4 flex items-center justify-between z-30 shrink-0">
-            <span class="text-xs text-zinc-400">${state.selectedIds.length} selected</span>
-            <div class="flex items-center space-x-2">
-              <button onclick="toggleSelectAll()" class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg">Select All</button>
-              <button onclick="bulkDelete()" class="px-3 py-1.5 text-xs bg-rose-600/80 hover:bg-rose-600 text-white rounded-lg">Delete</button>
-            </div>
-          </footer>
-        ` : ''}
-
-        ${renderUploadModal()}
-        ${renderLinkModal()}
-        ${renderWebVideoModal()}
-        ${renderAppModal()}
-        ${renderQuickViewModal()}
-        ${renderTextEditorModal()}
-        ${renderPopupVideoModal()}
-      `;
-
-      if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
+        const newText = text.substring(0, start) + wrapped + text.substring(end);
+        pushTextHistory(newText);
+        render();
+        setTimeout(() => {
+          const n = document.getElementById('modal-text-input');
+          if (n) { n.focus(); n.setSelectionRange(start, start + wrapped.length); }
+        }, 30);
+      } else {
+        if (formatKey === 'isBold') state.textEditorModal.isBold = !state.textEditorModal.isBold;
+        if (formatKey === 'isItalic') state.textEditorModal.isItalic = !state.textEditorModal.isItalic;
+        if (formatKey === 'isUnderline') state.textEditorModal.isUnderline = !state.textEditorModal.isUnderline;
+        render();
+        setTimeout(() => {
+          const newTa = document.getElementById('modal-text-input');
+          if (newTa) { newTa.focus(); newTa.setSelectionRange(start, end); }
+        }, 30);
       }
     }
 
-    loadData();
+    async function saveTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+      const textVal = ed.text.trim();
+      if (!textVal) {
+        alert('Please enter some text for the bubble.');
+        return;
+      }
+
+      const lines = textVal.split('\n').length + Math.floor(textVal.length / 22);
+      const dynamicHeight = Math.max(80, lines * 22);
+
+      if (ed.isNew) {
+        let allExisting = [
+          ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+          ...state.files.filter(f => f.parentId === state.currentFolderId),
+          ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+        ];
+
+        let posX = 20, posY = 20;
+        if (ed.referenceItemId) {
+          const refItem = allExisting.find(i => i.id === ed.referenceItemId);
+          if (refItem && refItem.x !== undefined && refItem.y !== undefined) {
+            posX = refItem.x + (refItem.width || 140) + 24;
+            posY = refItem.y;
+          }
+        } else if (allExisting.length > 0) {
+          const lastItem = allExisting[allExisting.length - 1];
+          const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+          const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+          const lastW = lastItem.width || 140;
+          posX = lastX + lastW + 24;
+          posY = lastY;
+          if (posX > 1000) { posX = 20; posY = lastY + 160; }
+        }
+
+        const bubble = {
+          id: uid(),
+          isBubble: true,
+          text: textVal,
+          parentId: state.currentFolderId,
+          x: posX,
+          y: posY,
+          width: 140,
+          height: dynamicHeight,
+          fontSize: ed.fontSize,
+          fontFamily: ed.fontFamily,
+          isBold: ed.isBold,
+          isItalic: ed.isItalic,
+          isUnderline: ed.isUnderline,
+          fontColor: ed.fontColor,
+          bgColour: ed.bgColour,
+          align: ed.align
+        };
+        state.textBubbles.push(bubble);
+        await saveTextBubble(bubble);
+      } else {
+        const bubble = state.textBubbles.find(b => b.id === ed.id);
+        if (bubble) {
+          bubble.text = textVal;
+          bubble.height = dynamicHeight;
+          bubble.fontSize = ed.fontSize;
+          bubble.fontFamily = ed.fontFamily;
+          bubble.isBold = ed.isBold;
+          bubble.isItalic = ed.isItalic;
+          bubble.isUnderline = ed.isUnderline;
+          bubble.fontColor = ed.fontColor;
+          bubble.bgColour = ed.bgColour;
+          bubble.align = ed.align;
+          await saveTextBubble(bubble);
+        }
+      }
+
+      state.textEditorModal = null;
+      render();
+    }
+
+    function attachDragAndResizeListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+
+      const items = container.querySelectorAll('[data-id]');
+      items.forEach(el => {
+        const id = el.getAttribute('data-id');
+        const resizeHandle = el.querySelector('.resize-handle');
+
+        // Dragging handler
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialLeft = 0, initialTop = 0;
+        let dragOffsets = {};
+
+        el.addEventListener('pointerdown', (e) => {
+          if (!state.editMode) return;
+          if (resizeHandle && resizeHandle.contains(e.target)) return;
+          if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+
+          e.stopPropagation();
+          isDragging = true;
+          el.setPointerCapture(e.pointerId);
+
+          startX = e.clientX;
+          startY = e.clientY;
+          initialLeft = parseFloat(el.style.left) || 20;
+          initialTop = parseFloat(el.style.top) || 20;
+
+          // If item is part of selection, record starting positions for all selected items
+          dragOffsets = {};
+          if (state.selectedIds.includes(id)) {
+            state.selectedIds.forEach(selId => {
+              const selEl = document.getElementById(`item-${selId}`);
+              if (selEl) {
+                dragOffsets[selId] = {
+                  left: parseFloat(selEl.style.left) || 20,
+                  top: parseFloat(selEl.style.top) || 20
+                };
+              }
+            });
+          } else {
+            // If dragging unselected item in edit mode, auto select it or treat as single
+            dragOffsets[id] = { left: initialLeft, top: initialTop };
+          }
+        });
+
+        el.addEventListener('pointermove', (e) => {
+          if (!isDragging) return;
+          e.stopPropagation();
+
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+
+          Object.keys(dragOffsets).forEach(selId => {
+            const selEl = document.getElementById(`item-${selId}`);
+            if (selEl) {
+              const base = dragOffsets[selId];
+              let newX = Math.max(0, base.left + dx);
+              let newY = Math.max(0, base.top + dy);
+
+              // Snap to grid
+              if (CONFIG.GRID_SIZE) {
+                newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+                newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+              }
+
+              selEl.style.left = `${newX}px`;
+              selEl.style.top = `${newY}px`;
+            }
+          });
+        });
+
+        const onDragEnd = async (e) => {
+          if (!isDragging) return;
+          isDragging = false;
+          try { el.releasePointerCapture(e.pointerId); } catch(err) {}
+
+          // Save final positions to state and DB
+          Object.keys(dragOffsets).forEach(selId => {
+            const selEl = document.getElementById(`item-${selId}`);
+            if (selEl) {
+              const finalX = parseFloat(selEl.style.left) || 20;
+              const finalY = parseFloat(selEl.style.top) || 20;
+
+              // Update state
+              const fObj = state.folders.find(f => f.id === selId);
+              if (fObj) { fObj.x = finalX; fObj.y = finalY; saveFolder(fObj); return; }
+              const fiObj = state.files.find(f => f.id === selId);
+              if (fiObj) { fiObj.x = finalX; fiObj.y = finalY; saveFile(fiObj); return; }
+              const bObj = state.textBubbles.find(b => b.id === selId);
+              if (bObj) { bObj.x = finalX; bObj.y = finalY; saveTextBubble(bObj); return; }
+            }
+          });
+        };
+
+        el.addEventListener('pointerup', onDragEnd);
+        el.addEventListener('pointercancel', onDragEnd);
+
+        // Resizing handler
+        if (resizeHandle) {
+          let isResizing = false;
+          let rStartX = 0, rStartY = 0;
+          let startW = 0, startH = 0;
+
+          resizeHandle.addEventListener('pointerdown', (e) => {
+            if (!state.editMode) return;
+            e.stopPropagation();
+            isResizing = true;
+            resizeHandle.setPointerCapture(e.pointerId);
+
+            rStartX = e.clientX;
+            rStartY = e.clientY;
+            startW = el.offsetWidth;
+            startH = el.offsetHeight;
+          });
+
+          resizeHandle.addEventListener('pointermove', (e) => {
+            if (!isResizing) return;
+            e.stopPropagation();
+
+            const dx = e.clientX - rStartX;
+            const dy = e.clientY - rStartY;
+
+            const newW = Math.max(64, startW + dx);
+            const newH = Math.max(64, startH + dy);
+
+            el.style.width = `${newW}px`;
+            el.style.height = `${newH}px`;
+          });
+
+          const onResizeEnd = async (e) => {
+            if (!isResizing) return;
+            isResizing = false;
+            try { resizeHandle.releasePointerCapture(e.pointerId); } catch(err) {}
+
+            const finalW = el.offsetWidth;
+            const finalH = el.offsetHeight;
+
+            const fObj = state.folders.find(f => f.id === id);
+            if (fObj) { fObj.width = finalW; fObj.height = finalH; saveFolder(fObj); return; }
+            const fiObj = state.files.find(f => f.id === id);
+            if (fiObj) { fiObj.width = finalW; fiObj.height = finalH; saveFile(fiObj); return; }
+            const bObj = state.textBubbles.find(b => b.id === id);
+            if (bObj) { bObj.width = finalW; bObj.height = finalH; saveTextBubble(bObj); return; }
+          };
+
+          resizeHandle.addEventListener('pointerup', onResizeEnd);
+          resizeHandle.addEventListener('pointercancel', onResizeEnd);
+        }
+      });
+    }
+
+    // Initialize application
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
   </script>
 </body>
 </html>
