@@ -1450,7 +1450,7 @@
         if (!bubble) return;
         const newText = prompt("Edit text note:", bubble.text);
         if (newText !== null) {
-          bubble.text = newText.trim();
+          bubble.text = newText;
           saveTextBubble(bubble);
           render();
         }
@@ -1468,7 +1468,7 @@
       } else {
         const file = state.files.find(f => f.id === id);
         if (!file) return;
-        const newName = prompt("Rename file:", file.name);
+        const newName = prompt("Rename item:", file.name);
         if (newName !== null && newName.trim() !== '') {
           file.name = newName.trim();
           saveFile(file);
@@ -1477,281 +1477,82 @@
       }
     }
 
-    function resizeByFinger(id, isFolderItem) {
-      closeMenu();
-      const el = document.getElementById(`item-${id}`);
-      if (!el) return;
-      const wStr = prompt("Enter new width in pixels (e.g. 120, 160, 200):", el.offsetWidth);
-      if (wStr === null) return;
-      const w = parseInt(wStr, 10);
-      if (isNaN(w) || w < 60) return;
-
-      const hStr = prompt("Enter new height in pixels (e.g. 120, 160, 200):", el.offsetHeight);
-      if (hStr === null) return;
-      const h = parseInt(hStr, 10);
-      if (isNaN(h) || h < 60) return;
-
-      el.style.width = w + 'px';
-      el.style.height = h + 'px';
-
-      if (isFolderItem) {
-        const f = state.folders.find(item => item.id === id);
-        if (f) { f.width = w; f.height = h; saveFolder(f); }
-      } else {
-        const fi = state.files.find(item => item.id === id) || state.textBubbles.find(item => item.id === id);
-        if (fi) {
-          fi.width = w;
-          fi.height = h;
-          if (fi.isBubble) saveTextBubble(fi);
-          else saveFile(fi);
-        }
-      }
-      render();
-    }
-
-    function snapToOriginalShape(id) {
-      closeMenu();
-      const el = document.getElementById(`item-${id}`);
-      if (!el) return;
-      const f = state.folders.find(item => item.id === id);
-      const fi = state.files.find(item => item.id === id);
-      const b = state.textBubbles.find(item => item.id === id);
-
-      let defW = f ? 96 : b ? 140 : 112;
-      let defH = f ? 96 : b ? 80 : 144;
-
-      el.style.width = defW + 'px';
-      el.style.height = defH + 'px';
-
-      if (f) { f.width = defW; f.height = defH; saveFolder(f); }
-      if (fi) { fi.width = defW; fi.height = defH; saveFile(fi); }
-      if (b) { b.width = defW; b.height = defH; saveTextBubble(b); }
-      render();
-    }
-
-    function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
+    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
       closeMenu();
       if (!confirm("Are you sure you want to delete this item?")) return;
       if (isBubbleItem) {
         state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        deleteFromDB('textBubbles', id);
+        await deleteFromDB('textBubbles', id);
       } else if (isFolderItem) {
         state.folders = state.folders.filter(f => f.id !== id);
-        deleteFromDB('folders', id);
+        await deleteFromDB('folders', id);
       } else {
         state.files = state.files.filter(f => f.id !== id);
-        deleteFromDB('files', id);
+        await deleteFromDB('files', id);
       }
       render();
     }
 
-    function moveToFolder(id, isFolderItem, isBubbleItem = false) {
+    async function moveToFolder(id, isFolderItem, isBubbleItem = false) {
       closeMenu();
-      const targetFolderId = buildFolderSelectionPrompt();
-      if (targetFolderId !== undefined) {
-        const actualParent = targetFolderId;
+      const targetId = buildFolderSelectionPrompt();
+      if (targetId !== undefined) {
+        const actualParent = targetId;
         if (isBubbleItem) {
-          let b = state.textBubbles.find(item => item.id === id);
-          if (b) { b.parentId = actualParent; saveTextBubble(b); }
+          const b = state.textBubbles.find(item => item.id === id);
+          if (b) { b.parentId = actualParent; await saveTextBubble(b); }
         } else if (isFolderItem) {
-          let f = state.folders.find(item => item.id === id);
-          if (f) { f.parentId = actualParent; saveFolder(f); }
+          const f = state.folders.find(item => item.id === id);
+          if (f) { f.parentId = actualParent; await saveFolder(f); }
         } else {
-          let fi = state.files.find(item => item.id === id);
-          if (fi) { fi.parentId = actualParent; saveFile(fi); }
+          const fi = state.files.find(item => item.id === id);
+          if (fi) { fi.parentId = actualParent; await saveFile(fi); }
         }
         render();
       }
     }
 
-    function attachDragAndResizeListeners() {
-      const container = document.getElementById('canvas-container');
-      if (!container) return;
+    function resizeByFinger(id, isFolderItem) {
+      closeMenu();
+      const itemEl = document.getElementById(`item-${id}`);
+      if (!itemEl) return;
+      const currentW = itemEl.offsetWidth;
+      const currentH = itemEl.offsetHeight;
+      const newW = prompt("Enter new width in pixels (e.g. 120, 180, 240):", currentW);
+      if (newW === null) return;
+      const newH = prompt("Enter new height in pixels (e.g. 120, 180, 240):", currentH);
+      if (newH === null) return;
 
-      const items = container.querySelectorAll('[id^="item-"]');
-      items.forEach(el => {
-        const id = el.getAttribute('data-id');
-        const resizeHandle = el.querySelector('.resize-handle');
-
-        // Dragging & Multi-Drag
-        let isDragging = false;
-        let startX = 0, startY = 0;
-        let initialPositions = new Map();
-
-        el.addEventListener('pointerdown', (e) => {
-          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) return;
-          if (state.selectMode) return; // In select mode, clicking toggles selection via click handler
-
-          isDragging = true;
-          el.setPointerCapture(e.pointerId);
-          startX = e.clientX;
-          startY = e.clientY;
-
-          // If this item is part of selected items, drag all selected together!
-          let activeIds = state.selectedIds.includes(id) ? state.selectedIds : [id];
-          initialPositions.clear();
-
-          activeIds.forEach(itemId => {
-            const itemEl = document.getElementById(`item-${itemId}`);
-            if (itemEl) {
-              initialPositions.set(itemId, {
-                x: parseInt(itemEl.style.left || 0, 10),
-                y: parseInt(itemEl.style.top || 0, 10)
-              });
-            }
-          });
-        });
-
-        el.addEventListener('pointermove', (e) => {
-          if (!isDragging) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-
-          initialPositions.forEach((pos, itemId) => {
-            const itemEl = document.getElementById(`item-${itemId}`);
-            if (itemEl) {
-              let newX = Math.max(0, pos.x + dx);
-              let newY = Math.max(0, pos.y + dy);
-
-              if (state.editMode) {
-                newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-                newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-              }
-
-              itemEl.style.left = newX + 'px';
-              itemEl.style.top = newY + 'px';
-            }
-          });
-        });
-
-        el.addEventListener('pointerup', async (e) => {
-          if (!isDragging) return;
-          isDragging = false;
-          el.releasePointerCapture(e.pointerId);
-
-          initialPositions.forEach(async (pos, itemId) => {
-            const itemEl = document.getElementById(`item-${itemId}`);
-            if (itemEl) {
-              const finalX = parseInt(itemEl.style.left || 0, 10);
-              const finalY = parseInt(itemEl.style.top || 0, 10);
-
-              let f = state.folders.find(item => item.id === itemId);
-              let fi = state.files.find(item => item.id === itemId);
-              let b = state.textBubbles.find(item => item.id === itemId);
-
-              if (f) { f.x = finalX; f.y = finalY; await saveFolder(f); }
-              if (fi) { fi.x = finalX; fi.y = finalY; await saveFile(fi); }
-              if (b) { b.x = finalX; b.y = finalY; await saveTextBubble(b); }
-            }
-          });
-        });
-
-        // Resizing
-        if (resizeHandle) {
-          let isResizing = false;
-          let rStartX = 0, rStartY = 0, startW = 0, startH = 0;
-
-          resizeHandle.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            isResizing = true;
-            resizeHandle.setPointerCapture(e.pointerId);
-            rStartX = e.clientX;
-            rStartY = e.clientY;
-            startW = el.offsetWidth;
-            startH = el.offsetHeight;
-          });
-
-          resizeHandle.addEventListener('pointermove', (e) => {
-            if (!isResizing) return;
-            const dw = e.clientX - rStartX;
-            const dh = e.clientY - rStartY;
-            const newW = Math.max(60, startW + dw);
-            const newH = Math.max(60, startH + dh);
-
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
-          });
-
-          resizeHandle.addEventListener('pointerup', async (e) => {
-            if (!isResizing) return;
-            isResizing = false;
-            resizeHandle.releasePointerCapture(e.pointerId);
-
-            const finalW = el.offsetWidth;
-            const finalH = el.offsetHeight;
-
-            let f = state.folders.find(item => item.id === id);
-            let fi = state.files.find(item => item.id === id);
-            let b = state.textBubbles.find(item => item.id === id);
-
-            if (f) { f.width = finalW; f.height = finalH; await saveFolder(f); }
-            if (fi) { fi.width = finalW; fi.height = finalH; await saveFile(fi); }
-            if (b) { b.width = finalW; b.height = finalH; await saveTextBubble(b); }
-          });
-        }
-      });
-    }
-
-    function attachBulkDragListeners() {
-      // Handled inside attachDragAndResizeListeners seamlessly
-    }
-
-    document.getElementById('file-input').addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const base64 = await fileToBase64(file);
-        const newFile = {
-          id: uid(),
-          name: file.name,
-          fileType: file.type || 'application/octet-stream',
-          dataUrl: base64,
-          parentId: state.currentFolderId,
-          x: 20 + (i * 20) % 300,
-          y: 20 + (i * 20) % 300,
-          width: 112,
-          height: 144
-        };
-        state.files.push(newFile);
-        await saveFile(newFile);
+      const wNum = parseInt(newW);
+      const hNum = parseInt(newH);
+      if (isNaN(wNum) || isNaN(hNum) || wNum < 60 || hNum < 60) {
+        alert('Invalid dimensions. Minimum size is 60px.');
+        return;
       }
-      render();
-    });
 
-    document.getElementById('photo-input').addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
-
-      const uploadId = uid();
-      state.activeUploads.push({ id: uploadId, name: `${files.length} media file(s)`, progress: 10 });
-      render();
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        state.activeUploads[0].progress = Math.round(((i + 1) / files.length) * 90);
+      let target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+      if (target) {
+        target.width = wNum;
+        target.height = hNum;
+        if (isFolder(target)) saveFolder(target);
+        else if (isBubble(target)) saveTextBubble(target);
+        else saveFile(target);
         render();
-
-        const base64 = await fileToBase64(file);
-        const newFile = {
-          id: uid(),
-          name: file.name,
-          fileType: file.type || 'image/png',
-          dataUrl: base64,
-          parentId: state.currentFolderId,
-          x: 20 + (i * 24) % 300,
-          y: 20 + (i * 24) % 300,
-          width: 112,
-          height: 144
-        };
-        state.files.push(newFile);
-        await saveFile(newFile);
       }
+    }
 
-      state.activeUploads = [];
-      render();
-    });
+    function snapToOriginalShape(id) {
+      closeMenu();
+      let target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+      if (target) {
+        delete target.width;
+        delete target.height;
+        if (isFolder(target)) saveFolder(target);
+        else if (isBubble(target)) saveTextBubble(target);
+        else saveFile(target);
+        render();
+      }
+    }
 
     function openNewFolderModal() {
       const name = prompt("Enter new folder name:", "New Folder");
@@ -1760,8 +1561,6 @@
           id: uid(),
           name: name.trim(),
           parentId: state.currentFolderId,
-          x: 20,
-          y: 20,
           width: 96,
           height: 96
         };
@@ -1781,43 +1580,28 @@
       state.linkModalThumbData = null;
       render();
     }
-
-    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        state.linkModalThumbData = await fileToBase64(file);
-        render();
-      }
-    });
-
     async function saveLinkModal() {
-      const urlInput = document.getElementById('link-url-input');
-      const nameInput = document.getElementById('link-name-input');
-      if (!urlInput || !urlInput.value.trim()) {
+      const urlInput = document.getElementById('link-url-input').value.trim();
+      const nameInput = document.getElementById('link-name-input').value.trim();
+      if (!urlInput) {
         alert('Please enter a valid URL.');
         return;
       }
-      let url = urlInput.value.trim();
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : url;
-
+      const finalName = nameInput || urlInput;
       const newFile = {
         id: uid(),
-        name: name,
+        name: finalName,
         fileType: 'link',
-        dataUrl: url,
-        thumbnailData: state.linkModalThumbData || null,
+        dataUrl: urlInput,
+        thumbnailData: state.linkModalThumbData,
         parentId: state.currentFolderId,
-        x: 20,
-        y: 20,
         width: 112,
         height: 144
       };
       state.files.push(newFile);
       await saveFile(newFile);
       closeLinkModal();
+      render();
     }
 
     function openWebVideoModal() {
@@ -1830,40 +1614,28 @@
       state.webVideoModalThumbData = null;
       render();
     }
-
-    document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        state.webVideoModalThumbData = await fileToBase64(file);
-        render();
-      }
-    });
-
     async function saveWebVideoModal() {
-      const urlInput = document.getElementById('web-video-url-input');
-      const nameInput = document.getElementById('web-video-name-input');
-      if (!urlInput || !urlInput.value.trim()) {
+      const urlInput = document.getElementById('web-video-url-input').value.trim();
+      const nameInput = document.getElementById('web-video-name-input').value.trim();
+      if (!urlInput) {
         alert('Please enter a valid video URL or embed code.');
         return;
       }
-      let url = urlInput.value.trim();
-      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Web Video';
-
+      const finalName = nameInput || 'Web Video';
       const newFile = {
         id: uid(),
-        name: name,
+        name: finalName,
         fileType: 'web-video',
-        dataUrl: url,
-        thumbnailData: state.webVideoModalThumbData || null,
+        dataUrl: urlInput,
+        thumbnailData: state.webVideoModalThumbData,
         parentId: state.currentFolderId,
-        x: 20,
-        y: 20,
         width: 112,
         height: 144
       };
       state.files.push(newFile);
       await saveFile(newFile);
       closeWebVideoModal();
+      render();
     }
 
     function openAppModal() {
@@ -1876,6 +1648,45 @@
       state.appModalThumbData = null;
       render();
     }
+    async function saveAppModal() {
+      const schemeInput = document.getElementById('app-scheme-input').value.trim();
+      const nameInput = document.getElementById('app-name-input').value.trim();
+      if (!schemeInput) {
+        alert('Please enter an app URL scheme.');
+        return;
+      }
+      const finalName = nameInput || 'iOS App';
+      const newFile = {
+        id: uid(),
+        name: finalName,
+        fileType: 'ios-app',
+        dataUrl: schemeInput,
+        thumbnailData: state.appModalThumbData,
+        parentId: state.currentFolderId,
+        width: 112,
+        height: 144
+      };
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAppModal();
+      render();
+    }
+
+    document.getElementById('link-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.linkModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
+
+    document.getElementById('web-video-thumbnail-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.webVideoModalThumbData = await fileToBase64(file);
+        render();
+      }
+    });
 
     document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -1885,34 +1696,196 @@
       }
     });
 
-    async function saveAppModal() {
-      const schemeInput = document.getElementById('app-scheme-input');
-      const nameInput = document.getElementById('app-name-input');
-      if (!schemeInput || !schemeInput.value.trim()) {
-        alert('Please enter a valid URL scheme or app link.');
-        return;
-      }
-      let scheme = schemeInput.value.trim();
-      const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'iOS App';
+    async function handleFilesUpload(fileList) {
+      const filesArray = Array.from(fileList);
+      if (filesArray.length === 0) return;
 
-      const newFile = {
-        id: uid(),
-        name: name,
-        fileType: 'ios-app',
-        dataUrl: scheme,
-        thumbnailData: state.appModalThumbData || null,
-        parentId: state.currentFolderId,
-        x: 20,
-        y: 20,
-        width: 112,
-        height: 144
-      };
-      state.files.push(newFile);
-      await saveFile(newFile);
-      closeAppModal();
+      for (let i = 0; i < filesArray.length; i++) {
+        const file = filesArray[i];
+        const uploadObj = { id: uid(), name: file.name, progress: 10 };
+        state.activeUploads.push(uploadObj);
+        render();
+
+        try {
+          const base64Data = await fileToBase64(file);
+          uploadObj.progress = 50;
+          render();
+
+          let textContent = '';
+          if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.csv') || file.name.endsWith('.html') || file.name.endsWith('.md')) {
+            try {
+              textContent = await file.text();
+            } catch (e) {}
+          }
+
+          const newFile = {
+            id: uid(),
+            name: file.name,
+            fileType: file.type || 'application/octet-stream',
+            dataUrl: base64Data,
+            rawBlob: file,
+            textContent: textContent,
+            parentId: state.currentFolderId,
+            width: 112,
+            height: 144
+          };
+
+          if (isVideoFile(newFile) && newFile.fileType !== 'web-video') {
+            await getOrCreateBlobUrl(newFile);
+          }
+
+          state.files.push(newFile);
+          await saveFile(newFile);
+          uploadObj.progress = 100;
+        } catch (err) {
+          console.error('Upload failed for file:', file.name, err);
+        }
+
+        state.activeUploads = state.activeUploads.filter(u => u.id !== uploadObj.id);
+        render();
+      }
     }
 
-    window.addEventListener('DOMContentLoaded', loadData);
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      handleFilesUpload(e.target.files);
+      e.target.value = '';
+    });
+
+    document.getElementById('photo-input').addEventListener('change', (e) => {
+      handleFilesUpload(e.target.files);
+      e.target.value = '';
+    });
+
+    function attachDragAndResizeListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+
+      const items = container.querySelectorAll('[data-id]');
+      items.forEach(el => {
+        const id = el.getAttribute('data-id');
+        const resizeHandle = el.querySelector('.resize-handle');
+
+        // Dragging handler
+        el.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('input') || e.target.closest('a')) return;
+          
+          // Enable moving even when Edit Mode is locked unless selectMode is active
+          if (state.selectMode) return;
+
+          e.stopPropagation();
+          el.setPointerCapture(e.pointerId);
+
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const initialLeft = parseInt(el.style.left) || 20;
+          const initialTop = parseInt(el.style.top) || 20;
+
+          let hasMoved = false;
+
+          const onPointerMove = (moveEvent) => {
+            const dx = moveEvent.clientX - startX;
+            const dy = moveEvent.clientY - startY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+              hasMoved = true;
+            }
+
+            let newX = initialLeft + dx;
+            let newY = initialTop + dy;
+
+            if (state.editMode) {
+              newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+              newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            }
+
+            newX = Math.max(0, newX);
+            newY = Math.max(0, newY);
+
+            el.style.left = `${newX}px`;
+            el.style.top = `${newY}px`;
+          };
+
+          const onPointerUp = async (upEvent) => {
+            el.releasePointerCapture(upEvent.pointerId);
+            el.removeEventListener('pointermove', onPointerMove);
+            el.removeEventListener('pointerup', onPointerUp);
+
+            if (hasMoved) {
+              const finalX = parseInt(el.style.left) || 0;
+              const finalY = parseInt(el.style.top) || 0;
+
+              let target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+              if (target) {
+                target.x = finalX;
+                target.y = finalY;
+                if (isFolder(target)) await saveFolder(target);
+                else if (isBubble(target)) await saveTextBubble(target);
+                else await saveFile(target);
+              }
+            }
+          };
+
+          el.addEventListener('pointermove', onPointerMove);
+          el.addEventListener('pointerup', onPointerUp);
+        });
+
+        // Resizing handler
+        if (resizeHandle) {
+          resizeHandle.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            resizeHandle.setPointerCapture(e.pointerId);
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startW = el.offsetWidth;
+            const startH = el.offsetHeight;
+
+            const onResizeMove = (moveEvent) => {
+              const dw = moveEvent.clientX - startX;
+              const dh = moveEvent.clientY - startY;
+              let newW = Math.max(60, startW + dw);
+              let newH = Math.max(60, startH + dh);
+
+              if (state.editMode) {
+                newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+                newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+              }
+
+              el.style.width = `${newW}px`;
+              el.style.height = `${newH}px`;
+            };
+
+            const onResizeUp = async (resizeUpEvent) => {
+              resizeHandle.releasePointerCapture(resizeUpEvent.pointerId);
+              resizeHandle.removeEventListener('pointermove', onResizeMove);
+              resizeHandle.removeEventListener('pointerup', onResizeUp);
+
+              const finalW = el.offsetWidth;
+              const finalH = el.offsetHeight;
+
+              let target = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+              if (target) {
+                target.width = finalW;
+                target.height = finalH;
+                if (isFolder(target)) await saveFolder(target);
+                else if (isBubble(target)) await saveTextBubble(target);
+                else await saveFile(target);
+              }
+            };
+
+            resizeHandle.addEventListener('pointermove', onResizeMove);
+            resizeHandle.addEventListener('pointerup', onResizeUp);
+          });
+        }
+      });
+    }
+
+    function attachBulkDragListeners() {
+      // Optional placeholder for future multi-item drag selection handling
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
   </script>
 </body>
 </html>
