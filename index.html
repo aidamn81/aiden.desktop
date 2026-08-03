@@ -92,6 +92,7 @@
       webVideoModalThumbData: null,
       appModal: false,
       appModalThumbData: null,
+      newFolderModal: false,
       activeUploads: [],
       popupVideoUrl: null
     };
@@ -466,9 +467,14 @@
           ${items.length === 0 && state.activeUploads.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
-              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
-                <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
-              </button>
+              <div class="flex gap-2">
+                <button onclick="openNewFolderModal()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
+                  <i data-lucide="folder-plus" class="w-4 h-4"></i> New Folder
+                </button>
+                <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
+                  <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
+                </button>
+              </div>
             </div>
           ` : `
             <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
@@ -499,6 +505,7 @@
         ${state.linkModal ? renderLinkModal() : ''}
         ${state.webVideoModal ? renderWebVideoModal() : ''}
         ${state.appModal ? renderAppModal() : ''}
+        ${state.newFolderModal ? renderNewFolderModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
         ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
@@ -672,6 +679,86 @@
       `;
     }
 
+    function renderNewFolderModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeNewFolderModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Create New Folder</h3>
+            <p class="text-xs text-zinc-400">Enter a name for your new folder.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="new-folder-name-input" type="text" placeholder="Folder Name" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeNewFolderModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveNewFolderModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Create</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openNewFolderModal() {
+      closeMenu();
+      closeHamburgerMenu();
+      state.newFolderModal = true;
+      render();
+      setTimeout(() => {
+        const input = document.getElementById('new-folder-name-input');
+        if (input) {
+          input.focus();
+          input.onkeydown = (e) => {
+            if (e.key === 'Enter') saveNewFolderModal();
+          };
+        }
+      }, 50);
+    }
+
+    function closeNewFolderModal() {
+      state.newFolderModal = false;
+      render();
+    }
+
+    async function saveNewFolderModal() {
+      const input = document.getElementById('new-folder-name-input');
+      const name = input ? input.value.trim() : '';
+      if (!name) {
+        alert('Please enter a folder name.');
+        return;
+      }
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+
+      let posX = 20, posY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 96;
+        posX = lastX + lastW + 24;
+        posY = lastY;
+        if (posX > 1000) { posX = 20; posY = lastY + 140; }
+      }
+
+      const newFolder = {
+        id: uid(),
+        name: name,
+        parentId: state.currentFolderId,
+        x: posX,
+        y: posY,
+        width: 96,
+        height: 96
+      };
+
+      state.folders.push(newFolder);
+      await saveFolder(newFolder);
+      state.newFolderModal = false;
+      render();
+    }
+
     function renderLinkModal() {
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeLinkModal()">
@@ -698,6 +785,74 @@
       `;
     }
 
+    function openLinkModal() {
+      state.linkModal = true;
+      state.linkModalThumbData = null;
+      render();
+    }
+    function closeLinkModal() {
+      state.linkModal = false;
+      state.linkModalThumbData = null;
+      render();
+    }
+
+    async function saveLinkModal() {
+      const urlInput = document.getElementById('link-url-input');
+      const nameInput = document.getElementById('link-name-input');
+      let url = urlInput ? urlInput.value.trim() : '';
+      let name = nameInput ? nameInput.value.trim() : '';
+
+      if (!url) {
+        alert('Please enter a valid URL.');
+        return;
+      }
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      if (!name) {
+        try {
+          const parsed = new URL(url);
+          name = parsed.hostname;
+        } catch (e) {
+          name = url;
+        }
+      }
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+
+      let posX = 20, posY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 112;
+        posX = lastX + lastW + 24;
+        posY = lastY;
+        if (posX > 1000) { posX = 20; posY = lastY + 160; }
+      }
+
+      const newFile = {
+        id: uid(),
+        name: name,
+        fileType: 'link',
+        dataUrl: url,
+        thumbnailData: state.linkModalThumbData || null,
+        parentId: state.currentFolderId,
+        x: posX,
+        y: posY,
+        width: 112,
+        height: 144
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeLinkModal();
+    }
+
     function renderWebVideoModal() {
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeWebVideoModal()">
@@ -722,6 +877,66 @@
           </div>
         </div>
       `;
+    }
+
+    function openWebVideoModal() {
+      state.webVideoModal = true;
+      state.webVideoModalThumbData = null;
+      render();
+    }
+    function closeWebVideoModal() {
+      state.webVideoModal = false;
+      state.webVideoModalThumbData = null;
+      render();
+    }
+
+    async function saveWebVideoModal() {
+      const urlInput = document.getElementById('web-video-url-input');
+      const nameInput = document.getElementById('web-video-name-input');
+      let url = urlInput ? urlInput.value.trim() : '';
+      let name = nameInput ? nameInput.value.trim() : '';
+
+      if (!url) {
+        alert('Please enter a valid video URL or embed code.');
+        return;
+      }
+      if (!name) {
+        name = 'Web Video';
+      }
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+
+      let posX = 20, posY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 112;
+        posX = lastX + lastW + 24;
+        posY = lastY;
+        if (posX > 1000) { posX = 20; posY = lastY + 160; }
+      }
+
+      const newFile = {
+        id: uid(),
+        name: name,
+        fileType: 'web-video',
+        dataUrl: url,
+        thumbnailData: state.webVideoModalThumbData || null,
+        parentId: state.currentFolderId,
+        x: posX,
+        y: posY,
+        width: 112,
+        height: 144
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeWebVideoModal();
     }
 
     function renderPopupVideoModal() {
@@ -802,6 +1017,66 @@
           </div>
         </div>
       `;
+    }
+
+    function openAppModal() {
+      state.appModal = true;
+      state.appModalThumbData = null;
+      render();
+    }
+    function closeAppModal() {
+      state.appModal = false;
+      state.appModalThumbData = null;
+      render();
+    }
+
+    async function saveAppModal() {
+      const schemeInput = document.getElementById('app-scheme-input');
+      const nameInput = document.getElementById('app-name-input');
+      let scheme = schemeInput ? schemeInput.value.trim() : '';
+      let name = nameInput ? nameInput.value.trim() : '';
+
+      if (!scheme) {
+        alert('Please enter a valid URL scheme or App link.');
+        return;
+      }
+      if (!name) {
+        name = 'App Shortcut';
+      }
+
+      let allExisting = [
+        ...state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root'),
+        ...state.files.filter(f => f.parentId === state.currentFolderId),
+        ...state.textBubbles.filter(b => b.parentId === state.currentFolderId)
+      ];
+
+      let posX = 20, posY = 20;
+      if (allExisting.length > 0) {
+        const lastItem = allExisting[allExisting.length - 1];
+        const lastX = lastItem.x !== undefined ? lastItem.x : 20;
+        const lastY = lastItem.y !== undefined ? lastItem.y : 20;
+        const lastW = lastItem.width || 112;
+        posX = lastX + lastW + 24;
+        posY = lastY;
+        if (posX > 1000) { posX = 20; posY = lastY + 160; }
+      }
+
+      const newFile = {
+        id: uid(),
+        name: name,
+        fileType: 'app',
+        dataUrl: scheme,
+        thumbnailData: state.appModalThumbData || null,
+        parentId: state.currentFolderId,
+        x: posX,
+        y: posY,
+        width: 112,
+        height: 144
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAppModal();
     }
 
     function renderTextEditorModal() {
@@ -1383,153 +1658,383 @@
         const id = el.getAttribute('data-id');
         const resizeHandle = el.querySelector('.resize-handle');
 
+        let itemObj = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+        if (!itemObj) return;
+
         // Dragging handler
         let isDragging = false;
-        let startX = 0, startY = 0;
-        let initialLeft = 0, initialTop = 0;
-        let dragOffsets = {};
+        let startX, startY, initialLeft, initialTop;
 
         el.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('.resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
           if (!state.editMode) return;
-          if (resizeHandle && resizeHandle.contains(e.target)) return;
-          if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
 
-          e.stopPropagation();
           isDragging = true;
           el.setPointerCapture(e.pointerId);
-
           startX = e.clientX;
           startY = e.clientY;
-          initialLeft = parseFloat(el.style.left) || 20;
-          initialTop = parseFloat(el.style.top) || 20;
-
-          // If item is part of selection, record starting positions for all selected items
-          dragOffsets = {};
-          if (state.selectedIds.includes(id)) {
-            state.selectedIds.forEach(selId => {
-              const selEl = document.getElementById(`item-${selId}`);
-              if (selEl) {
-                dragOffsets[selId] = {
-                  left: parseFloat(selEl.style.left) || 20,
-                  top: parseFloat(selEl.style.top) || 20
-                };
-              }
-            });
-          } else {
-            // If dragging unselected item in edit mode, auto select it or treat as single
-            dragOffsets[id] = { left: initialLeft, top: initialTop };
-          }
+          initialLeft = parseInt(el.style.left) || 20;
+          initialTop = parseInt(el.style.top) || 20;
+          e.stopPropagation();
         });
 
         el.addEventListener('pointermove', (e) => {
           if (!isDragging) return;
-          e.stopPropagation();
-
           const dx = e.clientX - startX;
           const dy = e.clientY - startY;
+          let newX = Math.max(0, initialLeft + dx);
+          let newY = Math.max(0, initialTop + dy);
 
-          Object.keys(dragOffsets).forEach(selId => {
-            const selEl = document.getElementById(`item-${selId}`);
-            if (selEl) {
-              const base = dragOffsets[selId];
-              let newX = Math.max(0, base.left + dx);
-              let newY = Math.max(0, base.top + dy);
+          // Snap to grid
+          newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+          newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
 
-              // Snap to grid
-              if (CONFIG.GRID_SIZE) {
-                newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-                newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-              }
-
-              selEl.style.left = `${newX}px`;
-              selEl.style.top = `${newY}px`;
-            }
-          });
+          el.style.left = newX + 'px';
+          el.style.top = newY + 'px';
         });
 
-        const onDragEnd = async (e) => {
+        el.addEventListener('pointerup', async (e) => {
           if (!isDragging) return;
           isDragging = false;
-          try { el.releasePointerCapture(e.pointerId); } catch(err) {}
+          el.releasePointerCapture(e.pointerId);
+          
+          itemObj.x = parseInt(el.style.left);
+          itemObj.y = parseInt(el.style.top);
 
-          // Save final positions to state and DB
-          Object.keys(dragOffsets).forEach(selId => {
-            const selEl = document.getElementById(`item-${selId}`);
-            if (selEl) {
-              const finalX = parseFloat(selEl.style.left) || 20;
-              const finalY = parseFloat(selEl.style.top) || 20;
-
-              // Update state
-              const fObj = state.folders.find(f => f.id === selId);
-              if (fObj) { fObj.x = finalX; fObj.y = finalY; saveFolder(fObj); return; }
-              const fiObj = state.files.find(f => f.id === selId);
-              if (fiObj) { fiObj.x = finalX; fiObj.y = finalY; saveFile(fiObj); return; }
-              const bObj = state.textBubbles.find(b => b.id === selId);
-              if (bObj) { bObj.x = finalX; bObj.y = finalY; saveTextBubble(bObj); return; }
-            }
-          });
-        };
-
-        el.addEventListener('pointerup', onDragEnd);
-        el.addEventListener('pointercancel', onDragEnd);
+          if (isFolder(itemObj)) await saveFolder(itemObj);
+          else if (isBubble(itemObj)) await saveTextBubble(itemObj);
+          else await saveFile(itemObj);
+        });
 
         // Resizing handler
         if (resizeHandle) {
           let isResizing = false;
-          let rStartX = 0, rStartY = 0;
-          let startW = 0, startH = 0;
+          let rStartX, rStartY, startW, startH;
 
           resizeHandle.addEventListener('pointerdown', (e) => {
             if (!state.editMode) return;
-            e.stopPropagation();
             isResizing = true;
             resizeHandle.setPointerCapture(e.pointerId);
-
             rStartX = e.clientX;
             rStartY = e.clientY;
-            startW = el.offsetWidth;
-            startH = el.offsetHeight;
+            startW = parseInt(el.style.width) || itemObj.width || 96;
+            startH = parseInt(el.style.height) || itemObj.height || 96;
+            e.stopPropagation();
+            e.preventDefault();
           });
 
           resizeHandle.addEventListener('pointermove', (e) => {
             if (!isResizing) return;
-            e.stopPropagation();
-
             const dx = e.clientX - rStartX;
             const dy = e.clientY - rStartY;
+            let newW = Math.max(64, startW + dx);
+            let newH = Math.max(64, startH + dy);
 
-            const newW = Math.max(64, startW + dx);
-            const newH = Math.max(64, startH + dy);
+            newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+            newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
 
-            el.style.width = `${newW}px`;
-            el.style.height = `${newH}px`;
+            el.style.width = newW + 'px';
+            el.style.height = newH + 'px';
           });
 
-          const onResizeEnd = async (e) => {
+          resizeHandle.addEventListener('pointerup', async (e) => {
             if (!isResizing) return;
             isResizing = false;
-            try { resizeHandle.releasePointerCapture(e.pointerId); } catch(err) {}
+            resizeHandle.releasePointerCapture(e.pointerId);
 
-            const finalW = el.offsetWidth;
-            const finalH = el.offsetHeight;
+            itemObj.width = parseInt(el.style.width);
+            itemObj.height = parseInt(el.style.height);
 
-            const fObj = state.folders.find(f => f.id === id);
-            if (fObj) { fObj.width = finalW; fObj.height = finalH; saveFolder(fObj); return; }
-            const fiObj = state.files.find(f => f.id === id);
-            if (fiObj) { fiObj.width = finalW; fiObj.height = finalH; saveFile(fiObj); return; }
-            const bObj = state.textBubbles.find(b => b.id === id);
-            if (bObj) { bObj.width = finalW; bObj.height = finalH; saveTextBubble(bObj); return; }
-          };
-
-          resizeHandle.addEventListener('pointerup', onResizeEnd);
-          resizeHandle.addEventListener('pointercancel', onResizeEnd);
+            if (isFolder(itemObj)) await saveFolder(itemObj);
+            else if (isBubble(itemObj)) await saveTextBubble(itemObj);
+            else await saveFile(itemObj);
+          });
         }
       });
     }
 
-    // Initialize application
-    window.addEventListener('DOMContentLoaded', () => {
+    // Additional folder & item utility stubs
+    function renameItem(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      let item = isFolderItem 
+        ? state.folders.find(f => f.id === id) 
+        : (isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id));
+      if (!item) return;
+      const newName = prompt('Enter new name:', item.name || '');
+      if (newName !== null && newName.trim() !== '') {
+        item.name = newName.trim();
+        if (isFolderItem) saveFolder(item);
+        else if (isBubbleItem) saveTextBubble(item);
+        else saveFile(item);
+        render();
+      }
+    }
+
+    function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      let item = isFolderItem 
+        ? state.folders.find(f => f.id === id) 
+        : (isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id));
+      if (!item) return;
+      if (confirm(`Are you sure you want to delete "${item.name || 'this item'}"?`)) {
+        if (isFolderItem) {
+          state.folders = state.folders.filter(f => f.id !== id);
+          deleteFromDB('folders', id);
+        } else if (isBubbleItem) {
+          state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+          deleteFromDB('textBubbles', id);
+        } else {
+          state.files = state.files.filter(f => f.id !== id);
+          deleteFromDB('files', id);
+        }
+        render();
+      }
+    }
+
+    function moveToFolder(id, isFolderItem, isBubbleItem = false) {
+      closeMenu();
+      let item = isFolderItem 
+        ? state.folders.find(f => f.id === id) 
+        : (isBubbleItem ? state.textBubbles.find(b => b.id === id) : state.files.find(f => f.id === id));
+      if (!item) return;
+
+      const folderList = state.folders.filter(f => f.id !== id && f.id !== item.parentId);
+      let promptMsg = "Enter target Folder ID or type 'root' for home:\n\nAvailable Folders:\n- root (Home)\n" + folderList.map(f => `- ${f.id}: ${f.name}`).join('\n');
+      const targetId = prompt(promptMsg, 'root');
+      if (targetId !== null) {
+        const cleanId = targetId.trim() === 'root' ? null : targetId.trim();
+        if (cleanId === null || state.folders.some(f => f.id === cleanId)) {
+          item.parentId = cleanId;
+          if (isFolderItem) saveFolder(item);
+          else if (isBubbleItem) saveTextBubble(item);
+          else saveFile(item);
+          render();
+        } else {
+          alert('Invalid Folder ID.');
+        }
+      }
+    }
+
+    function resizeByFinger(id, isFolderItem) {
+      closeMenu();
+      alert('Enable Edit Mode to drag or resize items freely using the bottom-right corner handle.');
+    }
+
+    function snapToOriginalShape(id) {
+      closeMenu();
+      let item = state.folders.find(f => f.id === id) || state.files.find(f => f.id === id) || state.textBubbles.find(b => b.id === id);
+      if (!item) return;
+      item.width = isFolder(item) ? 96 : (isBubble(item) ? 140 : 112);
+      item.height = isFolder(item) ? 96 : (isBubble(item) ? 80 : 144);
+      if (isFolder(item)) saveFolder(item);
+      else if (isBubble(item)) saveTextBubble(item);
+      else saveFile(item);
+      render();
+    }
+
+    function triggerFolderCover(id) {
+      closeMenu();
+      state.targetFolderCoverId = id;
+      document.getElementById('folder-cover-input').click();
+    }
+
+    function triggerChangeImage(id) {
+      closeMenu();
+      state.targetChangeImageId = id;
+      document.getElementById('change-image-input').click();
+    }
+
+    function copySingleFileClipboard(id) {
+      closeMenu();
+      const file = state.files.find(f => f.id === id);
+      if (!file) return;
+      navigator.clipboard?.writeText(file.dataUrl).then(() => {
+        alert('File link/data copied to clipboard!');
+      }).catch(() => {
+        alert('Could not copy to clipboard.');
+      });
+    }
+
+    function shareFile(id) {
+      closeMenu();
+      const file = state.files.find(f => f.id === id);
+      if (!file) return;
+      if (navigator.share) {
+        navigator.share({ title: file.name, url: file.dataUrl }).catch(() => {});
+      } else {
+        copySingleFileClipboard(id);
+      }
+    }
+
+    function bulkCopy() {
+      alert(`${state.selectedIds.length} items selected for copy.`);
+    }
+
+    function bulkMove() {
+      const targetId = prompt("Enter target Folder ID or 'root' for home:", 'root');
+      if (targetId !== null) {
+        const cleanId = targetId.trim() === 'root' ? null : targetId.trim();
+        state.selectedIds.forEach(id => {
+          let folder = state.folders.find(f => f.id === id);
+          let file = state.files.find(f => f.id === id);
+          let bubble = state.textBubbles.find(b => b.id === id);
+          if (folder) { folder.parentId = cleanId; saveFolder(folder); }
+          if (file) { file.parentId = cleanId; saveFile(file); }
+          if (bubble) { bubble.parentId = cleanId; saveTextBubble(bubble); }
+        });
+        state.selectedIds = [];
+        state.selectMode = false;
+        render();
+      }
+    }
+
+    function bulkShare() {
+      alert(`${state.selectedIds.length} items selected for sharing.`);
+    }
+
+    function bulkDelete() {
+      if (confirm(`Delete ${state.selectedIds.length} selected items?`)) {
+        state.selectedIds.forEach(id => {
+          state.folders = state.folders.filter(f => f.id !== id);
+          state.files = state.files.filter(f => f.id !== id);
+          state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+          deleteFromDB('folders', id);
+          deleteFromDB('files', id);
+          deleteFromDB('textBubbles', id);
+        });
+        state.selectedIds = [];
+        state.selectMode = false;
+        render();
+      }
+    }
+
+    // File input listeners setup
+    document.addEventListener('DOMContentLoaded', () => {
       loadData();
+
+      document.getElementById('file-input').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        for (let rawFile of files) {
+          const reader = new FileReader();
+          reader.onload = async (evt) => {
+            const dataUrl = evt.target.result;
+            const newFile = {
+              id: uid(),
+              name: rawFile.name,
+              fileType: rawFile.type || 'application/octet-stream',
+              dataUrl: dataUrl,
+              textContent: rawFile.type.startsWith('text/') || rawFile.name.endsWith('.txt') ? dataUrl : null,
+              parentId: state.currentFolderId,
+              width: 112,
+              height: 144
+            };
+            state.files.push(newFile);
+            await saveFile(newFile);
+            render();
+          };
+          reader.readAsDataURL(rawFile);
+        }
+        e.target.value = '';
+      });
+
+      document.getElementById('photo-input').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        for (let rawFile of files) {
+          const blobUrl = URL.createObjectURL(rawFile);
+          const reader = new FileReader();
+          reader.onload = async (evt) => {
+            const dataUrl = evt.target.result;
+            const newFile = {
+              id: uid(),
+              name: rawFile.name,
+              fileType: rawFile.type,
+              dataUrl: dataUrl,
+              rawBlob: rawFile,
+              blobUrl: blobUrl,
+              parentId: state.currentFolderId,
+              width: 112,
+              height: 144
+            };
+            state.files.push(newFile);
+            await saveFile(newFile);
+            render();
+          };
+          reader.readAsDataURL(rawFile);
+        }
+        e.target.value = '';
+      });
+
+      document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || !state.targetFolderCoverId) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          const folder = state.folders.find(f => f.id === state.targetFolderCoverId);
+          if (folder) {
+            folder.coverUrl = evt.target.result;
+            await saveFolder(folder);
+            render();
+          }
+          state.targetFolderCoverId = null;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('change-image-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || !state.targetChangeImageId) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          const targetFile = state.files.find(f => f.id === state.targetChangeImageId);
+          if (targetFile) {
+            targetFile.thumbnailData = evt.target.result;
+            await saveFile(targetFile);
+            render();
+          }
+          state.targetChangeImageId = null;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          state.linkModalThumbData = evt.target.result;
+          render();
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          state.webVideoModalThumbData = evt.target.result;
+          render();
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('app-thumbnail-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          state.appModalThumbData = evt.target.result;
+          render();
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
     });
   </script>
 </body>
