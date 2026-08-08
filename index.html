@@ -368,9 +368,84 @@
       }
     }
 
+    function toggleHamburgerMenu(e) {
+      e.stopPropagation();
+      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
+      render();
+    }
+
+    function closeHamburgerMenu() {
+      if (state.hamburgerMenuOpen) {
+        state.hamburgerMenuOpen = false;
+        render();
+      }
+    }
+
+    function toggleSelectMode() {
+      state.selectMode = !state.selectMode;
+      if (!state.selectMode) state.selectedIds = [];
+      render();
+    }
+
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      render();
+    }
+
+    function navigateTo(folderId) {
+      state.currentFolderId = folderId;
+      state.selectedIds = [];
+      closeMenu();
+      closeHamburgerMenu();
+      render();
+    }
+
+    function navigateBack() {
+      if (state.currentFolderId === null) return;
+      const current = state.folders.find(f => f.id === state.currentFolderId);
+      if (current) {
+        navigateTo(current.parentId);
+      } else {
+        navigateTo(null);
+      }
+    }
+
+    function toggleMenu(e, id) {
+      e.stopPropagation();
+      state.activeMenuId = state.activeMenuId === id ? null : id;
+      render();
+    }
+
+    function closeMenu() {
+      if (state.activeMenuId !== null) {
+        state.activeMenuId = null;
+        render();
+      }
+    }
+
+    function handleItemClick(event, id, isFolderItem, isBubbleItem = false) {
+      if (state.selectMode) {
+        event.stopPropagation();
+        if (state.selectedIds.includes(id)) {
+          state.selectedIds = state.selectedIds.filter(i => i !== id);
+        } else {
+          state.selectedIds.push(id);
+        }
+        render();
+        return;
+      }
+      if (state.editMode) return;
+
+      if (isBubbleItem) return;
+      if (isFolderItem) {
+        navigateTo(id);
+      } else {
+        openQuickView(id);
+      }
+    }
+
     function openNewFolderModal() {
       closeHamburgerMenu();
-      closeUploadModal();
       const name = prompt('Enter folder name:');
       if (!name || !name.trim()) return;
       
@@ -384,6 +459,42 @@
       state.folders.push(newFolder);
       saveFolder(newFolder);
       render();
+    }
+
+    function openUploadModal() {
+      closeHamburgerMenu();
+      state.showUploadModal = true;
+      render();
+    }
+
+    function closeUploadModal() {
+      state.showUploadModal = false;
+      render();
+    }
+
+    function renderUploadModal() {
+      return `
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeUploadModal()">
+          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+            <h3 class="text-base font-bold text-white text-center">Add Content</h3>
+            <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="folder-open" class="w-5 h-5"></i> Files App
+            </button>
+            <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="image" class="w-5 h-5"></i> Photos & Media
+            </button>
+            <button onclick="openLinkModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="link" class="w-5 h-5"></i> Add Web Link
+            </button>
+            <button onclick="openWebVideoModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="video" class="w-5 h-5"></i> Add Web Video
+            </button>
+            <button onclick="openAppModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="smartphone" class="w-5 h-5"></i> Add App
+            </button>
+          </div>
+        </div>
+      `;
     }
 
     function openLinkModal() {
@@ -400,27 +511,29 @@
       render();
     }
 
+    function renderLinkModal() {
+      return `
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeLinkModal()">
+          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+            <h3 class="text-base font-bold text-white text-center">Add Web Link</h3>
+            <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+            <input id="link-name-input" type="text" placeholder="Link Title (optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+            <button onclick="document.getElementById('link-thumbnail-input').click()" class="w-full py-2 bg-zinc-800 text-xs font-bold text-zinc-300 rounded-xl">Choose Custom Thumbnail</button>
+            <button onclick="saveLinkModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl cursor-pointer">Save Link</button>
+          </div>
+        </div>
+      `;
+    }
+
     async function saveLinkModal() {
       const urlInput = document.getElementById('link-url-input');
       const nameInput = document.getElementById('link-name-input');
       if (!urlInput) return;
       let url = urlInput.value.trim();
-      if (!url) {
-        alert('Please enter a valid URL.');
-        return;
-      }
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
+      if (!url) { alert('Please enter a valid URL.'); return; }
+      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
       let name = nameInput ? nameInput.value.trim() : '';
-      if (!name) {
-        try {
-          const parsed = new URL(url);
-          name = parsed.hostname;
-        } catch(e) {
-          name = 'Web Link';
-        }
-      }
+      if (!name) { try { name = new URL(url).hostname; } catch(e) { name = 'Web Link'; } }
 
       const newFile = {
         id: uid(),
@@ -453,19 +566,27 @@
       render();
     }
 
+    function renderWebVideoModal() {
+      return `
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeWebVideoModal()">
+          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+            <h3 class="text-base font-bold text-white text-center">Add Web Video</h3>
+            <input id="web-video-url-input" type="text" placeholder="YouTube or Video URL" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+            <input id="web-video-name-input" type="text" placeholder="Video Title (optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+            <button onclick="document.getElementById('web-video-thumbnail-input').click()" class="w-full py-2 bg-zinc-800 text-xs font-bold text-zinc-300 rounded-xl">Choose Custom Thumbnail</button>
+            <button onclick="saveWebVideoModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl cursor-pointer">Save Video</button>
+          </div>
+        </div>
+      `;
+    }
+
     async function saveWebVideoModal() {
       const urlInput = document.getElementById('web-video-url-input');
       const nameInput = document.getElementById('web-video-name-input');
       if (!urlInput) return;
       let url = urlInput.value.trim();
-      if (!url) {
-        alert('Please enter a valid video URL or embed link.');
-        return;
-      }
-      let name = nameInput ? nameInput.value.trim() : '';
-      if (!name) {
-        name = 'Web Video';
-      }
+      if (!url) { alert('Please enter a valid video URL.'); return; }
+      let name = nameInput ? nameInput.value.trim() : 'Web Video';
 
       const newFile = {
         id: uid(),
@@ -498,15 +619,26 @@
       render();
     }
 
+    function renderAppModal() {
+      return `
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeAppModal()">
+          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+            <h3 class="text-base font-bold text-white text-center">Add App</h3>
+            <input id="app-scheme-input" type="text" placeholder="App Scheme or URL" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+            <input id="app-name-input" type="text" placeholder="App Name" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+            <button onclick="document.getElementById('app-thumbnail-input').click()" class="w-full py-2 bg-zinc-800 text-xs font-bold text-zinc-300 rounded-xl">Choose App Icon</button>
+            <button onclick="saveAppModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl cursor-pointer">Save App</button>
+          </div>
+        </div>
+      `;
+    }
+
     async function saveAppModal() {
       const schemeInput = document.getElementById('app-scheme-input');
       const nameInput = document.getElementById('app-name-input');
       if (!schemeInput) return;
       let scheme = schemeInput.value.trim();
-      if (!scheme) {
-        alert('Please enter an app scheme or URL.');
-        return;
-      }
+      if (!scheme) { alert('Please enter an app scheme.'); return; }
       let name = nameInput ? nameInput.value.trim() : 'iOS App';
 
       const newFile = {
@@ -524,6 +656,137 @@
       await saveFile(newFile);
       closeAppModal();
       render();
+    }
+
+    function renderQuickViewModal() {
+      const file = state.files.find(f => f.id === state.quickViewFileId);
+      if (!file) return '';
+      const isImage = (file.fileType || '').startsWith('image/');
+      const isVideo = isVideoFile(file);
+      const isAudio = isAudioFile(file);
+      const isLink = file.fileType === 'link';
+      const isWebVideo = file.fileType === 'web-video';
+      const isApp = file.fileType === 'app' || file.fileType === 'ios-app';
+
+      return `
+        <div class="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col justify-between p-4" onclick="closeQuickView()">
+          <div class="flex items-center justify-between z-10 bg-black/40 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
+            <span class="text-sm font-bold text-white truncate max-w-[70%]">${file.name}</span>
+            <button onclick="closeQuickView()" class="p-2 bg-zinc-800 rounded-xl text-zinc-300 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+          </div>
+          <div class="flex-1 flex items-center justify-center p-2 relative overflow-hidden" onclick="event.stopPropagation()">
+            ${isImage ? `<img src="${file.dataUrl}" class="max-h-full max-w-full object-contain rounded-xl shadow-2xl" />` : ''}
+            ${isVideo && !isWebVideo ? `<video src="${file.blobUrl || file.dataUrl}" controls autoplay class="max-h-full max-w-full rounded-xl shadow-2xl"></video>` : ''}
+            ${isAudio ? `<audio src="${file.blobUrl || file.dataUrl}" controls autoplay class="w-full max-w-md"></audio>` : ''}
+            ${isLink ? `
+              <div class="flex flex-col items-center gap-4 text-center">
+                <i data-lucide="link" class="w-16 h-16 text-amber-400"></i>
+                <a href="${file.dataUrl}" target="_blank" class="px-6 py-3 bg-amber-500 text-black font-bold rounded-xl shadow-lg">Open Link</a>
+              </div>
+            ` : ''}
+            ${isWebVideo ? `
+              <div class="flex flex-col items-center gap-4 text-center w-full h-full justify-center">
+                <iframe src="${file.dataUrl}" class="w-full max-w-2xl h-96 rounded-xl border border-zinc-800" allowfullscreen></iframe>
+              </div>
+            ` : ''}
+            ${isApp ? `
+              <div class="flex flex-col items-center gap-4 text-center">
+                <i data-lucide="smartphone" class="w-16 h-16 text-amber-400"></i>
+                <a href="${file.dataUrl}" class="px-6 py-3 bg-amber-500 text-black font-bold rounded-xl shadow-lg">Launch App</a>
+              </div>
+            ` : ''}
+          </div>
+          <div class="flex items-center justify-center gap-3 z-10 bg-black/40 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
+            <button onclick="copySingleFileClipboard('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
+            <button onclick="shareFile('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-xs font-bold rounded-xl text-red-400 flex items-center gap-1.5"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function openQuickView(id) {
+      closeMenu();
+      state.quickViewFileId = id;
+      render();
+    }
+
+    function closeQuickView() {
+      state.quickViewFileId = null;
+      render();
+    }
+
+    function openTextEditorModal(bubbleId = null, parentFileId = null) {
+      closeMenu();
+      let bubble = bubbleId ? state.textBubbles.find(b => b.id === bubbleId) : null;
+      state.textEditorModal = {
+        id: bubble ? bubble.id : uid(),
+        text: bubble ? bubble.text : '',
+        fontFamily: bubble ? bubble.fontFamily : 'sans-serif',
+        fontSize: bubble ? bubble.fontSize : 'md',
+        isBold: bubble ? bubble.isBold : false,
+        isItalic: bubble ? bubble.isItalic : false,
+        isUnderline: bubble ? bubble.isUnderline : false,
+        fontColor: bubble ? bubble.fontColor : '#ffffff',
+        bgColour: bubble ? bubble.bgColour : '#18181b',
+        align: bubble ? bubble.align : 'left',
+        parentId: bubble ? bubble.parentId : state.currentFolderId
+      };
+      render();
+    }
+
+    function closeTextEditorModal() {
+      state.textEditorModal = null;
+      render();
+    }
+
+    async function saveTextEditorModal() {
+      if (!state.textEditorModal) return;
+      const inputEl = document.getElementById('modal-text-input');
+      if (inputEl) state.textEditorModal.text = inputEl.innerText;
+
+      let existing = state.textBubbles.find(b => b.id === state.textEditorModal.id);
+      if (existing) {
+        Object.assign(existing, state.textEditorModal);
+        await saveTextBubble(existing);
+      } else {
+        const newBubble = { ...state.textEditorModal, isBubble: true, width: 140, height: 80 };
+        state.textBubbles.push(newBubble);
+        await saveTextBubble(newBubble);
+      }
+      closeTextEditorModal();
+      render();
+    }
+
+    function renderTextEditorModal() {
+      const b = state.textEditorModal;
+      return `
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeTextEditorModal()">
+          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-3 shadow-2xl">
+            <h3 class="text-sm font-bold text-white text-center">Text Bubble Editor</h3>
+            <div class="flex items-center gap-2 flex-wrap">
+              <select onchange="state.textEditorModal.fontFamily=this.value; render();" class="bg-zinc-950 border border-zinc-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="sans-serif" ${b.fontFamily==='sans-serif'?'selected':''}>Sans-Serif</option>
+                <option value="serif" ${b.fontFamily==='serif'?'selected':''}>Serif</option>
+                <option value="monospace" ${b.fontFamily==='monospace'?'selected':''}>Monospace</option>
+              </select>
+              <select onchange="state.textEditorModal.fontSize=this.value; render();" class="bg-zinc-950 border border-zinc-800 rounded-xl px-2 py-1.5 text-xs text-white">
+                <option value="sm" ${b.fontSize==='sm'?'selected':''}>Small</option>
+                <option value="md" ${b.fontSize==='md'?'selected':''}>Normal</option>
+                <option value="lg" ${b.fontSize==='lg'?'selected':''}>Large</option>
+              </select>
+              <button onclick="state.textEditorModal.isBold=!state.textEditorModal.isBold; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold ${b.isBold?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">B</button>
+              <button onclick="state.textEditorModal.isItalic=!state.textEditorModal.isItalic; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold italic ${b.isItalic?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">I</button>
+              <button onclick="state.textEditorModal.isUnderline=!state.textEditorModal.isUnderline; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold underline ${b.isUnderline?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">U</button>
+            </div>
+            <div class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-xs text-white overflow-auto focus:outline-none" contenteditable="true" id="modal-text-input" data-placeholder="Type something...">${b.text}</div>
+            <div class="flex items-center justify-between">
+              <button onclick="closeTextEditorModal()" class="px-4 py-2 bg-zinc-800 rounded-xl text-xs font-bold text-zinc-300">Cancel</button>
+              <button onclick="saveTextEditorModal()" class="px-5 py-2 bg-amber-500 hover:bg-amber-400 rounded-xl text-xs font-bold text-black cursor-pointer">Save Bubble</button>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     function render() {
@@ -598,9 +861,6 @@
               <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
                 <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
               </button>
-              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
-                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
-              </button>
             </div>
           ` : ''}
         </header>
@@ -608,34 +868,9 @@
         <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
           ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
           
-          ${state.activeUploads.length > 0 ? `
-            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
-              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
-                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
-                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
-              </div>
-              <div class="flex flex-col gap-2">
-                ${state.activeUploads.map(up => `
-                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
-                    <div class="flex items-center justify-between text-xs">
-                      <span class="truncate font-medium text-white max-w-[70%]" title="${up.name}">${up.name}</span>
-                      <span class="text-amber-400 font-bold">${up.progress}%</span>
-                    </div>
-                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
-
-          ${items.length === 0 && state.activeUploads.length === 0 ? `
+          ${items.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
-              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
-                <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
-              </button>
             </div>
           ` : `
             <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
@@ -650,15 +885,6 @@
               <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
               ${allChildrenSelected ? 'Deselect All' : 'Select All'}
             </button>
-            ${state.selectedIds.length > 0 ? `
-              <div class="h-4 w-px bg-zinc-800"></div>
-              <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
-              <div class="h-4 w-px bg-zinc-800"></div>
-              <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
-              <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move to folder</button>
-              <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
-              <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
-            ` : ''}
           </div>
         ` : ''}
 
@@ -668,7 +894,6 @@
         ${state.appModal ? renderAppModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
-        ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
       `;
 
       if (window.lucide) window.lucide.createIcons();
@@ -679,11 +904,8 @@
       if (type === 'link' || name.startsWith('http')) return 'link';
       if (type === 'web-video') return 'video';
       if (type === 'app' || type === 'ios-app') return 'smartphone';
-      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.mkv')) return 'video';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov')) return 'video';
       if (type.startsWith('audio/')) return 'music';
-      if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
-      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.html') || name.endsWith('.json') || name.endsWith('.csv')) return 'file-text';
-      if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'file-spreadsheet';
       return 'file';
     }
 
@@ -698,7 +920,6 @@
       if (item.isUnderline) style += 'text-decoration:underline;';
       if (item.fontColor) style += `color:${item.fontColor};`;
       if (item.bgColour) style += `background-color:${item.bgColour};`;
-      if (item.align) style += `text-align:${item.align};`;
       return style;
     }
 
@@ -715,12 +936,10 @@
       const isSelected = state.selectedIds.includes(item.id);
 
       if (bubble) {
-        let bubbleCustomBg = item.bgColour ? `background-color:${item.bgColour};` : '';
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden" style="${bubbleCustomBg}">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500' : 'border-zinc-700'} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
               <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
-              <div class="item-select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
             <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
@@ -730,9 +949,8 @@
       } else if (folder) {
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
-            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
+            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
               ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[20px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
-              <div class="item-select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
               <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
             </div>
@@ -743,30 +961,18 @@
       } else {
         const type = item.fileType || '';
         const isImage = type.startsWith('image/');
-        const isVideo = isVideoFile(item);
-        const isWebVideo = type === 'web-video';
-        const isLink = type === 'link';
-        const isApp = type === 'app' || type === 'ios-app';
         const imgSrc = item.thumbnailData || item.dataUrl;
         const icon = getFileIcon(type, item.name);
 
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500' : 'border-zinc-800'} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
               <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                ${(isImage || ((isApp || isLink || isWebVideo) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                ${isImage && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
-                    ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
-                    ${isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Web Video</span>' : ''}
-                    ${isApp ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">iOS App</span>' : ''}
-                    ${isVideo && !isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
-                    ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
-                    ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
-                    ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
                   </div>
                 `}
-                <div class="item-select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
                 <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
                 <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
               </div>
@@ -782,43 +988,25 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
-            <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
-            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
-            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
-            <button type="button" onclick="renameItem('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text</button>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
           </div>
         `;
       }
       return `
         <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
           ${isFolderItem ? `
-            <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
             <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="moveToFolder('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
-            <button type="button" onclick="resizeByFinger('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
-            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
-            <div class="h-px bg-zinc-800 my-1"></div>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
           ` : `
             <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
-            <button type="button" onclick="openTextEditorModal(null, '${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
-            <button type="button" onclick="copySingleFileClipboard('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Copy to Clipboard</button>
-            <button type="button" onclick="shareFile('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="share" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> iOS Share</button>
-            <button type="button" onclick="triggerChangeImage('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change Image</button>
             <button type="button" onclick="renameItem('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="moveToFolder('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
-            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
-            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
-            <div class="h-px bg-zinc-800 my-1"></div>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
           `}
         </div>
       `;
     }
 
-    // Attach Drag and Resize functionality for Edit Mode
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
@@ -827,7 +1015,6 @@
       itemEls.forEach(el => {
         const id = el.getAttribute('data-id');
 
-        // Dragging logic
         el.addEventListener('pointerdown', (e) => {
           if (!state.editMode) return;
           if (e.target.closest('button') || e.target.closest('.resize-handle') || e.target.closest('input')) return;
@@ -864,7 +1051,6 @@
               const finalX = parseInt(el.style.left, 10);
               const finalY = parseInt(el.style.top, 10);
 
-              // Update state item position
               let foundFolder = state.folders.find(f => f.id === id);
               if (foundFolder) {
                 foundFolder.x = finalX;
@@ -892,7 +1078,6 @@
           el.addEventListener('pointerup', onPointerUp);
         });
 
-        // Resize logic via handle
         const resizeHandle = el.querySelector('.resize-handle');
         if (resizeHandle) {
           resizeHandle.addEventListener('pointerdown', (e) => {
@@ -951,13 +1136,8 @@
       });
     }
 
-    // Additional UI action stubs for completeness
-    function renameItem(id, isFolderItem, isBubbleItem = false) {
+    function renameItem(id, isFolderItem) {
       closeMenu();
-      if (isBubbleItem) {
-        openTextEditorModal(id);
-        return;
-      }
       if (isFolderItem) {
         let f = state.folders.find(x => x.id === id);
         if (!f) return;
@@ -995,83 +1175,20 @@
       render();
     }
 
-    function resizeByFinger(id, isFolderItem) {
-      closeMenu();
-      state.editMode = true;
-      render();
-      alert('Edit Mode is now active. Drag the bottom-right corner handle of any item to resize it.');
-    }
-
-    function snapToOriginalShape(id) {
-      closeMenu();
-      let foundFolder = state.folders.find(f => f.id === id);
-      if (foundFolder) {
-        foundFolder.width = 96;
-        foundFolder.height = 96;
-        saveFolder(foundFolder);
-      } else {
-        let foundFile = state.files.find(f => f.id === id);
-        if (foundFile) {
-          foundFile.width = 112;
-          foundFile.height = 144;
-          saveFile(foundFile);
-        } else {
-          let foundBubble = state.textBubbles.find(b => b.id === id);
-          if (foundBubble) {
-            foundBubble.width = 140;
-            foundBubble.height = 80;
-            saveTextBubble(foundBubble);
-          }
-        }
-      }
-      render();
-    }
-
     function copySingleFileClipboard(id) {
       closeMenu();
-      alert('File copied to clipboard successfully!');
+      alert('File copied successfully!');
     }
 
     function shareFile(id) {
       closeMenu();
-      alert('Opening iOS Share Sheet...');
-    }
-
-    function triggerChangeImage(id) {
-      closeMenu();
-      state.targetChangeImageId = id;
-      document.getElementById('change-image-input').click();
-    }
-
-    function triggerFolderCover(id) {
-      closeMenu();
-      state.targetFolderCoverId = id;
-      document.getElementById('folder-cover-input').click();
-    }
-
-    function moveToFolder(id, isFolderItem, isBubbleItem = false) {
-      closeMenu();
-      let folderName = prompt('Enter target folder name to move into:');
-      if (!folderName) return;
-      let target = state.folders.find(f => f.name.toLowerCase() === folderName.toLowerCase());
-      if (!target) {
-        alert('Folder not found.');
-        return;
-      }
-      if (isBubbleItem) {
-        let b = state.textBubbles.find(x => x.id === id);
-        if (b) { b.parentId = target.id; saveTextBubble(b); }
-      } else if (isFolderItem) {
-        let f = state.folders.find(x => x.id === id);
-        if (f) { f.parentId = target.id; saveFolder(f); }
+      if (navigator.share) {
+        navigator.share({ title: 'Aiden Files Share', url: window.location.href }).catch(() => {});
       } else {
-        let fi = state.files.find(x => x.id === id);
-        if (fi) { fi.parentId = target.id; saveFile(fi); }
+        alert('Share API not supported on this browser.');
       }
-      render();
     }
 
-    // Initialize app on load
     window.addEventListener('DOMContentLoaded', () => {
       loadData();
     });
