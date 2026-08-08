@@ -29,7 +29,6 @@
     }
     .folder-cube:active { transform: scale(0.95); }
 
-    /* Aesthetic Control: Hidden by default, shown ONLY in edit mode */
     .resize-handle {
       width: 28px;
       height: 28px;
@@ -40,17 +39,10 @@
       display: none;
     }
 
-    .item-select-checkbox {
-      display: none;
-    }
+    .item-select-checkbox { display: none; }
 
-    body.edit-mode .resize-handle {
-      display: flex;
-    }
-
-    body.edit-mode .item-select-checkbox {
-      display: flex;
-    }
+    body.edit-mode .resize-handle { display: flex; }
+    body.edit-mode .item-select-checkbox { display: flex; }
 
     #modal-text-input:empty:before {
       content: attr(data-placeholder);
@@ -359,7 +351,7 @@
           throw new Error('Failed to update manifest file on GitHub.');
         }
 
-        alert('Chunked Sync Successful! Cloud backup updated safely without server errors.');
+        alert('Chunked Sync Successful! Cloud backup updated safely.');
       } catch (err) {
         alert('Sync error: ' + err.message);
       } finally {
@@ -435,7 +427,6 @@
         return;
       }
       if (state.editMode) return;
-
       if (isBubbleItem) return;
       if (isFolderItem) {
         navigateTo(id);
@@ -474,9 +465,9 @@
 
     function renderUploadModal() {
       return `
-        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeUploadModal()">
-          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <h3 class="text-base font-bold text-white text-center">Add Content</h3>
+        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeUploadModal()">
+          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-3 shadow-2xl">
+            <h3 class="text-base font-bold text-white text-center mb-1">Add Content</h3>
             <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
               <i data-lucide="folder-open" class="w-5 h-5"></i> Files App
             </button>
@@ -491,6 +482,9 @@
             </button>
             <button onclick="openAppModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
               <i data-lucide="smartphone" class="w-5 h-5"></i> Add App
+            </button>
+            <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="file-text" class="w-5 h-5"></i> Text Box
             </button>
           </div>
         </div>
@@ -513,7 +507,7 @@
 
     function renderLinkModal() {
       return `
-        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeLinkModal()">
+        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeLinkModal()">
           <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
             <h3 class="text-base font-bold text-white text-center">Add Web Link</h3>
             <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
@@ -568,7 +562,7 @@
 
     function renderWebVideoModal() {
       return `
-        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeWebVideoModal()">
+        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeWebVideoModal()">
           <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
             <h3 class="text-base font-bold text-white text-center">Add Web Video</h3>
             <input id="web-video-url-input" type="text" placeholder="YouTube or Video URL" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
@@ -621,7 +615,7 @@
 
     function renderAppModal() {
       return `
-        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeAppModal()">
+        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeAppModal()">
           <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
             <h3 class="text-base font-bold text-white text-center">Add App</h3>
             <input id="app-scheme-input" type="text" placeholder="App Scheme or URL" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
@@ -669,10 +663,10 @@
       const isApp = file.fileType === 'app' || file.fileType === 'ios-app';
 
       return `
-        <div class="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col justify-between p-4" onclick="closeQuickView()">
-          <div class="flex items-center justify-between z-10 bg-black/40 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
+        <div class="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex flex-col justify-between p-4" onclick="closeQuickView()">
+          <div class="flex items-center justify-between z-10 bg-black/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
             <span class="text-sm font-bold text-white truncate max-w-[70%]">${file.name}</span>
-            <button onclick="closeQuickView()" class="p-2 bg-zinc-800 rounded-xl text-zinc-300 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <button onclick="closeQuickView()" class="p-2 bg-zinc-800 rounded-xl text-zinc-300 hover:text-white cursor-pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
           </div>
           <div class="flex-1 flex items-center justify-center p-2 relative overflow-hidden" onclick="event.stopPropagation()">
             ${isImage ? `<img src="${file.dataUrl}" class="max-h-full max-w-full object-contain rounded-xl shadow-2xl" />` : ''}
@@ -696,10 +690,10 @@
               </div>
             ` : ''}
           </div>
-          <div class="flex items-center justify-center gap-3 z-10 bg-black/40 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
-            <button onclick="copySingleFileClipboard('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
-            <button onclick="shareFile('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
-            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-xs font-bold rounded-xl text-red-400 flex items-center gap-1.5"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+          <div class="flex items-center justify-center gap-3 z-10 bg-black/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
+            <button onclick="copySingleFileClipboard('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5 cursor-pointer"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
+            <button onclick="shareFile('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5 cursor-pointer"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-xs font-bold rounded-xl text-red-400 flex items-center gap-1.5 cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
           </div>
         </div>
       `;
@@ -716,7 +710,7 @@
       render();
     }
 
-    function openTextEditorModal(bubbleId = null, parentFileId = null) {
+    function openTextEditorModal(bubbleId = null) {
       closeMenu();
       let bubble = bubbleId ? state.textBubbles.find(b => b.id === bubbleId) : null;
       state.textEditorModal = {
@@ -761,7 +755,7 @@
     function renderTextEditorModal() {
       const b = state.textEditorModal;
       return `
-        <div class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeTextEditorModal()">
+        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeTextEditorModal()">
           <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-3 shadow-2xl">
             <h3 class="text-sm font-bold text-white text-center">Text Bubble Editor</h3>
             <div class="flex items-center gap-2 flex-wrap">
@@ -778,10 +772,12 @@
               <button onclick="state.textEditorModal.isBold=!state.textEditorModal.isBold; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold ${b.isBold?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">B</button>
               <button onclick="state.textEditorModal.isItalic=!state.textEditorModal.isItalic; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold italic ${b.isItalic?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">I</button>
               <button onclick="state.textEditorModal.isUnderline=!state.textEditorModal.isUnderline; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold underline ${b.isUnderline?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">U</button>
+              <input type="color" value="${b.fontColor || '#ffffff'}" onchange="state.textEditorModal.fontColor=this.value; render();" class="w-7 h-7 rounded-lg bg-transparent border-0 cursor-pointer" title="Font Color" />
+              <input type="color" value="${b.bgColour || '#18181b'}" onchange="state.textEditorModal.bgColour=this.value; render();" class="w-7 h-7 rounded-lg bg-transparent border-0 cursor-pointer" title="Background Color" />
             </div>
             <div class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-xs text-white overflow-auto focus:outline-none" contenteditable="true" id="modal-text-input" data-placeholder="Type something...">${b.text}</div>
             <div class="flex items-center justify-between">
-              <button onclick="closeTextEditorModal()" class="px-4 py-2 bg-zinc-800 rounded-xl text-xs font-bold text-zinc-300">Cancel</button>
+              <button onclick="closeTextEditorModal()" class="px-4 py-2 bg-zinc-800 rounded-xl text-xs font-bold text-zinc-300 cursor-pointer">Cancel</button>
               <button onclick="saveTextEditorModal()" class="px-5 py-2 bg-amber-500 hover:bg-amber-400 rounded-xl text-xs font-bold text-black cursor-pointer">Save Bubble</button>
             </div>
           </div>
@@ -817,10 +813,10 @@
                   <span>Back</span>
                 </button>
               ` : ''}
-              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0 cursor-pointer">
                 ${state.selectMode ? 'Cancel' : 'Select'}
               </button>
-              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0 cursor-pointer">
                 ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
               </button>
             </div>
@@ -853,6 +849,9 @@
               <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
               </button>
+              <button onclick="openTextEditorModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="file-text" class="w-4 h-4 text-amber-400"></i> Text Box
+              </button>
               <div class="h-px bg-zinc-800 my-1"></div>
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
                 <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
@@ -881,7 +880,7 @@
 
         ${state.selectMode ? `
           <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-4 flex-wrap justify-center">
-            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0">
+            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer">
               <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
               ${allChildrenSelected ? 'Deselect All' : 'Select All'}
             </button>
@@ -950,7 +949,7 @@
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
             <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
-              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[20px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
+              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[22px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
               <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
             </div>
@@ -996,6 +995,7 @@
       return `
         <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
           ${isFolderItem ? `
+            <button type="button" onclick="changeFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Set Cover Art</button>
             <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
             <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
           ` : `
@@ -1005,6 +1005,12 @@
           `}
         </div>
       `;
+    }
+
+    function changeFolderCover(folderId) {
+      closeMenu();
+      state.targetFolderCoverId = folderId;
+      document.getElementById('folder-cover-input').click();
     }
 
     function attachDragAndResizeListeners() {
@@ -1189,8 +1195,112 @@
       }
     }
 
+    // Input file listeners setup
     window.addEventListener('DOMContentLoaded', () => {
       loadData();
+
+      document.getElementById('file-input').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        for (let file of files) {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const newFile = {
+              id: uid(),
+              name: file.name,
+              fileType: file.type,
+              dataUrl: event.target.result,
+              parentId: state.currentFolderId,
+              width: 112,
+              height: 144
+            };
+            if (isVideoFile(newFile) || isAudioFile(newFile)) {
+              newFile.rawBlob = file;
+              await getOrCreateBlobUrl(newFile);
+            }
+            state.files.push(newFile);
+            await saveFile(newFile);
+            render();
+          };
+          reader.readAsDataURL(file);
+        }
+        e.target.value = '';
+      });
+
+      document.getElementById('photo-input').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        for (let file of files) {
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const newFile = {
+              id: uid(),
+              name: file.name,
+              fileType: file.type,
+              dataUrl: event.target.result,
+              parentId: state.currentFolderId,
+              width: 112,
+              height: 144
+            };
+            if (isVideoFile(newFile) || isAudioFile(newFile)) {
+              newFile.rawBlob = file;
+              await getOrCreateBlobUrl(newFile);
+            }
+            state.files.push(newFile);
+            await saveFile(newFile);
+            render();
+          };
+          reader.readAsDataURL(file);
+        }
+        e.target.value = '';
+      });
+
+      document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || !state.targetFolderCoverId) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          let folder = state.folders.find(f => f.id === state.targetFolderCoverId);
+          if (folder) {
+            folder.coverUrl = event.target.result;
+            await saveFolder(folder);
+            render();
+          }
+          state.targetFolderCoverId = null;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+      });
+
+      document.getElementById('app-thumbnail-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          state.appModalThumbData = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          state.linkModalThumbData = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          state.webVideoModalThumbData = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
     });
   </script>
 </body>
