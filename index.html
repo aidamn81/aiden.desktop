@@ -1,1307 +1,868 @@
 <!DOCTYPE html>
-<html lang="en" class="bg-black text-white select-none">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Aiden Files</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Gothic Archive - Formation Edition</title>
+    <style>
+        :root {
+            --bg-color: #0b0b0d;
+            --panel-bg: #141418;
+            --panel-border: #2a2a35;
+            --text-primary: #e0e0e6;
+            --text-secondary: #9999a6;
+            --accent: #6b2d5c;
+            --accent-hover: #8a3b78;
+            --gold: #d4af37;
+            --danger: #8b0000;
+            --grid-color: rgba(212, 175, 55, 0.07);
+        }
 
-    .edit-grid-bg {
-      background-size: 24px 24px;
-      background-image:
-        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    }
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
 
-    .touch-none { touch-action: none; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Cinzel', 'Times New Roman', serif, sans-serif;
+        }
 
-    .folder-cube {
-      width: 100%;
-      height: 100%;
-      border-radius: 22px;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      overflow: hidden;
-    }
-    .folder-cube:active { transform: scale(0.95); }
+        #app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
 
-    .resize-handle {
-      width: 28px;
-      height: 28px;
-      bottom: -4px;
-      right: -4px;
-      border-top-left-radius: 12px;
-      touch-action: none;
-      display: none;
-    }
+        /* Infinite Scroll / Zoom Canvas Layer */
+        #canvas-viewport {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: 0 0;
+            overflow: hidden;
+        }
 
-    .item-select-checkbox { display: none; }
+        #infinite-canvas {
+            position: absolute;
+            top: -5000px;
+            left: -5000px;
+            width: 10000px;
+            height: 10000px;
+            background-color: var(--bg-color);
+            background-image: 
+                linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+                linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
 
-    body.edit-mode .resize-handle { display: flex; }
-    body.edit-mode .item-select-checkbox { display: flex; }
+        body.edit-mode-active #infinite-canvas {
+            opacity: 1;
+        }
 
-    #modal-text-input:empty:before {
-      content: attr(data-placeholder);
-      color: #71717a;
-      pointer-events: none;
-    }
-    #modal-text-input { outline: none; }
-  </style>
+        /* UI Toolbar / Formatting Bar */
+        #toolbar {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 8px 16px;
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 95vw;
+        }
+
+        .tool-btn {
+            background: #1f1f26;
+            border: 1px solid var(--panel-border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .tool-btn:hover {
+            background: var(--accent);
+            border-color: var(--gold);
+        }
+
+        .tool-btn.active {
+            background: var(--accent);
+            border-color: var(--gold);
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+        }
+
+        /* Canvas Objects (Relics, Folders, Text, Images) */
+        .archive-item {
+            position: absolute;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .archive-item.relic, .archive-item.folder-box {
+            min-width: 150px;
+            min-height: 100px;
+        }
+
+        body.edit-mode-active .archive-item {
+            border-color: var(--gold);
+            cursor: move;
+        }
+
+        .item-header {
+            background: #1a1a21;
+            padding: 6px 10px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--gold);
+        }
+
+        .item-content {
+            padding: 10px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .item-content img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        .text-box-content {
+            width: 100%;
+            height: 100%;
+            outline: none;
+            background: transparent;
+            color: var(--text-primary);
+            border: none;
+            font-family: inherit;
+            resize: none;
+        }
+
+        /* Context Menu */
+        #context-menu {
+            position: fixed;
+            background: var(--panel-bg);
+            border: 1px solid var(--gold);
+            border-radius: 6px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            min-width: 180px;
+            padding: 4px 0;
+        }
+
+        .menu-item {
+            padding: 8px 14px;
+            font-size: 12px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-item:hover {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .menu-divider {
+            height: 1px;
+            background: var(--panel-border);
+            margin: 4px 0;
+        }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: var(--gold);
+            right: 0;
+            bottom: 0;
+            cursor: se-resize;
+            display: none;
+            border-radius: 2px 0 4px 0;
+        }
+
+        body.edit-mode-active .resize-handle {
+            display: block;
+        }
+
+        /* Modal Overlays */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(3px);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--gold);
+            padding: 24px;
+            border-radius: 8px;
+            width: 350px;
+            max-width: 90vw;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .modal-box h3 {
+            margin: 0;
+            color: var(--gold);
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
+
+        .modal-box input, .modal-box select {
+            background: #0b0b0d;
+            border: 1px solid var(--panel-border);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Notification Toast */
+        #toast {
+            position: fixed;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--panel-bg);
+            border: 1px solid var(--gold);
+            color: var(--gold);
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 4000;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        #toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
 </head>
-<body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
-  <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
+<body>
 
-  <input id="file-input" type="file" multiple class="hidden" />
-  <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
-  <input id="change-image-input" type="file" accept="image/*" class="hidden" />
-  <input id="folder-cover-input" type="file" accept="image/*" class="hidden" />
-  <input id="app-thumbnail-input" type="file" accept="image/*" class="hidden" />
-  <input id="link-thumbnail-input" type="file" accept="image/*" class="hidden" />
-  <input id="web-video-thumbnail-input" type="file" accept="image/*" class="hidden" />
+    <div id="app-container">
+        <!-- Toolbar containing load, save, scales, edit mode, and add item options -->
+        <div id="toolbar">
+            <button class="tool-btn" id="btn-edit-mode">Edit Mode: OFF</button>
+            <button class="tool-btn" id="btn-add-text">Add Text Box</button>
+            <button class="tool-btn" id="btn-add-image">Add Image</button>
+            <button class="tool-btn" id="btn-add-folder">Add Folder</button>
+            <button class="tool-btn" id="btn-recentre">Recentré</button>
+            <button class="tool-btn" id="btn-save">Save</button>
+            <button class="tool-btn" id="btn-load">Load</button>
+            <button class="tool-btn" id="scale-down">-</button>
+            <span class="tool-btn" id="scale-display" style="cursor:default;">100%</span>
+            <button class="tool-btn" id="scale-up">+</button>
+        </div>
 
-  <script>
-    const CONFIG = {
-      ghRepo: 'aidamn81/aidenfiles',
-      ghPath: 'aiden_meta.json',
-      GRID_SIZE: 24
-    };
+        <div id="canvas-viewport">
+            <div id="infinite-canvas">
+                <!-- Dynamic Archive Items injected via JS -->
+            </div>
+        </div>
+    </div>
 
-    let state = {
-      editMode: false,
-      selectMode: false,
-      selectedIds: [],
-      currentFolderId: null,
-      folders: [],
-      files: [],
-      textBubbles: [],
-      ghToken: localStorage.getItem('af_gh_token') || '',
-      isSyncing: false,
-      activeMenuId: null,
-      hamburgerMenuOpen: false,
-      targetChangeImageId: null,
-      targetFolderCoverId: null,
-      quickViewFileId: null,
-      showUploadModal: false,
-      textEditorModal: null,
-      linkModal: false,
-      linkModalThumbData: null,
-      webVideoModal: false,
-      webVideoModalThumbData: null,
-      appModal: false,
-      appModalThumbData: null,
-      activeUploads: [],
-      popupVideoUrl: null
-    };
+    <!-- Context Menu -->
+    <div id="context-menu">
+        <div class="menu-item" id="ctx-align-left">Align Left <span>[L]</span></div>
+        <div class="menu-item" id="ctx-align-center">Align Centre <span>[C]</span></div>
+        <div class="menu-item" id="ctx-align-right">Align Right <span>[R]</span></div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" id="ctx-resize-orig">Resize to Original Shape</div>
+        <div class="menu-item" id="ctx-resize-finger">Resize by Finger / Drag</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" id="ctx-copy">Copy</div>
+        <div class="menu-item" id="ctx-copy-folder" style="display:none;">Copy Folder</div>
+        <div class="menu-item" id="ctx-ios-share" style="display:none;">iOS Share</div>
+        <div class="menu-item" id="ctx-move">Move</div>
+        <div class="menu-item" id="ctx-move-folder">Move to Folder...</div>
+        <div class="menu-item" id="ctx-change-img" style="display:none;">Change Image</div>
+        <div class="menu-item" id="ctx-rename">Rename</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" id="ctx-delete" style="color: #ff5555;">Delete</div>
+    </div>
 
-    const uid = () => Math.random().toString(36).substring(2, 9);
-    const isFolder = item => !('fileType' in item) && !('isBubble' in item);
-    const isBubble = item => item.isBubble === true;
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="modal-delete">
+        <div class="modal-box">
+            <h3>Confirm Deletion</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Are you sure you wish to consign this relic/folder to the void?</p>
+            <div class="modal-buttons">
+                <button class="tool-btn" id="modal-del-cancel">Cancel</button>
+                <button class="tool-btn" id="modal-del-confirm" style="background: var(--danger); border-color: #ff5555;">Delete</button>
+            </div>
+        </div>
+    </div>
 
-    function isVideoFile(file) {
-      const t = file.fileType || '';
-      const n = file.name || '';
-      return t.startsWith('video/') || t === 'web-video' || n.endsWith('.mp4') || n.endsWith('.mov') || n.endsWith('.webm') || n.endsWith('.m4v') || n.endsWith('.mkv');
-    }
-    function isAudioFile(file) {
-      const t = file.fileType || '';
-      const n = file.name || '';
-      return t.startsWith('audio/') || n.endsWith('.mp3') || n.endsWith('.m4a') || n.endsWith('.wav') || n.endsWith('.aac');
-    }
+    <!-- Move to Folder Modal -->
+    <div class="modal-overlay" id="modal-move-folder">
+        <div class="modal-box">
+            <h3>Move to Folder</h3>
+            <select id="folder-select" style="width: 100%;">
+                <!-- Dynamic folder options -->
+            </select>
+            <div class="modal-buttons">
+                <button class="tool-btn" id="modal-move-cancel">Cancel</button>
+                <button class="tool-btn" id="modal-move-confirm">Move</button>
+            </div>
+        </div>
+    </div>
 
-    async function getOrCreateBlobUrl(file) {
-      if (file.blobUrl) return file.blobUrl;
-      if (file.rawBlob) {
-        file.blobUrl = URL.createObjectURL(file.rawBlob);
-        return file.blobUrl;
-      }
-      if (!file.dataUrl) return '';
-      try {
-        const res = await fetch(file.dataUrl);
-        const blob = await res.blob();
-        file.blobUrl = URL.createObjectURL(blob);
-        return file.blobUrl;
-      } catch (e) {
-        return file.dataUrl;
-      }
-    }
+    <!-- Rename Modal -->
+    <div class="modal-overlay" id="modal-rename">
+        <div class="modal-box">
+            <h3>Rename Item</h3>
+            <input type="text" id="rename-input" placeholder="Enter new title...">
+            <div class="modal-buttons">
+                <button class="tool-btn" id="modal-rename-cancel">Cancel</button>
+                <button class="tool-btn" id="modal-rename-confirm">Apply</button>
+            </div>
+        </div>
+    </div>
 
-    const DB_NAME = 'aiden_files_db';
-    const DB_VERSION = 5;
+    <input type="file" id="hidden-file-input" accept="image/*" style="display: none;">
 
-    function openDB() {
-      return new Promise((resolve) => {
-        try {
-          const req = indexedDB.open(DB_NAME, DB_VERSION);
-          req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains('folders')) db.createObjectStore('folders', { keyPath: 'id' });
-            if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'id' });
-            if (!db.objectStoreNames.contains('textBubbles')) db.createObjectStore('textBubbles', { keyPath: 'id' });
-          };
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => resolve(null);
-        } catch (e) { resolve(null); }
-      });
-    }
+    <div id="toast">Changes Recorded</div>
 
-    async function loadData() {
-      const db = await openDB();
-      if (db) {
-        state.folders = await new Promise(res => {
-          const tx = db.transaction('folders', 'readonly');
-          const req = tx.objectStore('folders').getAll();
-          req.onsuccess = () => res(req.result || []);
-        });
-        state.files = await new Promise(res => {
-          const tx = db.transaction('files', 'readonly');
-          const req = tx.objectStore('files').getAll();
-          req.onsuccess = () => res(req.result || []);
-        });
-        state.textBubbles = await new Promise(res => {
-          const tx = db.transaction('textBubbles', 'readonly');
-          const req = tx.objectStore('textBubbles').getAll();
-          req.onsuccess = () => res(req.result || []);
-        });
-      }
-
-      for (let file of state.files) {
-        if ((isVideoFile(file) || isAudioFile(file)) && file.fileType !== 'web-video') {
-          await getOrCreateBlobUrl(file);
-        }
-      }
-
-      if (state.folders.length === 0) {
-        const root = { id: 'root', name: 'Aiden Files', parentId: null, width: 96, height: 96 };
-        state.folders = [root];
-        saveFolder(root);
-      }
-      render();
-    }
-
-    async function saveFolder(folder) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction('folders', 'readwrite');
-        tx.objectStore('folders').put(folder);
-      }
-    }
-
-    async function saveFile(file) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction('files', 'readwrite');
-        const fileToSave = { ...file };
-        delete fileToSave.blobUrl;
-        tx.objectStore('files').put(fileToSave);
-      }
-    }
-
-    async function saveTextBubble(bubble) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction('textBubbles', 'readwrite');
-        tx.objectStore('textBubbles').put(bubble);
-      }
-    }
-
-    async function deleteFromDB(storeName, id) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).delete(id);
-      }
-    }
-
-    function resetToken() {
-      const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
-      if (token !== null) {
-        state.ghToken = token.trim();
-        localStorage.setItem('af_gh_token', state.ghToken);
-        alert('New token saved successfully!');
-        syncWithGitHub();
-      }
-    }
-
-    async function syncWithGitHub(forcePull = false) {
-      if (!state.ghToken) {
-        resetToken();
-        if (!state.ghToken) return;
-      }
-
-      state.isSyncing = true;
-      render();
-
-      try {
-        let cleanToken = state.ghToken.replace(/^(token|Bearer)\s+/i, '').trim();
-        const authHeader = `token ${cleanToken}`;
-        const headers = {
-          'Authorization': authHeader,
-          'Accept': 'application/vnd.github.v3+json',
-          'X-GitHub-Api-Version': '2022-11-28'
+    <script>
+        // State Management preserving all required mechanics and zoom/pan system
+        let state = {
+            editMode: false,
+            scale: 1,
+            panX: 5000,
+            panY: 5000,
+            items: [
+                { id: 'item-1', type: 'text', title: 'Gothic Manifest', x: 5100, y: 4900, w: 280, h: 180, content: 'Welcome to the definitive Gothic Archive. Explore the shadows.', align: 'left', folder: null },
+                { id: 'item-2', type: 'folder', title: 'Cabinet of Curiosities', x: 5450, y: 4900, w: 220, h: 160, folder: null }
+            ]
         };
 
-        const metaUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/aiden_meta.json`;
+        let activeId = null;
+        let isPanning = false;
+        let startPanX = 0, startPanY = 0;
+        let isDraggingItem = false;
+        let draggedItem = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
+        let isResizing = false;
+        let resizedItem = null;
+        let resizeStartX = 0, resizeStartY5 = 0, startW = 0, startH = 0;
 
-        if (forcePull) {
-          const getRes = await fetch(metaUrl, { headers });
-          if (getRes.ok) {
-            const getJson = await getRes.json();
-            const manifest = JSON.parse(decodeURIComponent(escape(atob(getJson.content))));
+        const viewport = document.getElementById('canvas-viewport');
+        const canvas = document.getElementById('infinite-canvas');
+        const contextMenu = document.getElementById('context-menu');
+        const toast = document.getElementById('toast');
 
-            let allFolders = [];
-            let allFiles = [];
-            let allBubbles = [];
-
-            for (let chunkFileName of manifest.chunks) {
-              const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
-              const chunkRes = await fetch(chunkUrl, { headers });
-              if (chunkRes.ok) {
-                const chunkJson = await chunkRes.json();
-                const chunkData = JSON.parse(decodeURIComponent(escape(atob(chunkJson.content))));
-                if (chunkData.folders) allFolders.push(...chunkData.folders);
-                if (chunkData.files) allFiles.push(...chunkData.files);
-                if (chunkData.textBubbles) allBubbles.push(...chunkData.textBubbles);
-              }
-            }
-
-            state.folders = allFolders.length > 0 ? allFolders : state.folders;
-            state.files = allFiles.length > 0 ? allFiles : state.files;
-            state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
-
-            for (let f of state.folders) await saveFolder(f);
-            for (let fi of state.files) await saveFile(fi);
-            for (let b of state.textBubbles) await saveTextBubble(b);
-            alert('Synced chunks down from Cloud successfully!');
-            state.isSyncing = false;
-            render();
-            return;
-          }
+        function showToast(msg) {
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
         }
 
-        const sanitizedFiles = state.files.map(file => {
-          const copy = { ...file };
-          delete copy.blobUrl;
-          delete copy.rawBlob;
-          return copy;
-        });
-
-        const CHUNK_SIZE = 15;
-        const fileChunks = [];
-        for (let i = 0; i < sanitizedFiles.length; i += CHUNK_SIZE) {
-          fileChunks.push(sanitizedFiles.slice(i, i + CHUNK_SIZE));
-        }
-        if (fileChunks.length === 0) fileChunks.push([]);
-
-        const chunkFileNames = [];
-
-        for (let index = 0; index < fileChunks.length; index++) {
-          const chunkFileName = `chunk_${index}.json`;
-          chunkFileNames.push(chunkFileName);
-          const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
-
-          let chunkSha = null;
-          const existingChunkRes = await fetch(chunkUrl, { headers });
-          if (existingChunkRes.ok) {
-            const existingData = await existingChunkRes.json();
-            chunkSha = existingData.sha;
-          }
-
-          const chunkPayloadData = {
-            folders: index === 0 ? state.folders : [],
-            files: fileChunks[index],
-            textBubbles: index === 0 ? state.textBubbles : []
-          };
-
-          const chunkPutPayload = {
-            message: `Sync Aiden Files Chunk ${index}`,
-            content: btoa(unescape(encodeURIComponent(JSON.stringify(chunkPayloadData)))),
-            ...(chunkSha && { sha: chunkSha })
-          };
-
-          let putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
-          if (putRes.status === 500) {
-            await new Promise(r => setTimeout(r, 1500));
-            putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
-          }
-          if (!putRes.ok) {
-            throw new Error(`Failed to upload chunk ${index} (status ${putRes.status})`);
-          }
-        }
-
-        let metaSha = null;
-        const existingMetaRes = await fetch(metaUrl, { headers });
-        if (existingMetaRes.ok) {
-          const metaJson = await existingMetaRes.json();
-          metaSha = metaJson.sha;
-        }
-
-        const metaManifest = { chunks: chunkFileNames, updatedAt: new Date().toISOString() };
-        const metaPutPayload = {
-          message: 'Update Aiden Files Manifest',
-          content: btoa(unescape(encodeURIComponent(JSON.stringify(metaManifest)))),
-          ...(metaSha && { sha: metaSha })
-        };
-
-        const metaPutRes = await fetch(metaUrl, { method: 'PUT', headers, body: JSON.stringify(metaPutPayload) });
-        if (!metaPutRes.ok) {
-          throw new Error('Failed to update manifest file on GitHub.');
-        }
-
-        alert('Chunked Sync Successful! Cloud backup updated safely.');
-      } catch (err) {
-        alert('Sync error: ' + err.message);
-      } finally {
-        state.isSyncing = false;
-        render();
-      }
-    }
-
-    function toggleHamburgerMenu(e) {
-      e.stopPropagation();
-      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
-      render();
-    }
-
-    function closeHamburgerMenu() {
-      if (state.hamburgerMenuOpen) {
-        state.hamburgerMenuOpen = false;
-        render();
-      }
-    }
-
-    function toggleSelectMode() {
-      state.selectMode = !state.selectMode;
-      if (!state.selectMode) state.selectedIds = [];
-      render();
-    }
-
-    function toggleEditMode() {
-      state.editMode = !state.editMode;
-      render();
-    }
-
-    function navigateTo(folderId) {
-      state.currentFolderId = folderId;
-      state.selectedIds = [];
-      closeMenu();
-      closeHamburgerMenu();
-      render();
-    }
-
-    function navigateBack() {
-      if (state.currentFolderId === null) return;
-      const current = state.folders.find(f => f.id === state.currentFolderId);
-      if (current) {
-        navigateTo(current.parentId);
-      } else {
-        navigateTo(null);
-      }
-    }
-
-    function toggleMenu(e, id) {
-      e.stopPropagation();
-      state.activeMenuId = state.activeMenuId === id ? null : id;
-      render();
-    }
-
-    function closeMenu() {
-      if (state.activeMenuId !== null) {
-        state.activeMenuId = null;
-        render();
-      }
-    }
-
-    function handleItemClick(event, id, isFolderItem, isBubbleItem = false) {
-      if (state.selectMode) {
-        event.stopPropagation();
-        if (state.selectedIds.includes(id)) {
-          state.selectedIds = state.selectedIds.filter(i => i !== id);
-        } else {
-          state.selectedIds.push(id);
-        }
-        render();
-        return;
-      }
-      if (state.editMode) return;
-      if (isBubbleItem) return;
-      if (isFolderItem) {
-        navigateTo(id);
-      } else {
-        openQuickView(id);
-      }
-    }
-
-    function openNewFolderModal() {
-      closeHamburgerMenu();
-      const name = prompt('Enter folder name:');
-      if (!name || !name.trim()) return;
-      
-      const newFolder = {
-        id: uid(),
-        name: name.trim(),
-        parentId: state.currentFolderId,
-        width: 96,
-        height: 96
-      };
-      state.folders.push(newFolder);
-      saveFolder(newFolder);
-      render();
-    }
-
-    function openUploadModal() {
-      closeHamburgerMenu();
-      state.showUploadModal = true;
-      render();
-    }
-
-    function closeUploadModal() {
-      state.showUploadModal = false;
-      render();
-    }
-
-    function renderUploadModal() {
-      return `
-        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeUploadModal()">
-          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-3 shadow-2xl">
-            <h3 class="text-base font-bold text-white text-center mb-1">Add Content</h3>
-            <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="folder-open" class="w-5 h-5"></i> Files App
-            </button>
-            <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="image" class="w-5 h-5"></i> Photos & Media
-            </button>
-            <button onclick="openLinkModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="link" class="w-5 h-5"></i> Add Web Link
-            </button>
-            <button onclick="openWebVideoModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="video" class="w-5 h-5"></i> Add Web Video
-            </button>
-            <button onclick="openAppModal()" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="smartphone" class="w-5 h-5"></i> Add App
-            </button>
-            <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
-              <i data-lucide="file-text" class="w-5 h-5"></i> Text Box
-            </button>
-          </div>
-        </div>
-      `;
-    }
-
-    function openLinkModal() {
-      closeHamburgerMenu();
-      closeUploadModal();
-      state.linkModal = true;
-      state.linkModalThumbData = null;
-      render();
-    }
-
-    function closeLinkModal() {
-      state.linkModal = false;
-      state.linkModalThumbData = null;
-      render();
-    }
-
-    function renderLinkModal() {
-      return `
-        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeLinkModal()">
-          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <h3 class="text-base font-bold text-white text-center">Add Web Link</h3>
-            <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
-            <input id="link-name-input" type="text" placeholder="Link Title (optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
-            <button onclick="document.getElementById('link-thumbnail-input').click()" class="w-full py-2 bg-zinc-800 text-xs font-bold text-zinc-300 rounded-xl">Choose Custom Thumbnail</button>
-            <button onclick="saveLinkModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl cursor-pointer">Save Link</button>
-          </div>
-        </div>
-      `;
-    }
-
-    async function saveLinkModal() {
-      const urlInput = document.getElementById('link-url-input');
-      const nameInput = document.getElementById('link-name-input');
-      if (!urlInput) return;
-      let url = urlInput.value.trim();
-      if (!url) { alert('Please enter a valid URL.'); return; }
-      if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
-      let name = nameInput ? nameInput.value.trim() : '';
-      if (!name) { try { name = new URL(url).hostname; } catch(e) { name = 'Web Link'; } }
-
-      const newFile = {
-        id: uid(),
-        name: name,
-        fileType: 'link',
-        dataUrl: url,
-        thumbnailData: state.linkModalThumbData,
-        parentId: state.currentFolderId,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(newFile);
-      await saveFile(newFile);
-      closeLinkModal();
-      render();
-    }
-
-    function openWebVideoModal() {
-      closeHamburgerMenu();
-      closeUploadModal();
-      state.webVideoModal = true;
-      state.webVideoModalThumbData = null;
-      render();
-    }
-
-    function closeWebVideoModal() {
-      state.webVideoModal = false;
-      state.webVideoModalThumbData = null;
-      render();
-    }
-
-    function renderWebVideoModal() {
-      return `
-        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeWebVideoModal()">
-          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <h3 class="text-base font-bold text-white text-center">Add Web Video</h3>
-            <input id="web-video-url-input" type="text" placeholder="YouTube or Video URL" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
-            <input id="web-video-name-input" type="text" placeholder="Video Title (optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
-            <button onclick="document.getElementById('web-video-thumbnail-input').click()" class="w-full py-2 bg-zinc-800 text-xs font-bold text-zinc-300 rounded-xl">Choose Custom Thumbnail</button>
-            <button onclick="saveWebVideoModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl cursor-pointer">Save Video</button>
-          </div>
-        </div>
-      `;
-    }
-
-    async function saveWebVideoModal() {
-      const urlInput = document.getElementById('web-video-url-input');
-      const nameInput = document.getElementById('web-video-name-input');
-      if (!urlInput) return;
-      let url = urlInput.value.trim();
-      if (!url) { alert('Please enter a valid video URL.'); return; }
-      let name = nameInput ? nameInput.value.trim() : 'Web Video';
-
-      const newFile = {
-        id: uid(),
-        name: name,
-        fileType: 'web-video',
-        dataUrl: url,
-        thumbnailData: state.webVideoModalThumbData,
-        parentId: state.currentFolderId,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(newFile);
-      await saveFile(newFile);
-      closeWebVideoModal();
-      render();
-    }
-
-    function openAppModal() {
-      closeHamburgerMenu();
-      closeUploadModal();
-      state.appModal = true;
-      state.appModalThumbData = null;
-      render();
-    }
-
-    function closeAppModal() {
-      state.appModal = false;
-      state.appModalThumbData = null;
-      render();
-    }
-
-    function renderAppModal() {
-      return `
-        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeAppModal()">
-          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <h3 class="text-base font-bold text-white text-center">Add App</h3>
-            <input id="app-scheme-input" type="text" placeholder="App Scheme or URL" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
-            <input id="app-name-input" type="text" placeholder="App Name" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white" />
-            <button onclick="document.getElementById('app-thumbnail-input').click()" class="w-full py-2 bg-zinc-800 text-xs font-bold text-zinc-300 rounded-xl">Choose App Icon</button>
-            <button onclick="saveAppModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl cursor-pointer">Save App</button>
-          </div>
-        </div>
-      `;
-    }
-
-    async function saveAppModal() {
-      const schemeInput = document.getElementById('app-scheme-input');
-      const nameInput = document.getElementById('app-name-input');
-      if (!schemeInput) return;
-      let scheme = schemeInput.value.trim();
-      if (!scheme) { alert('Please enter an app scheme.'); return; }
-      let name = nameInput ? nameInput.value.trim() : 'iOS App';
-
-      const newFile = {
-        id: uid(),
-        name: name,
-        fileType: 'app',
-        dataUrl: scheme,
-        thumbnailData: state.appModalThumbData,
-        parentId: state.currentFolderId,
-        width: 112,
-        height: 144
-      };
-
-      state.files.push(newFile);
-      await saveFile(newFile);
-      closeAppModal();
-      render();
-    }
-
-    function renderQuickViewModal() {
-      const file = state.files.find(f => f.id === state.quickViewFileId);
-      if (!file) return '';
-      const isImage = (file.fileType || '').startsWith('image/');
-      const isVideo = isVideoFile(file);
-      const isAudio = isAudioFile(file);
-      const isLink = file.fileType === 'link';
-      const isWebVideo = file.fileType === 'web-video';
-      const isApp = file.fileType === 'app' || file.fileType === 'ios-app';
-
-      return `
-        <div class="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex flex-col justify-between p-4" onclick="closeQuickView()">
-          <div class="flex items-center justify-between z-10 bg-black/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
-            <span class="text-sm font-bold text-white truncate max-w-[70%]">${file.name}</span>
-            <button onclick="closeQuickView()" class="p-2 bg-zinc-800 rounded-xl text-zinc-300 hover:text-white cursor-pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
-          </div>
-          <div class="flex-1 flex items-center justify-center p-2 relative overflow-hidden" onclick="event.stopPropagation()">
-            ${isImage ? `<img src="${file.dataUrl}" class="max-h-full max-w-full object-contain rounded-xl shadow-2xl" />` : ''}
-            ${isVideo && !isWebVideo ? `<video src="${file.blobUrl || file.dataUrl}" controls autoplay class="max-h-full max-w-full rounded-xl shadow-2xl"></video>` : ''}
-            ${isAudio ? `<audio src="${file.blobUrl || file.dataUrl}" controls autoplay class="w-full max-w-md"></audio>` : ''}
-            ${isLink ? `
-              <div class="flex flex-col items-center gap-4 text-center">
-                <i data-lucide="link" class="w-16 h-16 text-amber-400"></i>
-                <a href="${file.dataUrl}" target="_blank" class="px-6 py-3 bg-amber-500 text-black font-bold rounded-xl shadow-lg">Open Link</a>
-              </div>
-            ` : ''}
-            ${isWebVideo ? `
-              <div class="flex flex-col items-center gap-4 text-center w-full h-full justify-center">
-                <iframe src="${file.dataUrl}" class="w-full max-w-2xl h-96 rounded-xl border border-zinc-800" allowfullscreen></iframe>
-              </div>
-            ` : ''}
-            ${isApp ? `
-              <div class="flex flex-col items-center gap-4 text-center">
-                <i data-lucide="smartphone" class="w-16 h-16 text-amber-400"></i>
-                <a href="${file.dataUrl}" class="px-6 py-3 bg-amber-500 text-black font-bold rounded-xl shadow-lg">Launch App</a>
-              </div>
-            ` : ''}
-          </div>
-          <div class="flex items-center justify-center gap-3 z-10 bg-black/50 backdrop-blur-md p-3 rounded-2xl border border-zinc-800" onclick="event.stopPropagation()">
-            <button onclick="copySingleFileClipboard('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5 cursor-pointer"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
-            <button onclick="shareFile('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-xl text-white flex items-center gap-1.5 cursor-pointer"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
-            <button onclick="deleteItemConfirm('${file.id}', false); closeQuickView();" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-xs font-bold rounded-xl text-red-400 flex items-center gap-1.5 cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
-          </div>
-        </div>
-      `;
-    }
-
-    function openQuickView(id) {
-      closeMenu();
-      state.quickViewFileId = id;
-      render();
-    }
-
-    function closeQuickView() {
-      state.quickViewFileId = null;
-      render();
-    }
-
-    function openTextEditorModal(bubbleId = null) {
-      closeMenu();
-      let bubble = bubbleId ? state.textBubbles.find(b => b.id === bubbleId) : null;
-      state.textEditorModal = {
-        id: bubble ? bubble.id : uid(),
-        text: bubble ? bubble.text : '',
-        fontFamily: bubble ? bubble.fontFamily : 'sans-serif',
-        fontSize: bubble ? bubble.fontSize : 'md',
-        isBold: bubble ? bubble.isBold : false,
-        isItalic: bubble ? bubble.isItalic : false,
-        isUnderline: bubble ? bubble.isUnderline : false,
-        fontColor: bubble ? bubble.fontColor : '#ffffff',
-        bgColour: bubble ? bubble.bgColour : '#18181b',
-        align: bubble ? bubble.align : 'left',
-        parentId: bubble ? bubble.parentId : state.currentFolderId
-      };
-      render();
-    }
-
-    function closeTextEditorModal() {
-      state.textEditorModal = null;
-      render();
-    }
-
-    async function saveTextEditorModal() {
-      if (!state.textEditorModal) return;
-      const inputEl = document.getElementById('modal-text-input');
-      if (inputEl) state.textEditorModal.text = inputEl.innerText;
-
-      let existing = state.textBubbles.find(b => b.id === state.textEditorModal.id);
-      if (existing) {
-        Object.assign(existing, state.textEditorModal);
-        await saveTextBubble(existing);
-      } else {
-        const newBubble = { ...state.textEditorModal, isBubble: true, width: 140, height: 80 };
-        state.textBubbles.push(newBubble);
-        await saveTextBubble(newBubble);
-      }
-      closeTextEditorModal();
-      render();
-    }
-
-    function renderTextEditorModal() {
-      const b = state.textEditorModal;
-      return `
-        <div class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4" onclick="closeTextEditorModal()">
-          <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-3 shadow-2xl">
-            <h3 class="text-sm font-bold text-white text-center">Text Bubble Editor</h3>
-            <div class="flex items-center gap-2 flex-wrap">
-              <select onchange="state.textEditorModal.fontFamily=this.value; render();" class="bg-zinc-950 border border-zinc-800 rounded-xl px-2 py-1.5 text-xs text-white">
-                <option value="sans-serif" ${b.fontFamily==='sans-serif'?'selected':''}>Sans-Serif</option>
-                <option value="serif" ${b.fontFamily==='serif'?'selected':''}>Serif</option>
-                <option value="monospace" ${b.fontFamily==='monospace'?'selected':''}>Monospace</option>
-              </select>
-              <select onchange="state.textEditorModal.fontSize=this.value; render();" class="bg-zinc-950 border border-zinc-800 rounded-xl px-2 py-1.5 text-xs text-white">
-                <option value="sm" ${b.fontSize==='sm'?'selected':''}>Small</option>
-                <option value="md" ${b.fontSize==='md'?'selected':''}>Normal</option>
-                <option value="lg" ${b.fontSize==='lg'?'selected':''}>Large</option>
-              </select>
-              <button onclick="state.textEditorModal.isBold=!state.textEditorModal.isBold; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold ${b.isBold?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">B</button>
-              <button onclick="state.textEditorModal.isItalic=!state.textEditorModal.isItalic; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold italic ${b.isItalic?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">I</button>
-              <button onclick="state.textEditorModal.isUnderline=!state.textEditorModal.isUnderline; render();" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold underline ${b.isUnderline?'bg-amber-500 border-amber-500 text-black':'bg-zinc-950 border-zinc-800 text-white'}">U</button>
-              <input type="color" value="${b.fontColor || '#ffffff'}" onchange="state.textEditorModal.fontColor=this.value; render();" class="w-7 h-7 rounded-lg bg-transparent border-0 cursor-pointer" title="Font Color" />
-              <input type="color" value="${b.bgColour || '#18181b'}" onchange="state.textEditorModal.bgColour=this.value; render();" class="w-7 h-7 rounded-lg bg-transparent border-0 cursor-pointer" title="Background Color" />
-            </div>
-            <div class="w-full h-36 bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-xs text-white overflow-auto focus:outline-none" contenteditable="true" id="modal-text-input" data-placeholder="Type something...">${b.text}</div>
-            <div class="flex items-center justify-between">
-              <button onclick="closeTextEditorModal()" class="px-4 py-2 bg-zinc-800 rounded-xl text-xs font-bold text-zinc-300 cursor-pointer">Cancel</button>
-              <button onclick="saveTextEditorModal()" class="px-5 py-2 bg-amber-500 hover:bg-amber-400 rounded-xl text-xs font-bold text-black cursor-pointer">Save Bubble</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function render() {
-      const app = document.getElementById('app');
-      const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
-      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
-      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
-      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
-      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
-      const allChildrenSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
-
-      if (state.editMode) {
-        document.body.classList.add('edit-mode');
-      } else {
-        document.body.classList.remove('edit-mode');
-      }
-
-      app.innerHTML = `
-        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
-          <div class="flex items-center gap-2">
-            <div class="flex items-center gap-1.5 shrink-0">
-              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
-                <i data-lucide="menu" class="w-5 h-5"></i>
-              </button>
-              ${state.currentFolderId !== null ? `
-                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
-                  <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                  <span>Back</span>
-                </button>
-              ` : ''}
-              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0 cursor-pointer">
-                ${state.selectMode ? 'Cancel' : 'Select'}
-              </button>
-              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0 cursor-pointer">
-                ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
-              </button>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
-              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
-              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
-            </div>
-          </div>
-
-          ${state.hamburgerMenuOpen ? `
-            <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
-              <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
-              </button>
-              <button onclick="openNewFolderModal()" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
-              </button>
-              <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
-              </button>
-              <button onclick="openLinkModal()" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
-              </button>
-              <button onclick="openWebVideoModal()" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
-              </button>
-              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
-              </button>
-              <button onclick="openTextEditorModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="file-text" class="w-4 h-4 text-amber-400"></i> Text Box
-              </button>
-              <div class="h-px bg-zinc-800 my-1"></div>
-              <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
-                <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
-                <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
-              </button>
-              <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
-                <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
-              </button>
-            </div>
-          ` : ''}
-        </header>
-
-        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
-          ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
-          
-          ${items.length === 0 ? `
-            <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
-              <span>Folder is empty</span>
-            </div>
-          ` : `
-            <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
-              ${items.map((item, index) => renderItem(item, index)).join('')}
-            </div>
-          `}
-        </main>
-
-        ${state.selectMode ? `
-          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-4 flex-wrap justify-center">
-            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer">
-              <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
-              ${allChildrenSelected ? 'Deselect All' : 'Select All'}
-            </button>
-          </div>
-        ` : ''}
-
-        ${state.showUploadModal ? renderUploadModal() : ''}
-        ${state.linkModal ? renderLinkModal() : ''}
-        ${state.webVideoModal ? renderWebVideoModal() : ''}
-        ${state.appModal ? renderAppModal() : ''}
-        ${state.quickViewFileId ? renderQuickViewModal() : ''}
-        ${state.textEditorModal ? renderTextEditorModal() : ''}
-      `;
-
-      if (window.lucide) window.lucide.createIcons();
-      attachDragAndResizeListeners();
-    }
-
-    function getFileIcon(type, name) {
-      if (type === 'link' || name.startsWith('http')) return 'link';
-      if (type === 'web-video') return 'video';
-      if (type === 'app' || type === 'ios-app') return 'smartphone';
-      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov')) return 'video';
-      if (type.startsWith('audio/')) return 'music';
-      return 'file';
-    }
-
-    function bubbleInlineStyle(item) {
-      let style = '';
-      if (item.fontFamily) style += `font-family:${item.fontFamily};`;
-      if (item.fontSize === 'lg') style += 'font-size:16px;';
-      else if (item.fontSize === 'sm') style += 'font-size:10px;';
-      else style += 'font-size:11px;';
-      if (item.isBold) style += 'font-weight:bold;';
-      if (item.isItalic) style += 'font-style:italic;';
-      if (item.isUnderline) style += 'text-decoration:underline;';
-      if (item.fontColor) style += `color:${item.fontColor};`;
-      if (item.bgColour) style += `background-color:${item.bgColour};`;
-      return style;
-    }
-
-    function renderItem(item, index) {
-      const col = index % 4;
-      const row = Math.floor(index / 4);
-      const posX = item.x !== undefined ? item.x : (20 + col * 140);
-      const posY = item.y !== undefined ? item.y : (20 + row * 160);
-      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
-      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
-      const folder = isFolder(item);
-      const bubble = isBubble(item);
-      const isMenuOpen = state.activeMenuId === item.id;
-      const isSelected = state.selectedIds.includes(item.id);
-
-      if (bubble) {
-        return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500' : 'border-zinc-700'} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
-              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
-            </div>
-            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
-            ${isMenuOpen ? renderContextMenu(item, false, true) : ''}
-          </div>
-        `;
-      } else if (folder) {
-        return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
-            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
-              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[22px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
-              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
-              <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
-            </div>
-            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
-            ${isMenuOpen ? renderContextMenu(item, true) : ''}
-          </div>
-        `;
-      } else {
-        const type = item.fileType || '';
-        const isImage = type.startsWith('image/');
-        const imgSrc = item.thumbnailData || item.dataUrl;
-        const icon = getFileIcon(type, item.name);
-
-        return `
-          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500' : 'border-zinc-800'} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
-              <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                ${isImage && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
-                  <div class="flex flex-col items-center gap-1 text-zinc-400">
-                    <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
-                  </div>
-                `}
-                <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
-                <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
-              </div>
-            </div>
-            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
-            ${isMenuOpen ? renderContextMenu(item, false) : ''}
-          </div>
-        `;
-      }
-    }
-
-    function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
-      if (isBubbleItem) {
-        return `
-          <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text</button>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
-          </div>
-        `;
-      }
-      return `
-        <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-          ${isFolderItem ? `
-            <button type="button" onclick="changeFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Set Cover Art</button>
-            <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
-          ` : `
-            <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
-            <button type="button" onclick="renameItem('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
-            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete</button>
-          `}
-        </div>
-      `;
-    }
-
-    function changeFolderCover(folderId) {
-      closeMenu();
-      state.targetFolderCoverId = folderId;
-      document.getElementById('folder-cover-input').click();
-    }
-
-    function attachDragAndResizeListeners() {
-      const container = document.getElementById('canvas-container');
-      if (!container) return;
-
-      const itemEls = container.querySelectorAll('[id^="item-"]');
-      itemEls.forEach(el => {
-        const id = el.getAttribute('data-id');
-
-        el.addEventListener('pointerdown', (e) => {
-          if (!state.editMode) return;
-          if (e.target.closest('button') || e.target.closest('.resize-handle') || e.target.closest('input')) return;
-          
-          e.stopPropagation();
-          el.setPointerCapture(e.pointerId);
-
-          let startX = e.clientX;
-          let startY = e.clientY;
-          let initialLeft = el.offsetLeft;
-          let initialTop = el.offsetTop;
-          let hasMoved = false;
-
-          const onPointerMove = (moveEvent) => {
-            let dx = moveEvent.clientX - startX;
-            let dy = moveEvent.clientY - startY;
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-              hasMoved = true;
-              el.style.zIndex = '100';
-            }
-            let newX = Math.max(0, initialLeft + dx);
-            let newY = Math.max(0, initialTop + dy);
-            el.style.left = `${newX}px`;
-            el.style.top = `${newY}px`;
-          };
-
-          const onPointerUp = (upEvent) => {
-            el.releasePointerCapture(upEvent.pointerId);
-            el.removeEventListener('pointermove', onPointerMove);
-            el.removeEventListener('pointerup', onPointerUp);
-            el.style.zIndex = '';
-
-            if (hasMoved) {
-              const finalX = parseInt(el.style.left, 10);
-              const finalY = parseInt(el.style.top, 10);
-
-              let foundFolder = state.folders.find(f => f.id === id);
-              if (foundFolder) {
-                foundFolder.x = finalX;
-                foundFolder.y = finalY;
-                saveFolder(foundFolder);
-              } else {
-                let foundFile = state.files.find(f => f.id === id);
-                if (foundFile) {
-                  foundFile.x = finalX;
-                  foundFile.y = finalY;
-                  saveFile(foundFile);
-                } else {
-                  let foundBubble = state.textBubbles.find(b => b.id === id);
-                  if (foundBubble) {
-                    foundBubble.x = finalX;
-                    foundBubble.y = finalY;
-                    saveTextBubble(foundBubble);
-                  }
+        // Render Canvas Items
+        function render() {
+            canvas.innerHTML = '';
+            
+            // Render grid placement or containment lines if needed
+            state.items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = `archive-item ${item.type === 'folder' ? 'folder-box' : 'relic'}`;
+                el.id = item.id;
+                el.style.left = item.x + 'px';
+                el.style.top = item.y + 'px';
+                el.style.width = item.w + 'px';
+                el.style.height = item.h + 'px';
+
+                let headerHtml = `<div class="item-header"><span>${item.title}</span><span>#${item.id.slice(-4)}</span></div>`;
+                
+                let contentHtml = '';
+                if(item.type === 'text') {
+                    contentHtml = `<div class="item-content"><textarea class="text-box-content" style="text-align: ${item.align};" ${state.editMode ? '' : 'readonly'}>${item.content || ''}</textarea></div>`;
+                } else if(item.type === 'image') {
+                    contentHtml = `<div class="item-content"><img src="${item.content}" alt="${item.title}"></div>`;
+                } else if(item.type === 'folder') {
+                    contentHtml = `<div class="item-content" style="color: var(--text-secondary); font-size: 11px;">[Folder Archive]</div>`;
                 }
-              }
-            }
-          };
 
-          el.addEventListener('pointermove', onPointerMove);
-          el.addEventListener('pointerup', onPointerUp);
+                el.innerHTML = headerHtml + contentHtml + `<div class="resize-handle"></div>`;
+                
+                // Event bindings for interaction
+                el.addEventListener('mousedown', (e) => handleItemMouseDown(e, item));
+                el.addEventListener('contextmenu', (e) => handleContextMenu(e, item));
+
+                // Text live updating
+                if(item.type === 'text') {
+                    const ta = el.querySelector('textarea');
+                    ta.addEventListener('input', (e) => {
+                        item.content = e.target.value;
+                    });
+                }
+
+                canvas.appendChild(el);
+            });
+
+            updateTransform();
+        }
+
+        function updateTransform() {
+            canvas.style.transform = `translate(${-state.panX}px, ${-state.panY}px) scale(${state.scale})`;
+            document.getElementById('scale-display').innerText = Math.round(state.scale * 100) + '%';
+        }
+
+        // Zooming & Panning Mechanics (Permanent locked method)
+        window.addEventListener('wheel', (e) => {
+            if(e.target.closest('#toolbar') || e.target.closest('#context-menu') || e.target.closest('.modal-overlay')) return;
+            e.preventDefault();
+            const zoomFactor = 1.1;
+            let oldScale = state.scale;
+            if(e.deltaY < 0) {
+                state.scale = Math.min(state.scale * zoomFactor, 3.0);
+            } else {
+                state.scale = Math.max(state.scale / zoomFactor, 0.2);
+            }
+            updateTransform();
+        }, { passive: false });
+
+        viewport.addEventListener('mousedown', (e) => {
+            if(e.target === viewport || e.target === canvas) {
+                if(e.button === 0) {
+                    isPanning = true;
+                    startPanX = e.clientX + state.panX;
+                    startPanY = e.clientY + state.panY;
+                }
+            }
+            hideContextMenu();
         });
 
-        const resizeHandle = el.querySelector('.resize-handle');
-        if (resizeHandle) {
-          resizeHandle.addEventListener('pointerdown', (e) => {
-            if (!state.editMode) return;
-            e.stopPropagation();
-            resizeHandle.setPointerCapture(e.pointerId);
-
-            let startX = e.clientX;
-            let startY = e.clientY;
-            let initialW = el.offsetWidth;
-            let initialH = el.offsetHeight;
-
-            const onResizeMove = (moveEvent) => {
-              let dw = moveEvent.clientX - startX;
-              let dh = moveEvent.clientY - startY;
-              let newW = Math.max(64, initialW + dw);
-              let newH = Math.max(64, initialH + dh);
-              el.style.width = `${newW}px`;
-              el.style.height = `${newH}px`;
-            };
-
-            const onResizeUp = (upEvent) => {
-              resizeHandle.releasePointerCapture(upEvent.pointerId);
-              resizeHandle.removeEventListener('pointermove', onResizeMove);
-              resizeHandle.removeEventListener('pointerup', onResizeUp);
-
-              const finalW = el.offsetWidth;
-              const finalH = el.offsetHeight;
-
-              let foundFolder = state.folders.find(f => f.id === id);
-              if (foundFolder) {
-                foundFolder.width = finalW;
-                foundFolder.height = finalH;
-                saveFolder(foundFolder);
-              } else {
-                let foundFile = state.files.find(f => f.id === id);
-                if (foundFile) {
-                  foundFile.width = finalW;
-                  foundFile.height = finalH;
-                  saveFile(foundFile);
-                } else {
-                  let foundBubble = state.textBubbles.find(b => b.id === id);
-                  if (foundBubble) {
-                    foundBubble.width = finalW;
-                    foundBubble.height = finalH;
-                    saveTextBubble(foundBubble);
-                  }
+        window.addEventListener('mousemove', (e) => {
+            if(isPanning) {
+                state.panX = startPanX - e.clientX;
+                state.panY = startPanY - e.clientY;
+                updateTransform();
+            } else if(isDraggingItem && draggedItem && state.editMode) {
+                let rawX = (e.clientX - viewport.getBoundingClientRect().left + state.panX) / state.scale - dragOffsetX;
+                let rawY = (e.clientY - viewport.getBoundingClientRect().top + state.panY) / state.scale - dragOffsetY;
+                
+                // Soft snap to grid (40px grid)
+                draggedItem.x = Math.round(rawX / 40) * 40;
+                draggedItem.y = Math.round(rawY / 40) * 40;
+                
+                const el = document.getElementById(draggedItem.id);
+                if(el) {
+                    el.style.left = draggedItem.x + 'px';
+                    el.style.top = draggedItem.y + 'px';
                 }
-              }
-            };
+            } else if(isResizing && resizedItem) {
+                let dx = (e.clientX - resizeStartX) / state.scale;
+                let dy = (e.clientY - resizeStartY5) / state.scale;
+                resizedItem.w = Math.max(120, startW + dx);
+                resizedItem.h = Math.max(80, startH + dy);
 
-            resizeHandle.addEventListener('pointermove', onResizeMove);
-            resizeHandle.addEventListener('pointerup', onResizeUp);
-          });
-        }
-      });
-    }
-
-    function renameItem(id, isFolderItem) {
-      closeMenu();
-      if (isFolderItem) {
-        let f = state.folders.find(x => x.id === id);
-        if (!f) return;
-        let newName = prompt('Rename folder:', f.name);
-        if (newName && newName.trim()) {
-          f.name = newName.trim();
-          saveFolder(f);
-          render();
-        }
-      } else {
-        let fi = state.files.find(x => x.id === id);
-        if (!fi) return;
-        let newName = prompt('Rename file:', fi.name);
-        if (newName && newName.trim()) {
-          fi.name = newName.trim();
-          saveFile(fi);
-          render();
-        }
-      }
-    }
-
-    function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
-      closeMenu();
-      if (!confirm('Are you sure you want to delete this item?')) return;
-      if (isBubbleItem) {
-        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        deleteFromDB('textBubbles', id);
-      } else if (isFolderItem) {
-        state.folders = state.folders.filter(f => f.id !== id && f.parentId !== id);
-        deleteFromDB('folders', id);
-      } else {
-        state.files = state.files.filter(f => f.id !== id);
-        deleteFromDB('files', id);
-      }
-      render();
-    }
-
-    function copySingleFileClipboard(id) {
-      closeMenu();
-      alert('File copied successfully!');
-    }
-
-    function shareFile(id) {
-      closeMenu();
-      if (navigator.share) {
-        navigator.share({ title: 'Aiden Files Share', url: window.location.href }).catch(() => {});
-      } else {
-        alert('Share API not supported on this browser.');
-      }
-    }
-
-    // Input file listeners setup
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-
-      document.getElementById('file-input').addEventListener('change', async (e) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-        for (let file of files) {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            const newFile = {
-              id: uid(),
-              name: file.name,
-              fileType: file.type,
-              dataUrl: event.target.result,
-              parentId: state.currentFolderId,
-              width: 112,
-              height: 144
-            };
-            if (isVideoFile(newFile) || isAudioFile(newFile)) {
-              newFile.rawBlob = file;
-              await getOrCreateBlobUrl(newFile);
+                const el = document.getElementById(resizedItem.id);
+                if(el) {
+                    el.style.width = resizedItem.w + 'px';
+                    el.style.height = resizedItem.h + 'px';
+                }
             }
-            state.files.push(newFile);
-            await saveFile(newFile);
-            render();
-          };
-          reader.readAsDataURL(file);
-        }
-        e.target.value = '';
-      });
+        });
 
-      document.getElementById('photo-input').addEventListener('change', async (e) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-        for (let file of files) {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            const newFile = {
-              id: uid(),
-              name: file.name,
-              fileType: file.type,
-              dataUrl: event.target.result,
-              parentId: state.currentFolderId,
-              width: 112,
-              height: 144
-            };
-            if (isVideoFile(newFile) || isAudioFile(newFile)) {
-              newFile.rawBlob = file;
-              await getOrCreateBlobUrl(newFile);
+        window.addEventListener('mouseup', () => {
+            isPanning = false;
+            isDraggingItem = false;
+            draggedItem = null;
+            isResizing = false;
+            resizedItem = null;
+        });
+
+        // Item Interaction Handlers
+        function handleItemMouseDown(e, item) {
+            if(e.button !== 0) return;
+            activeId = item.id;
+            
+            if(e.target.classList.contains('resize-handle')) {
+                if(!state.editMode) return;
+                isResizing = true;
+                resizedItem = item;
+                resizeStartX = e.clientX;
+                resizeStartY5 = e.clientY;
+                startW = item.w;
+                startH = item.h;
+                e.stopPropagation();
+                return;
             }
-            state.files.push(newFile);
-            await saveFile(newFile);
-            render();
-          };
-          reader.readAsDataURL(file);
+
+            if(state.editMode && !e.target.classList.contains('text-box-content')) {
+                isDraggingItem = true;
+                draggedItem = item;
+                const el = document.getElementById(item.id);
+                const rect = el.getBoundingClientRect();
+                dragOffsetX = (e.clientX - rect.left) / state.scale;
+                dragOffsetY = (e.clientY - rect.top) / state.scale;
+                e.stopPropagation();
+            }
         }
-        e.target.value = '';
-      });
 
-      document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file || !state.targetFolderCoverId) return;
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          let folder = state.folders.find(f => f.id === state.targetFolderCoverId);
-          if (folder) {
-            folder.coverUrl = event.target.result;
-            await saveFolder(folder);
+        // Context Menu Implementation with requested options
+        function handleContextMenu(e, item) {
+            e.preventDefault();
+            activeId = item.id;
+            
+            // Configure specific visibility based on item type
+            const isFolder = item.type === 'folder';
+            const isImage = item.type === 'image';
+            
+            document.getElementById('ctx-copy-folder').style.display = isFolder ? 'flex' : 'none';
+            document.getElementById('ctx-ios-share').style.display = isImage ? 'flex' : 'none';
+            document.getElementById('ctx-change-img').style.display = isImage ? 'flex' : 'none';
+
+            contextMenu.style.display = 'flex';
+            contextMenu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+            contextMenu.style.top = Math.min(e.clientY, window.innerHeight - 250) + 'px';
+        }
+
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+        }
+
+        document.addEventListener('click', hideContextMenu);
+
+        // Toolbar Controls
+        document.getElementById('btn-edit-mode').addEventListener('click', () => {
+            state.editMode = !state.editMode;
+            const btn = document.getElementById('btn-edit-mode');
+            if(state.editMode) {
+                document.body.classList.add('edit-mode-active');
+                btn.classList.add('active');
+                btn.innerText = 'Edit Mode: ON';
+                showToast('Edit Mode Enabled');
+            } else {
+                document.body.classList.remove('edit-mode-active');
+                btn.classList.remove('active');
+                btn.innerText = 'Edit Mode: OFF';
+                showToast('Edit Mode Locked');
+            }
             render();
-          }
-          state.targetFolderCoverId = null;
-        };
-        reader.readAsDataURL(file);
-        e.target.value = '';
-      });
+        });
 
-      document.getElementById('app-thumbnail-input').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          state.appModalThumbData = event.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
+        document.getElementById('btn-recentre').addEventListener('click', () => {
+            state.panX = 5000 - window.innerWidth / 2 + 150;
+            state.panY = 5000 - window.innerHeight / 2 + 100;
+            state.scale = 1;
+            updateTransform();
+            showToast('Recentred Archive');
+        });
 
-      document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          state.linkModalThumbData = event.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
+        document.getElementById('scale-up').addEventListener('click', () => {
+            state.scale = Math.min(state.scale * 1.15, 3.0);
+            updateTransform();
+        });
 
-      document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          state.webVideoModalThumbData = event.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-  </script>
+        document.getElementById('scale-down').addEventListener('click', () => {
+            state.scale = Math.max(state.scale / 1.15, 0.2);
+            updateTransform();
+        });
+
+        // Add Items
+        document.getElementById('btn-add-text').addEventListener('click', () => {
+            const newItem = {
+                id: 'item-' + Date.now(),
+                type: 'text',
+                title: 'New Scroll',
+                x: state.panX + window.innerWidth / 2 - 100,
+                y: state.panY + window.innerHeight / 2 - 75,
+                w: 240,
+                h: 150,
+                content: 'Enter your text here...',
+                align: 'left',
+                folder: null
+            };
+            state.items.push(newItem);
+            render();
+            showToast('Text Scroll Added');
+        });
+
+        let pendingImageType = 'image';
+        document.getElementById('btn-add-image').addEventListener('click', () => {
+            pendingImageType = 'image';
+            document.getElementById('hidden-file-input').click();
+        });
+
+        document.getElementById('btn-add-folder').addEventListener('click', () => {
+            const newItem = {
+                id: 'folder-' + Date.now(),
+                type: 'folder',
+                title: 'New Archive Folder',
+                x: state.panX + window.innerWidth / 2 - 100,
+                y: state.panY + window.innerHeight / 2 - 75,
+                w: 200,
+                h: 140,
+                folder: null
+            };
+            state.items.push(newItem);
+            render();
+            showToast('New Folder Created');
+        });
+
+        document.getElementById('hidden-file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                if(pendingImageType === 'image') {
+                    const newItem = {
+                        id: 'img-' + Date.now(),
+                        type: 'image',
+                        title: file.name.substring(0, 15),
+                        x: state.panX + window.innerWidth / 2 - 100,
+                        y: state.panY + window.innerHeight / 2 - 100,
+                        w: 220,
+                        h: 220,
+                        content: event.target.result,
+                        folder: null
+                    };
+                    state.items.push(newItem);
+                    render();
+                    showToast('Image Relic Added');
+                } else if(pendingImageType === 'change') {
+                    const item = state.items.find(i => i.id === activeId);
+                    if(item) {
+                        item.content = event.target.result;
+                        render();
+                        showToast('Image Updated');
+                    }
+                }
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+        });
+
+        // Context Menu Actions Implementation
+        document.getElementById('ctx-align-left').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item && item.type === 'text') { item.align = 'left'; render(); showToast('Aligned Left'); }
+        });
+        document.getElementById('ctx-align-center').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item && item.type === 'text') { item.align = 'center'; render(); showToast('Aligned Centre'); }
+        });
+        document.getElementById('ctx-align-right').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item && item.type === 'text') { item.align = 'right'; render(); showToast('Aligned Right'); }
+        });
+
+        document.getElementById('ctx-resize-orig').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item) {
+                item.w = 240; item.h = 160;
+                render();
+                showToast('Resized to Original Shape');
+            }
+        });
+
+        document.getElementById('ctx-resize-finger').addEventListener('click', () => {
+            showToast('Finger/Drag resize is active via bottom-right handle.');
+        });
+
+        document.getElementById('ctx-copy').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item) {
+                const clone = JSON.parse(JSON.stringify(item));
+                clone.id = 'item-' + Date.now();
+                clone.x += 30;
+                clone.y += 30;
+                state.items.push(clone);
+                render();
+                showToast('Relic Copied');
+            }
+        });
+
+        document.getElementById('ctx-copy-folder').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item && item.type === 'folder') {
+                const clone = JSON.parse(JSON.stringify(item));
+                clone.id = 'folder-' + Date.now();
+                clone.title += ' (Copy)';
+                clone.x += 40;
+                clone.y += 40;
+                state.items.push(clone);
+                render();
+                showToast('Folder Copied Successfully');
+            }
+        });
+
+        document.getElementById('ctx-ios-share').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item && item.type === 'image') {
+                if(navigator.share) {
+                    navigator.share({ title: item.title, text: 'Gothic Archive Relic', url: item.content }).catch(() => {});
+                } else {
+                    showToast('iOS Share simulated: Image link ready.');
+                }
+            }
+        });
+
+        document.getElementById('ctx-move').addEventListener('click', () => {
+            showToast('Drag item in Edit Mode to move across the archive.');
+        });
+
+        document.getElementById('ctx-move-folder').addEventListener('click', () => {
+            const folderSelect = document.getElementById('folder-select');
+            folderSelect.innerHTML = '<option value="">(None / Root Archive)</option>';
+            state.items.filter(i => i.type === 'folder' && i.id !== activeId).forEach(f => {
+                folderSelect.innerHTML += `<option value="${f.id}">${f.title}</option>`;
+            });
+            document.getElementById('modal-move-folder').style.display = 'flex';
+        });
+
+        document.getElementById('ctx-change-img').addEventListener('click', () => {
+            pendingImageType = 'change';
+            document.getElementById('hidden-file-input').click();
+        });
+
+        document.getElementById('ctx-rename').addEventListener('click', () => {
+            const item = state.items.find(i => i.id === activeId);
+            if(item) {
+                document.getElementById('rename-input').value = item.title;
+                document.getElementById('modal-rename').style.display = 'flex';
+            }
+        });
+
+        document.getElementById('ctx-delete').addEventListener('click', () => {
+            document.getElementById('modal-delete').style.display = 'flex';
+        });
+
+        // Modals Handlers
+        document.getElementById('modal-del-cancel').addEventListener('click', () => {
+            document.getElementById('modal-delete').style.display = 'none';
+        });
+        document.getElementById('modal-del-confirm').addEventListener('click', () => {
+            state.items = state.items.filter(i => i.id !== activeId);
+            document.getElementById('modal-delete').style.display = 'none';
+            render();
+            showToast('Relic consigned to the void.');
+        });
+
+        document.getElementById('modal-move-cancel').addEventListener('click', () => {
+            document.getElementById('modal-move-folder').style.display = 'none';
+        });
+        document.getElementById('modal-move-confirm').addEventListener('click', () => {
+            const targetFolder = document.getElementById('folder-select').value;
+            const item = state.items.find(i => i.id === activeId);
+            if(item) {
+                item.folder = targetFolder || null;
+                showToast(targetFolder ? 'Moved into folder.' : 'Moved to root archive.');
+            }
+            document.getElementById('modal-move-folder').style.display = 'none';
+        });
+
+        document.getElementById('modal-rename-cancel').addEventListener('click', () => {
+            document.getElementById('modal-rename').style.display = 'none';
+        });
+        document.getElementById('modal-rename-confirm').addEventListener('click', () => {
+            const newTitle = document.getElementById('rename-input').value;
+            const item = state.items.find(i => i.id === activeId);
+            if(item && newTitle.trim()) {
+                item.title = newTitle.trim();
+                render();
+                showToast('Archive item renamed');
+            }
+            document.getElementById('modal-rename').style.display = 'none';
+        });
+
+        // Save and Load Options
+        document.getElementById('btn-save').addEventListener('click', () => {
+            localStorage.setItem('gothic_archive_state_v2', JSON.stringify(state));
+            showToast('Archive Saved to Memory');
+        });
+
+        document.getElementById('btn-load').addEventListener('click', () => {
+            const saved = localStorage.getItem('gothic_archive_state_v2');
+            if(saved) {
+                try {
+                    state = JSON.parse(saved);
+                    render();
+                    showToast('Archive Loaded from Memory');
+                } catch(e) {
+                    showToast('Failed to load archive.');
+                }
+            } else {
+                showToast('No saved archive found.');
+            }
+        });
+
+        // Initial setup
+        render();
+        // Center initial view
+        state.panX = 5000 - window.innerWidth / 2 + 150;
+        state.panY = 5000 - window.innerHeight / 2 + 100;
+        updateTransform();
+    </script>
 </body>
 </html>
