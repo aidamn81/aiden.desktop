@@ -94,6 +94,8 @@
       quickViewFileId: null,
       showUploadModal: false,
       textEditorModal: null,
+      checklistModal: false,
+      checklistDraftItems: [],
       linkModal: false,
       linkModalThumbData: null,
       webVideoModal: false,
@@ -367,46 +369,6 @@
       }
     }
 
-    function createChecklistBubble() {
-      const id = uid();
-      const defaultText = `[ ] First checklist task\n[ ] Second checklist task\n[x] Completed item example`;
-      const bubble = {
-        id,
-        parentId: state.currentFolderId,
-        isBubble: true,
-        text: defaultText,
-        isChecklist: true,
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: 'md',
-        fontColor: '#ffffff',
-        bgColour: '#18181b',
-        align: 'left',
-        width: 160,
-        height: 120,
-        x: 40,
-        y: 40
-      };
-      state.textBubbles.push(bubble);
-      saveTextBubble(bubble);
-      render();
-    }
-
-    function toggleChecklistItem(bubbleId, lineIndex) {
-      const bubble = state.textBubbles.find(b => b.id === bubbleId);
-      if (!bubble) return;
-      const lines = bubble.text.split('\n');
-      if (lines[lineIndex] !== undefined) {
-        if (lines[lineIndex].startsWith('[ ] ')) {
-          lines[lineIndex] = lines[lineIndex].replace('[ ] ', '[x] ');
-        } else if (lines[lineIndex].startsWith('[x] ')) {
-          lines[lineIndex] = lines[lineIndex].replace('[x] ', '[ ] ');
-        }
-        bubble.text = lines.join('\n');
-        saveTextBubble(bubble);
-        render();
-      }
-    }
-
     function render() {
       const app = document.getElementById('app');
       const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
@@ -441,8 +403,8 @@
               <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
                 ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
               </button>
-              <button onclick="openTextEditorModal()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Add Text Bubble">
-                <i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i>
+              <button onclick="openTextEditorModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Text Bubble">
+                <i data-lucide="message-square" class="w-4 h-4"></i>
                 <span>Text Bubble</span>
               </button>
             </div>
@@ -474,6 +436,9 @@
               </button>
               <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
+              </button>
+              <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
               </button>
               <div class="h-px bg-zinc-800 my-1"></div>
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
@@ -551,6 +516,7 @@
         ${state.linkModal ? renderLinkModal() : ''}
         ${state.webVideoModal ? renderWebVideoModal() : ''}
         ${state.appModal ? renderAppModal() : ''}
+        ${state.checklistModal ? renderChecklistModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
         ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
@@ -587,26 +553,13 @@
       return style;
     }
 
-    function renderBubbleContent(item) {
-      let rawText = item.text || 'Empty bubble';
-      if (item.isChecklist || rawText.includes('[ ]') || rawText.includes('[x]')) {
-        let lines = rawText.split('\n');
-        return lines.map((line, idx) => {
-          if (line.startsWith('[ ] ')) {
-            return `<div class="flex items-center gap-1.5 my-1 cursor-pointer pointer-events-auto" onclick="event.stopPropagation(); toggleChecklistItem('${item.id}', ${idx})">
-              <span class="w-3.5 h-3.5 rounded border border-zinc-500 bg-zinc-800 inline-block shrink-0"></span>
-              <span>${line.substring(4)}</span>
-            </div>`;
-          } else if (line.startsWith('[x] ')) {
-            return `<div class="flex items-center gap-1.5 my-1 cursor-pointer pointer-events-auto line-through opacity-60" onclick="event.stopPropagation(); toggleChecklistItem('${item.id}', ${idx})">
-              <span class="w-3.5 h-3.5 rounded border border-amber-500 bg-amber-500 flex items-center justify-center inline-block shrink-0 text-black text-[9px] font-bold">✓</span>
-              <span>${line.substring(4)}</span>
-            </div>`;
-          }
-          return `<div>${line}</div>`;
-        }).join('');
-      }
-      return rawText;
+    function toggleChecklistItem(event, bubbleId, index) {
+      event.stopPropagation();
+      const bubble = state.textBubbles.find(b => b.id === bubbleId);
+      if (!bubble || !bubble.checklist) return;
+      bubble.checklist[index].checked = !bubble.checklist[index].checked;
+      saveTextBubble(bubble);
+      render();
     }
 
     function renderItem(item, index) {
@@ -614,8 +567,8 @@
       const row = Math.floor(index / 4);
       const posX = item.x !== undefined ? item.x : (20 + col * 140);
       const posY = item.y !== undefined ? item.y : (20 + row * 160);
-      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 140 : 112);
-      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 80 : 144);
+      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 160 : 112);
+      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 100 : 144);
       const folder = isFolder(item);
       const bubble = isBubble(item);
       const isMenuOpen = state.activeMenuId === item.id;
@@ -623,10 +576,28 @@
 
       if (bubble) {
         let bubbleCustomBg = item.bgColour ? `background-color:${item.bgColour};` : '';
+        const isChecklist = item.isChecklist && Array.isArray(item.checklist);
+
         return `
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden" style="${bubbleCustomBg}">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none" style="${bubbleInlineStyle(item)}">${renderBubbleContent(item)}</div>
+              ${isChecklist ? `
+                <div class="flex flex-col gap-1.5 w-full">
+                  <div class="text-xs font-bold border-b border-zinc-700/50 pb-1 text-amber-400 truncate">${item.title || 'Checklist'}</div>
+                  <div class="flex flex-col gap-1 overflow-y-auto max-h-48 no-scrollbar pr-1">
+                    ${item.checklist.map((chk, idx) => `
+                      <div onclick="toggleChecklistItem(event, '${item.id}', ${idx})" class="flex items-center gap-2 text-xs hover:bg-white/5 p-1 rounded cursor-pointer select-none">
+                        <div class="w-4 h-4 rounded border ${chk.checked ? 'bg-amber-500 border-amber-500' : 'border-zinc-500'} flex items-center justify-center shrink-0">
+                          ${chk.checked ? '<i data-lucide="check" class="w-3 h-3 text-black stroke-[3]"></i>' : ''}
+                        </div>
+                        <span class="${chk.checked ? 'line-through text-zinc-500' : 'text-zinc-200'} truncate">${chk.text}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : `
+                <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
+              `}
               <div class="select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
               <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
@@ -689,7 +660,7 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>
+            ${item.isChecklist ? '' : `<button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>`}
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
             <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
@@ -737,14 +708,98 @@
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
               <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video / Embed</button>
               <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
+              <button onclick="openChecklistModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Checklist</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
-              <button onclick="createChecklistBubble(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist</button>
               <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
             </div>
             <button onclick="closeUploadModal()" class="text-xs text-zinc-500 hover:text-zinc-300 mt-2 font-medium">Cancel</button>
           </div>
         </div>
       `;
+    }
+
+    function renderChecklistModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeChecklistModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add Checklist</h3>
+            <p class="text-xs text-zinc-400">Create a interactive task list to add to your workspace.</p>
+            <div class="flex flex-col gap-3 mt-1 text-left">
+              <input id="checklist-title-input" type="text" placeholder="Checklist Title (e.g. To-Do List)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              
+              <div class="flex flex-col gap-2 max-h-48 overflow-y-auto no-scrollbar" id="checklist-items-container">
+                ${state.checklistDraftItems.map((item, idx) => `
+                  <div class="flex items-center gap-2">
+                    <input type="text" value="${item}" onchange="updateChecklistDraftItem(${idx}, this.value)" placeholder="Item ${idx + 1}" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-amber-500" />
+                    <button type="button" onclick="removeChecklistDraftItem(${idx})" class="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                `).join('')}
+              </div>
+
+              <button type="button" onclick="addChecklistDraftItem()" class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-zinc-700/50">
+                <i data-lucide="plus" class="w-4 h-4"></i> Add Line Item
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeChecklistModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveChecklistModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Create Checklist</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openChecklistModal() {
+      state.checklistDraftItems = [''];
+      state.checklistModal = true;
+      render();
+    }
+
+    function closeChecklistModal() {
+      state.checklistModal = false;
+      render();
+    }
+
+    function addChecklistDraftItem() {
+      state.checklistDraftItems.push('');
+      render();
+    }
+
+    function updateChecklistDraftItem(index, val) {
+      state.checklistDraftItems[index] = val;
+    }
+
+    function removeChecklistDraftItem(index) {
+      state.checklistDraftItems.splice(index, 1);
+      render();
+    }
+
+    async function saveChecklistModal() {
+      const title = (document.getElementById('checklist-title-input').value || 'Checklist').trim();
+      const validItems = state.checklistDraftItems.map(i => i.trim()).filter(i => i.length > 0);
+      
+      if (validItems.length === 0) {
+        alert('Please add at least one item to your checklist.');
+        return;
+      }
+
+      const newBubble = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        title: title,
+        isBubble: true,
+        isChecklist: true,
+        checklist: validItems.map(text => ({ text, checked: false })),
+        width: 180,
+        height: 120,
+        x: 40,
+        y: 40
+      };
+
+      state.textBubbles.push(newBubble);
+      await saveTextBubble(newBubble);
+      closeChecklistModal();
     }
 
     function renderLinkModal() {
@@ -949,7 +1004,7 @@
                 <span class="text-[10px] text-zinc-400 font-bold px-1">Bg:</span>
                 <label class="cursor-pointer relative" title="Background colour">
                   <input type="color" value="${ed.bgColour || '#18181b'}" oninput="applyTextEditorFormat('bgColour', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
-                  <span class="p-1 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="palette" class="w-4 h-4" style="color:${ed.bgColour || '#18181b'}"></i></span>
+                  <span class="p-1 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="paint-bucket" class="w-4 h-4" style="color:${ed.bgColour || '#18181b'}"></i></span>
                 </label>
                 ${bgSwatches.slice(0, 4).map(c => `
                   <button type="button" onclick="applyTextEditorFormat('bgColour', '${c}')" class="w-4 h-4 rounded-full border ${ed.bgColour === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
@@ -958,136 +1013,156 @@
               </div>
             </div>
 
-            <div class="min-h-[140px] max-h-[300px] bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white text-xs outline-none focus:border-amber-500 overflow-y-auto" id="modal-text-input" contenteditable="true" data-placeholder="Type text here..." oninput="onTextEditorInput(event)"></div>
+            <div class="relative w-full min-h-[140px] bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-col justify-between" style="${ed.bgColour ? `background-color:${ed.bgColour};` : ''}">
+              <div id="modal-text-input" contenteditable="true" oninput="handleTextEditorInput(this)" data-placeholder="Type your note or thoughts here..." class="w-full min-h-[100px] max-h-[300px] overflow-y-auto leading-relaxed select-text text-white" style="${editorPreviewStyle(ed)}"></div>
+            </div>
 
-            <div class="flex items-center gap-2">
-              <button onclick="closeTextEditorModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveTextEditorModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Bubble</button>
+            <div class="flex items-center gap-2 mt-1">
+              <button type="button" onclick="closeTextEditorModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button type="button" onclick="saveTextEditorModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Text Bubble</button>
             </div>
           </div>
         </div>
       `;
     }
 
+    function editorPreviewStyle(ed) {
+      let style = '';
+      if (ed.fontFamily) style += `font-family:${ed.fontFamily};`;
+      if (ed.fontSize === 'lg') style += 'font-size:16px;';
+      else if (ed.fontSize === 'sm') style += 'font-size:10px;';
+      else style += 'font-size:12px;';
+      if (ed.isBold) style += 'font-weight:bold;';
+      if (ed.isItalic) style += 'font-style:italic;';
+      if (ed.isUnderline) style += 'text-decoration:underline;';
+      if (ed.fontColor) style += `color:${ed.fontColor};`;
+      if (ed.align) style += `text-align:${ed.align};`;
+      return style;
+    }
+
     function openTextEditorModal(bubbleId = null, attachedFileId = null) {
-      let ed;
+      let ed = {
+        bubbleId,
+        attachedFileId,
+        isNew: !bubbleId,
+        text: '',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: 'md',
+        isBold: false,
+        isItalic: false,
+        isUnderline: false,
+        fontColor: null,
+        bgColour: null,
+        align: 'left',
+        history: [],
+        historyIndex: -1
+      };
+
       if (bubbleId) {
         const bubble = state.textBubbles.find(b => b.id === bubbleId);
-        if (!bubble) return;
-        ed = {
-          id: bubble.id,
-          isNew: false,
-          attachedFileId: bubble.attachedFileId || null,
-          text: bubble.text || '',
-          fontFamily: bubble.fontFamily || 'system-ui, -apple-system, sans-serif',
-          fontSize: bubble.fontSize || 'md',
-          fontColor: bubble.fontColor || '#ffffff',
-          bgColour: bubble.bgColour || '#18181b',
-          align: bubble.align || 'left',
-          isBold: !!bubble.isBold,
-          isItalic: !!bubble.isItalic,
-          isUnderline: !!bubble.isUnderline,
-          history: [bubble.text || ''],
-          historyIndex: 0
-        };
-      } else {
-        ed = {
-          id: uid(),
-          isNew: true,
-          attachedFileId: attachedFileId,
-          text: '',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-          fontSize: 'md',
-          fontColor: '#ffffff',
-          bgColour: '#18181b',
-          align: 'left',
-          isBold: false,
-          isItalic: false,
-          isUnderline: false,
-          history: [''],
-          historyIndex: 0
-        };
+        if (bubble) {
+          ed.text = bubble.text || '';
+          ed.fontFamily = bubble.fontFamily || ed.fontFamily;
+          ed.fontSize = bubble.fontSize || ed.fontSize;
+          ed.isBold = !!bubble.isBold;
+          ed.isItalic = !!bubble.isItalic;
+          ed.isUnderline = !!bubble.isUnderline;
+          ed.fontColor = bubble.fontColor || null;
+          ed.bgColour = bubble.bgColour || null;
+          ed.align = bubble.align || 'left';
+        }
       }
+
+      ed.history.push(getTextEditorSnapshot(ed));
+      ed.historyIndex = 0;
+
       state.textEditorModal = ed;
       render();
+
       setTimeout(() => {
-        const el = document.getElementById('modal-text-input');
-        if (el) {
-          el.innerText = ed.text;
-          el.style.fontFamily = ed.fontFamily;
-          if (ed.fontSize === 'lg') el.style.fontSize = '16px';
-          else if (ed.fontSize === 'sm') el.style.fontSize = '10px';
-          else el.style.fontSize = '12px';
-          el.style.fontWeight = ed.isBold ? 'bold' : 'normal';
-          el.style.fontStyle = ed.isItalic ? 'italic' : 'normal';
-          el.style.textDecoration = ed.isUnderline ? 'underline' : 'none';
-          if (ed.fontColor) el.style.color = ed.fontColor;
-          if (ed.bgColour) el.style.backgroundColor = ed.bgColour;
-          if (ed.align) el.style.textAlign = ed.align;
-          el.focus();
+        const inp = document.getElementById('modal-text-input');
+        if (inp) {
+          inp.innerText = ed.text;
+          inp.focus();
         }
       }, 50);
     }
 
-    function applyTextEditorFormat(key, value) {
+    function getTextEditorSnapshot(ed) {
+      return {
+        text: ed.text,
+        fontSize: ed.fontSize,
+        fontFamily: ed.fontFamily,
+        isBold: ed.isBold,
+        isItalic: ed.isItalic,
+        isUnderline: ed.isUnderline,
+        fontColor: ed.fontColor,
+        bgColour: ed.bgColour,
+        align: ed.align
+      };
+    }
+
+    function pushTextEditorHistory() {
       const ed = state.textEditorModal;
       if (!ed) return;
-      if (key === 'isBold' || key === 'isItalic' || key === 'isUnderline') {
+      if (ed.historyIndex < ed.history.length - 1) {
+        ed.history = ed.history.slice(0, ed.historyIndex + 1);
+      }
+      ed.history.push(getTextEditorSnapshot(ed));
+      ed.historyIndex = ed.history.length - 1;
+    }
+
+    function handleTextEditorInput(elem) {
+      if (!state.textEditorModal) return;
+      state.textEditorModal.text = elem.innerText;
+    }
+
+    function applyTextEditorFormat(key, value = undefined) {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+
+      if (typeof ed[key] === 'boolean') {
         ed[key] = !ed[key];
       } else {
         ed[key] = value;
       }
-
-      const el = document.getElementById('modal-text-input');
-      if (el) {
-        if (ed.fontFamily) el.style.fontFamily = ed.fontFamily;
-        if (ed.fontSize === 'lg') el.style.fontSize = '16px';
-        else if (ed.fontSize === 'sm') el.style.fontSize = '10px';
-        else el.style.fontSize = '12px';
-        el.style.fontWeight = ed.isBold ? 'bold' : 'normal';
-        el.style.fontStyle = ed.isItalic ? 'italic' : 'normal';
-        el.style.textDecoration = ed.isUnderline ? 'underline' : 'none';
-        el.style.color = ed.fontColor || '#ffffff';
-        el.style.backgroundColor = ed.bgColour || '#18181b';
-        el.style.textAlign = ed.align || 'left';
-      }
+      pushTextEditorHistory();
       render();
-      setTimeout(() => {
-        const el2 = document.getElementById('modal-text-input');
-        if (el2) el2.innerText = ed.text;
-      }, 10);
-    }
 
-    function onTextEditorInput(e) {
-      const ed = state.textEditorModal;
-      if (!ed) return;
-      const text = e.target.innerText;
-      ed.text = text;
-      if (ed.history[ed.historyIndex] !== text) {
-        ed.history = ed.history.slice(0, ed.historyIndex + 1);
-        ed.history.push(text);
-        ed.historyIndex = ed.history.length - 1;
-      }
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) {
+          inp.innerText = ed.text;
+        }
+      }, 30);
     }
 
     function textEditorUndo() {
       const ed = state.textEditorModal;
       if (!ed || ed.historyIndex <= 0) return;
       ed.historyIndex--;
-      ed.text = ed.history[ed.historyIndex];
-      const el = document.getElementById('modal-text-input');
-      if (el) el.innerText = ed.text;
+      const snap = ed.history[ed.historyIndex];
+      Object.assign(ed, snap);
       render();
+
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) inp.innerText = ed.text;
+      }, 30);
     }
 
     function textEditorRedo() {
       const ed = state.textEditorModal;
       if (!ed || ed.historyIndex >= ed.history.length - 1) return;
       ed.historyIndex++;
-      ed.text = ed.history[ed.historyIndex];
-      const el = document.getElementById('modal-text-input');
-      if (el) el.innerText = ed.text;
+      const snap = ed.history[ed.historyIndex];
+      Object.assign(ed, snap);
       render();
+
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) inp.innerText = ed.text;
+      }, 30);
     }
 
     function closeTextEditorModal() {
@@ -1095,53 +1170,115 @@
       render();
     }
 
-    function saveTextEditorModal() {
+    async function saveTextEditorModal() {
       const ed = state.textEditorModal;
       if (!ed) return;
-      const el = document.getElementById('modal-text-input');
-      const text = el ? el.innerText.trim() : ed.text.trim();
 
-      if (!text) {
-        alert('Please enter some text for the bubble.');
-        return;
-      }
+      const inp = document.getElementById('modal-text-input');
+      if (inp) ed.text = inp.innerText.trim();
 
-      let bubble = state.textBubbles.find(b => b.id === ed.id);
-      if (bubble) {
-        bubble.text = text;
-        bubble.fontFamily = ed.fontFamily;
-        bubble.fontSize = ed.fontSize;
-        bubble.fontColor = ed.fontColor;
-        bubble.bgColour = ed.bgColour;
-        bubble.align = ed.align;
-        bubble.isBold = ed.isBold;
-        bubble.isItalic = ed.isItalic;
-        bubble.isUnderline = ed.isUnderline;
-        saveTextBubble(bubble);
+      if (ed.bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === ed.bubbleId);
+        if (bubble) {
+          bubble.text = ed.text;
+          bubble.fontFamily = ed.fontFamily;
+          bubble.fontSize = ed.fontSize;
+          bubble.isBold = ed.isBold;
+          bubble.isItalic = ed.isItalic;
+          bubble.isUnderline = ed.isUnderline;
+          bubble.fontColor = ed.fontColor;
+          bubble.bgColour = ed.bgColour;
+          bubble.align = ed.align;
+          await saveTextBubble(bubble);
+        }
       } else {
-        bubble = {
-          id: ed.id,
+        const newBubble = {
+          id: uid(),
           parentId: state.currentFolderId,
+          attachedFileId: ed.attachedFileId || null,
           isBubble: true,
-          attachedFileId: ed.attachedFileId,
-          text: text,
+          text: ed.text,
           fontFamily: ed.fontFamily,
           fontSize: ed.fontSize,
-          fontColor: ed.fontColor,
-          bgColour: ed.bgColour,
-          align: ed.align,
           isBold: ed.isBold,
           isItalic: ed.isItalic,
           isUnderline: ed.isUnderline,
+          fontColor: ed.fontColor,
+          bgColour: ed.bgColour,
+          align: ed.align,
           width: 140,
           height: 80,
-          x: 40,
-          y: 40
+          x: 20,
+          y: 20
         };
-        state.textBubbles.push(bubble);
-        saveTextBubble(bubble);
+        state.textBubbles.push(newBubble);
+        await saveTextBubble(newBubble);
       }
+
       closeTextEditorModal();
+    }
+
+    function renderQuickViewModal() {
+      const file = state.files.find(f => f.id === state.quickViewFileId);
+      if (!file) return '';
+
+      const type = file.fileType || '';
+      const isImg = type.startsWith('image/');
+      const isVid = isVideoFile(file);
+      const isAud = isAudioFile(file);
+      const isWebVideo = type === 'web-video';
+
+      let contentHtml = '';
+      if (isImg) {
+        contentHtml = `<img src="${file.dataUrl}" class="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl" />`;
+      } else if (isVid && !isWebVideo) {
+        const src = file.blobUrl || file.dataUrl;
+        contentHtml = `<video src="${src}" controls autoplay playsinline webkit-playsinline class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl bg-black"></video>`;
+      } else if (isWebVideo) {
+        contentHtml = `
+          <div class="flex flex-col items-center gap-4 text-center">
+            <button onclick="playPopupVideo('${file.videoUrl}')" class="px-6 py-4 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-2xl flex items-center gap-2 shadow-xl shadow-amber-500/20 text-sm">
+              <i data-lucide="play" class="w-5 h-5 fill-black"></i> Launch Video Player / Embed
+            </button>
+            <span class="text-xs text-zinc-400 break-all">${file.videoUrl}</span>
+          </div>
+        `;
+      } else if (isAud) {
+        const src = file.blobUrl || file.dataUrl;
+        contentHtml = `
+          <div class="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col items-center gap-4 w-full max-w-sm">
+            <i data-lucide="music" class="w-16 h-16 text-amber-400 animate-pulse"></i>
+            <span class="text-sm font-bold text-white text-center">${file.name}</span>
+            <audio src="${src}" controls autoplay class="w-full"></audio>
+          </div>
+        `;
+      } else {
+        contentHtml = `
+          <div class="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col items-center gap-3 text-center max-w-xs">
+            <i data-lucide="file-text" class="w-12 h-12 text-amber-400"></i>
+            <span class="text-xs font-bold text-white">${file.name}</span>
+            <span class="text-[10px] text-zinc-500">Preview not directly streamable. You can open or share it below.</span>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onclick="closeQuickView()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 max-w-2xl w-full flex flex-col items-center gap-4 relative shadow-2xl" onclick="event.stopPropagation()">
+            <div class="w-full flex items-center justify-between border-b border-zinc-800 pb-3">
+              <span class="text-xs font-bold text-zinc-300 truncate max-w-[80%]">${file.name}</span>
+              <button onclick="closeQuickView()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="w-full flex items-center justify-center min-h-[200px] py-2">
+              ${contentHtml}
+            </div>
+            <div class="w-full flex items-center justify-end gap-2 border-t border-zinc-800 pt-3">
+              <button onclick="shareFile('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-bold text-zinc-200 flex items-center gap-2"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+              <button onclick="closeQuickView()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs">Done</button>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     function toggleHamburgerMenu(e) {
@@ -1149,12 +1286,37 @@
       state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
       render();
     }
-
     function closeHamburgerMenu() {
       if (state.hamburgerMenuOpen) {
         state.hamburgerMenuOpen = false;
         render();
       }
+    }
+
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      render();
+    }
+
+    function toggleSelectMode() {
+      state.selectMode = !state.selectMode;
+      if (!state.selectMode) state.selectedIds = [];
+      render();
+    }
+
+    function toggleSelectAll() {
+      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
+      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
+      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
+
+      const allSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
+      if (allSelected) {
+        state.selectedIds = [];
+      } else {
+        state.selectedIds = items.map(item => item.id);
+      }
+      render();
     }
 
     function navigateTo(folderId) {
@@ -1166,27 +1328,30 @@
 
     function navigateBack() {
       if (state.currentFolderId === null) return;
-      const curr = state.folders.find(f => f.id === state.currentFolderId);
-      if (curr) {
-        navigateTo(curr.parentId);
+      const cur = state.folders.find(f => f.id === state.currentFolderId);
+      if (cur) {
+        navigateTo(cur.parentId);
       } else {
         navigateTo(null);
       }
     }
 
-    function toggleSelectMode() {
-      state.selectMode = !state.selectMode;
-      state.selectedIds = [];
+    function toggleMenu(e, id) {
+      e.stopPropagation();
+      state.activeMenuId = state.activeMenuId === id ? null : id;
       render();
     }
 
-    function toggleEditMode() {
-      state.editMode = !state.editMode;
-      render();
+    function closeMenu() {
+      if (state.activeMenuId !== null) {
+        state.activeMenuId = null;
+        render();
+      }
     }
 
     function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
-      if (e) e.stopPropagation();
+      if (e.target.closest('button')) return;
+
       if (state.selectMode) {
         if (state.selectedIds.includes(id)) {
           state.selectedIds = state.selectedIds.filter(i => i !== id);
@@ -1200,211 +1365,181 @@
       if (isFolderItem) {
         navigateTo(id);
       } else if (isBubbleItem) {
-        openTextEditorModal(id);
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble && !bubble.isChecklist) {
+          openTextEditorModal(id);
+        }
       } else {
         const file = state.files.find(f => f.id === id);
         if (!file) return;
 
-        if (file.fileType === 'link' && file.dataUrl) {
-          window.open(file.dataUrl, '_blank');
-        } else if (file.fileType === 'app' || file.fileType === 'ios-app') {
-          if (file.dataUrl) window.location.href = file.dataUrl;
-        } else if (file.fileType === 'web-video') {
-          state.popupVideoUrl = file.dataUrl;
-          render();
+        if (file.fileType === 'link' && file.url) {
+          window.open(file.url, '_blank');
+        } else if (file.fileType === 'web-video' && file.videoUrl) {
+          playPopupVideo(file.videoUrl);
+        } else if ((file.fileType === 'app' || file.fileType === 'ios-app') && file.appScheme) {
+          window.location.href = file.appScheme;
         } else {
           openQuickView(id);
         }
       }
     }
 
-    function toggleMenu(e, id) {
-      if (e) e.stopPropagation();
-      state.activeMenuId = state.activeMenuId === id ? null : id;
+    function playPopupVideo(url) {
+      state.popupVideoUrl = url;
       render();
     }
-
-    function closeMenu() {
-      if (state.activeMenuId !== null) {
-        state.activeMenuId = null;
-        render();
-      }
-    }
-
-    function openUploadModal() {
-      state.showUploadModal = true;
-      render();
-    }
-
-    function closeUploadModal() {
-      state.showUploadModal = false;
-      render();
-    }
-
-    function openLinkModal() {
-      state.linkModal = true;
-      state.linkModalThumbData = null;
-      render();
-    }
-
-    function closeLinkModal() {
-      state.linkModal = false;
-      state.linkModalThumbData = null;
-      render();
-    }
-
-    function saveLinkModal() {
-      const urlInput = document.getElementById('link-url-input');
-      const nameInput = document.getElementById('link-name-input');
-      let url = urlInput ? urlInput.value.trim() : '';
-      let name = nameInput ? nameInput.value.trim() : '';
-
-      if (!url) {
-        alert('Please enter a valid URL.');
-        return;
-      }
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-      if (!name) name = url;
-
-      const file = {
-        id: uid(),
-        parentId: state.currentFolderId,
-        name: name,
-        fileType: 'link',
-        dataUrl: url,
-        thumbnailData: state.linkModalThumbData || null,
-        width: 112,
-        height: 144
-      };
-      state.files.push(file);
-      saveFile(file);
-      closeLinkModal();
-      render();
-    }
-
-    function openWebVideoModal() {
-      state.webVideoModal = true;
-      state.webVideoModalThumbData = null;
-      render();
-    }
-
-    function closeWebVideoModal() {
-      state.webVideoModal = false;
-      state.webVideoModalThumbData = null;
-      render();
-    }
-
-    function saveWebVideoModal() {
-      const urlInput = document.getElementById('web-video-url-input');
-      const nameInput = document.getElementById('web-video-name-input');
-      let url = urlInput ? urlInput.value.trim() : '';
-      let name = nameInput ? nameInput.value.trim() : '';
-
-      if (!url) {
-        alert('Please enter a video URL or embed snippet.');
-        return;
-      }
-      if (!name) name = 'Web Video';
-
-      const file = {
-        id: uid(),
-        parentId: state.currentFolderId,
-        name: name,
-        fileType: 'web-video',
-        dataUrl: url,
-        thumbnailData: state.webVideoModalThumbData || null,
-        width: 112,
-        height: 144
-      };
-      state.files.push(file);
-      saveFile(file);
-      closeWebVideoModal();
-      render();
-    }
-
-    function openAppModal() {
-      state.appModal = true;
-      state.appModalThumbData = null;
-      render();
-    }
-
-    function closeAppModal() {
-      state.appModal = false;
-      state.appModalThumbData = null;
-      render();
-    }
-
-    function saveAppModal() {
-      const schemeInput = document.getElementById('app-scheme-input');
-      const nameInput = document.getElementById('app-name-input');
-      let scheme = schemeInput ? schemeInput.value.trim() : '';
-      let name = nameInput ? nameInput.value.trim() : '';
-
-      if (!scheme) {
-        alert('Please enter an app URL scheme.');
-        return;
-      }
-      if (!name) name = 'iOS App';
-
-      const file = {
-        id: uid(),
-        parentId: state.currentFolderId,
-        name: name,
-        fileType: 'app',
-        dataUrl: scheme,
-        thumbnailData: state.appModalThumbData || null,
-        width: 112,
-        height: 144
-      };
-      state.files.push(file);
-      saveFile(file);
-      closeAppModal();
-      render();
-    }
-
     function closePopupVideo() {
       state.popupVideoUrl = null;
       render();
     }
 
+    function openQuickView(id) {
+      state.quickViewFileId = id;
+      state.activeMenuId = null;
+      render();
+    }
+    function closeQuickView() {
+      state.quickViewFileId = null;
+      render();
+    }
+
+    function openUploadModal() { state.showUploadModal = true; render(); }
+    function closeUploadModal() { state.showUploadModal = false; render(); }
+
+    function openLinkModal() { state.linkModal = true; state.linkModalThumbData = null; render(); }
+    function closeLinkModal() { state.linkModal = false; state.linkModalThumbData = null; render(); }
+
+    function openWebVideoModal() { state.webVideoModal = true; state.webVideoModalThumbData = null; render(); }
+    function closeWebVideoModal() { state.webVideoModal = false; state.webVideoModalThumbData = null; render(); }
+
+    function openAppModal() { state.appModal = true; state.appModalThumbData = null; render(); }
+    function closeAppModal() { state.appModal = false; state.appModalThumbData = null; render(); }
+
+    async function saveLinkModal() {
+      const urlInp = document.getElementById('link-url-input');
+      const nameInp = document.getElementById('link-name-input');
+      if (!urlInp || !urlInp.value.trim()) {
+        alert('Please enter a valid URL.');
+        return;
+      }
+      let url = urlInp.value.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      const name = nameInp && nameInp.value.trim() ? nameInp.value.trim() : url.replace(/^https?:\/\//, '').split('/')[0];
+
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: name,
+        fileType: 'link',
+        url: url,
+        thumbnailData: state.linkModalThumbData || null,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeLinkModal();
+      render();
+    }
+
+    async function saveWebVideoModal() {
+      const urlInp = document.getElementById('web-video-url-input');
+      const nameInp = document.getElementById('web-video-name-input');
+      if (!urlInp || !urlInp.value.trim()) {
+        alert('Please enter a valid video link or embed code.');
+        return;
+      }
+      const videoUrl = urlInp.value.trim();
+      const name = nameInp && nameInp.value.trim() ? nameInp.value.trim() : 'Web Video';
+
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: name,
+        fileType: 'web-video',
+        videoUrl: videoUrl,
+        thumbnailData: state.webVideoModalThumbData || null,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeWebVideoModal();
+      render();
+    }
+
+    async function saveAppModal() {
+      const schemeInp = document.getElementById('app-scheme-input');
+      const nameInp = document.getElementById('app-name-input');
+      if (!schemeInp || !schemeInp.value.trim()) {
+        alert('Please enter a valid App URL scheme or deep link.');
+        return;
+      }
+      const appScheme = schemeInp.value.trim();
+      const name = nameInp && nameInp.value.trim() ? nameInp.value.trim() : 'iOS App';
+
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: name,
+        fileType: 'app',
+        appScheme: appScheme,
+        thumbnailData: state.appModalThumbData || null,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAppModal();
+      render();
+    }
+
     function openNewFolderModal() {
-      const name = prompt('Enter folder name:');
+      const name = prompt('Enter new folder name:');
       if (name && name.trim()) {
-        const folder = {
+        const newFolder = {
           id: uid(),
           name: name.trim(),
           parentId: state.currentFolderId,
           width: 96,
-          height: 96
+          height: 96,
+          x: 20,
+          y: 20
         };
-        state.folders.push(folder);
-        saveFolder(folder);
+        state.folders.push(newFolder);
+        saveFolder(newFolder);
         render();
       }
     }
 
-    function triggerFolderCover(folderId) {
-      state.targetFolderCoverId = folderId;
-      document.getElementById('folder-cover-input').click();
-    }
-
-    function triggerChangeImage(fileId) {
-      state.targetChangeImageId = fileId;
-      document.getElementById('change-image-input').click();
-    }
-
     function renameItem(id, isFolderItem, isBubbleItem = false) {
+      state.activeMenuId = null;
       if (isBubbleItem) {
-        openTextEditorModal(id);
-        return;
-      }
-      if (isFolderItem) {
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (!bubble) return;
+        const newName = prompt('Rename Text Bubble:', bubble.text ? bubble.text.substring(0, 20) : 'Text Bubble');
+        if (newName !== null && newName.trim()) {
+          bubble.text = newName.trim();
+          saveTextBubble(bubble);
+          render();
+        }
+      } else if (isFolderItem) {
         const folder = state.folders.find(f => f.id === id);
         if (!folder) return;
         const newName = prompt('Rename folder:', folder.name);
-        if (newName && newName.trim()) {
+        if (newName !== null && newName.trim()) {
           folder.name = newName.trim();
           saveFolder(folder);
           render();
@@ -1413,7 +1548,7 @@
         const file = state.files.find(f => f.id === id);
         if (!file) return;
         const newName = prompt('Rename file:', file.name);
-        if (newName && newName.trim()) {
+        if (newName !== null && newName.trim()) {
           file.name = newName.trim();
           saveFile(file);
           render();
@@ -1421,23 +1556,37 @@
       }
     }
 
-    function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
-      if (confirm('Are you sure you want to delete this item?')) {
-        if (isBubbleItem) {
-          state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-          deleteFromDB('textBubbles', id);
-        } else if (isFolderItem) {
-          state.folders = state.folders.filter(f => f.id !== id);
-          deleteFromDB('folders', id);
-        } else {
-          state.files = state.files.filter(f => f.id !== id);
-          deleteFromDB('files', id);
-        }
-        render();
+    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
+      state.activeMenuId = null;
+      if (!confirm('Are you sure you want to delete this item?')) return;
+
+      if (isBubbleItem) {
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('textBubbles', id);
+      } else if (isFolderItem) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        await deleteFromDB('folders', id);
+      } else {
+        state.files = state.files.filter(f => f.id !== id);
+        await deleteFromDB('files', id);
       }
+      render();
+    }
+
+    function triggerFolderCover(folderId) {
+      state.targetFolderCoverId = folderId;
+      state.activeMenuId = null;
+      document.getElementById('folder-cover-input').click();
+    }
+
+    function triggerChangeImage(fileId) {
+      state.targetChangeImageId = fileId;
+      state.activeMenuId = null;
+      document.getElementById('change-image-input').click();
     }
 
     function snapToOriginalShape(id) {
+      state.activeMenuId = null;
       const folder = state.folders.find(f => f.id === id);
       if (folder) {
         folder.width = 96;
@@ -1464,182 +1613,164 @@
     }
 
     function resizeByFinger(id, isFolderItem) {
-      alert('You can drag the yellow handle at the bottom right corner of any item in Edit Mode to resize it with your finger!');
+      state.activeMenuId = null;
+      alert('Edit Mode activated. Drag the yellow handle on the bottom right corner of the item to resize.');
+      state.editMode = true;
+      render();
     }
 
     function moveToFolder(id, isFolderItem, isBubbleItem = false) {
-      const availableFolders = state.folders.filter(f => f.id !== id && f.id !== state.currentFolderId);
-      if (availableFolders.length === 0) {
-        alert('No other folders available to move to.');
-        return;
-      }
-      let msg = 'Select target folder ID or name:\n' + availableFolders.map(f => `${f.name} (ID: ${f.id})`).join('\n');
-      const target = prompt(msg);
-      if (!target) return;
-      const found = availableFolders.find(f => f.id === target.trim() || f.name.toLowerCase() === target.trim().toLowerCase());
-      if (found) {
-        if (isBubbleItem) {
-          const bubble = state.textBubbles.find(b => b.id === id);
-          if (bubble) {
-            bubble.parentId = found.id === 'root' ? null : found.id;
-            saveTextBubble(bubble);
-          }
-        } else if (isFolderItem) {
-          const folder = state.folders.find(f => f.id === id);
-          if (folder) {
-            folder.parentId = found.id === 'root' ? null : found.id;
-            saveFolder(folder);
-          }
-        } else {
-          const file = state.files.find(f => f.id === id);
-          if (file) {
-            file.parentId = found.id === 'root' ? null : found.id;
-            saveFile(file);
-          }
+      state.activeMenuId = null;
+      const availableFolders = state.folders.filter(f => f.id !== id);
+      let promptText = 'Enter target folder name (or leave empty for Home):\nAvailable: ' + availableFolders.map(f => f.name).join(', ');
+      const targetName = prompt(promptText);
+
+      if (targetName === null) return;
+
+      let targetFolderId = null;
+      if (targetName.trim() !== '') {
+        const found = availableFolders.find(f => f.name.toLowerCase() === targetName.trim().toLowerCase());
+        if (!found) {
+          alert('Folder not found.');
+          return;
         }
-        render();
-      } else {
-        alert('Folder not found.');
+        targetFolderId = found.id;
       }
-    }
 
-    function openQuickView(id) {
-      state.quickViewFileId = id;
+      if (isBubbleItem) {
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble) {
+          bubble.parentId = targetFolderId;
+          saveTextBubble(bubble);
+        }
+      } else if (isFolderItem) {
+        const folder = state.folders.find(f => f.id === id);
+        if (folder) {
+          folder.parentId = targetFolderId;
+          saveFolder(folder);
+        }
+      } else {
+        const file = state.files.find(f => f.id === id);
+        if (file) {
+          file.parentId = targetFolderId;
+          saveFile(file);
+        }
+      }
       render();
-    }
-
-    function closeQuickView() {
-      state.quickViewFileId = null;
-      render();
-    }
-
-    function renderQuickViewModal() {
-      const file = state.files.find(f => f.id === state.quickViewFileId);
-      if (!file) return '';
-
-      const type = file.fileType || '';
-      const isImage = type.startsWith('image/');
-      const isVideo = isVideoFile(file);
-      const isAudio = isAudioFile(file);
-
-      return `
-        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onclick="closeQuickView()">
-          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-2xl flex flex-col gap-4 shadow-2xl relative max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <span class="text-sm font-bold text-white truncate max-w-[80%]">${file.name}</span>
-              <button onclick="closeQuickView()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
-            </div>
-            <div class="flex items-center justify-center bg-black rounded-2xl overflow-hidden min-h-[200px]">
-              ${isImage && (file.blobUrl || file.dataUrl) ? `<img src="${file.blobUrl || file.dataUrl}" class="max-h-[60vh] object-contain rounded-xl" />` : ''}
-              ${isVideo && (file.blobUrl || file.dataUrl) ? `<video controls autoplay playsinline class="max-h-[60vh] w-full rounded-xl" src="${file.blobUrl || file.dataUrl}"></video>` : ''}
-              ${isAudio && (file.blobUrl || file.dataUrl) ? `<audio controls autoplay class="w-full m-4" src="${file.blobUrl || file.dataUrl}"></audio>` : ''}
-              {!isImage && !isVideo && !isAudio ? `<div class="p-8 text-center text-zinc-400 text-xs">Preview not available for this file type.<br/><br/><a href="${file.blobUrl || file.dataUrl}" download="${file.name}" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl inline-block mt-2">Download File</a></div>` : ''}
-            </div>
-            <div class="flex items-center justify-between text-xs text-zinc-400 border-t border-zinc-800 pt-3">
-              <span>Type: ${file.fileType || 'Unknown'}</span>
-              <button onclick="shareFile('${file.id}')" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-xl flex items-center gap-1.5"><i data-lucide="share" class="w-3.5 h-3.5"></i> iOS Share</button>
-            </div>
-          </div>
-        </div>
-      `;
     }
 
     async function copySingleFileClipboard(id) {
+      state.activeMenuId = null;
       const file = state.files.find(f => f.id === id);
       if (!file) return;
+
       try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(file.dataUrl || file.blobUrl || file.name);
+        if (navigator.clipboard && window.ClipboardItem && file.dataUrl && file.fileType.startsWith('image/')) {
+          const res = await fetch(file.dataUrl);
+          const blob = await res.blob();
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          alert('Image copied to clipboard!');
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(file.url || file.videoUrl || file.name);
           alert('Copied to clipboard!');
         } else {
-          alert('Clipboard access not supported.');
+          alert('Clipboard not available.');
         }
-      } catch (e) {
-        alert('Could not copy: ' + e.message);
+      } catch (err) {
+        alert('Could not copy to clipboard: ' + err.message);
       }
     }
 
     async function shareFile(id) {
+      state.activeMenuId = null;
       const file = state.files.find(f => f.id === id);
       if (!file) return;
+
       try {
         if (navigator.share) {
-          await navigator.share({
-            title: file.name,
-            url: file.dataUrl || file.blobUrl
-          });
+          if (file.rawBlob) {
+            const f = new File([file.rawBlob], file.name, { type: file.fileType });
+            await navigator.share({ files: [f], title: file.name });
+          } else {
+            await navigator.share({ title: file.name, url: file.url || file.videoUrl || window.location.href });
+          }
         } else {
-          copySingleFileClipboard(id);
+          alert('Sharing is not supported on this device/browser.');
         }
       } catch (e) {
-        console.log('Share canceled/failed');
-      }
-    }
-
-    function toggleSelectAll() {
-      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
-      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
-      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
-      const allItems = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
-
-      if (state.selectedIds.length === allItems.length) {
-        state.selectedIds = [];
-      } else {
-        state.selectedIds = allItems.map(i => i.id);
-      }
-      render();
-    }
-
-    function bulkDelete() {
-      if (confirm(`Delete ${state.selectedIds.length} selected items?`)) {
-        state.selectedIds.forEach(id => {
-          state.folders = state.folders.filter(f => f.id !== id);
-          state.files = state.files.filter(f => f.id !== id);
-          state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-          deleteFromDB('folders', id);
-          deleteFromDB('files', id);
-          deleteFromDB('textBubbles', id);
-        });
-        state.selectedIds = [];
-        render();
+        if (e.name !== 'AbortError') alert('Share error: ' + e.message);
       }
     }
 
     function bulkCopy() {
-      alert('Selected items copied to memory clipboard.');
+      alert(`${state.selectedIds.length} items ready to copy.`);
     }
 
     function bulkMove() {
       const availableFolders = state.folders.filter(f => !state.selectedIds.includes(f.id));
-      if (availableFolders.length === 0) {
-        alert('No available target folders.');
-        return;
+      let promptText = 'Enter target folder name (or leave empty for Home):\nAvailable: ' + availableFolders.map(f => f.name).join(', ');
+      const targetName = prompt(promptText);
+
+      if (targetName === null) return;
+
+      let targetFolderId = null;
+      if (targetName.trim() !== '') {
+        const found = availableFolders.find(f => f.name.toLowerCase() === targetName.trim().toLowerCase());
+        if (!found) {
+          alert('Folder not found.');
+          return;
+        }
+        targetFolderId = found.id;
       }
-      let msg = 'Select target folder ID or name:\n' + availableFolders.map(f => `${f.name} (ID: ${f.id})`).join('\n');
-      const target = prompt(msg);
-      if (!target) return;
-      const found = availableFolders.find(f => f.id === target.trim() || f.name.toLowerCase() === target.trim().toLowerCase());
-      if (found) {
-        const targetParentId = found.id === 'root' ? null : found.id;
-        state.selectedIds.forEach(id => {
-          const folder = state.folders.find(f => f.id === id);
-          if (folder) { folder.parentId = targetParentId; saveFolder(folder); }
-          const file = state.files.find(f => f.id === id);
-          if (file) { file.parentId = targetParentId; saveFile(file); }
-          const bubble = state.textBubbles.find(b => b.id === id);
-          if (bubble) { bubble.parentId = targetParentId; saveTextBubble(bubble); }
-        });
-        state.selectedIds = [];
-        render();
-      }
+
+      state.selectedIds.forEach(id => {
+        const folder = state.folders.find(f => f.id === id);
+        if (folder) {
+          folder.parentId = targetFolderId;
+          saveFolder(folder);
+        }
+        const file = state.files.find(f => f.id === id);
+        if (file) {
+          file.parentId = targetFolderId;
+          saveFile(file);
+        }
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble) {
+          bubble.parentId = targetFolderId;
+          saveTextBubble(bubble);
+        }
+      });
+
+      state.selectedIds = [];
+      state.selectMode = false;
+      render();
     }
 
     function bulkShare() {
-      alert('iOS Share triggered for selected batch.');
+      alert(`Sharing ${state.selectedIds.length} items.`);
+    }
+
+    async function bulkDelete() {
+      if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
+
+      for (let id of state.selectedIds) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        await deleteFromDB('folders', id);
+
+        state.files = state.files.filter(f => f.id !== id);
+        await deleteFromDB('files', id);
+
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('textBubbles', id);
+      }
+
+      state.selectedIds = [];
+      state.selectMode = false;
+      render();
     }
 
     function forcePullCloudData() {
-      if (confirm('Force pull latest data from GitHub Cloud? Unsaved local changes will be replaced.')) {
+      if (confirm('Are you sure you want to pull data from GitHub Cloud? This will refresh your current view.')) {
         syncWithGitHub(true);
       }
     }
@@ -1648,254 +1779,246 @@
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      let activeDragId = null;
-      let activeResizeId = null;
+      let isDragging = false;
+      let isResizing = false;
+      let currentElem = null;
       let startX = 0, startY = 0;
       let initialLeft = 0, initialTop = 0;
       let initialWidth = 0, initialHeight = 0;
 
-      container.querySelectorAll('[id^="item-"]').forEach(el => {
-        const id = el.getAttribute('data-id');
+      container.onmousedown = onPointerDown;
+      container.ontouchstart = onPointerDown;
 
-        el.addEventListener('pointerdown', (e) => {
-          if (!state.editMode) return;
-          if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+      function onPointerDown(e) {
+        if (!state.editMode) return;
 
-          activeDragId = id;
-          startX = e.clientX;
-          startY = e.clientY;
-          initialLeft = parseInt(el.style.left) || 0;
-          initialTop = parseInt(el.style.top) || 0;
-          el.setPointerCapture(e.pointerId);
-          e.stopPropagation();
-        });
+        const target = e.target;
+        const resizeHandle = target.closest('.resize-handle');
+        const itemElem = target.closest('[id^="item-"]');
 
-        const handle = el.querySelector('.resize-handle');
-        if (handle) {
-          handle.addEventListener('pointerdown', (e) => {
-            if (!state.editMode) return;
-            activeResizeId = id;
-            startX = e.clientX;
-            startY = e.clientY;
-            initialWidth = el.offsetWidth;
-            initialHeight = el.offsetHeight;
-            handle.setPointerCapture(e.pointerId);
-            e.stopPropagation();
-          });
+        if (!itemElem) return;
+
+        const pointer = e.touches ? e.touches[0] : e;
+        startX = pointer.clientX;
+        startY = pointer.clientY;
+        currentElem = itemElem;
+
+        const rect = itemElem.getBoundingClientRect();
+
+        if (resizeHandle) {
+          isResizing = true;
+          initialWidth = rect.width;
+          initialHeight = rect.height;
+          e.preventDefault();
+        } else if (!target.closest('button')) {
+          isDragging = true;
+          initialLeft = itemElem.offsetLeft;
+          initialTop = itemElem.offsetTop;
+          e.preventDefault();
         }
-      });
 
-      window.addEventListener('pointermove', (e) => {
-        if (activeDragId) {
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
+        document.onmousemove = onPointerMove;
+        document.ontouchmove = onPointerMove;
+        document.onmouseup = onPointerUp;
+        document.ontouchend = onPointerUp;
+      }
+
+      function onPointerMove(e) {
+        if (!isDragging && !isResizing) return;
+        const pointer = e.touches ? e.touches[0] : e;
+        const dx = pointer.clientX - startX;
+        const dy = pointer.clientY - startY;
+        const id = currentElem.getAttribute('data-id');
+
+        if (isDragging) {
           let newX = Math.max(0, initialLeft + dx);
           let newY = Math.max(0, initialTop + dy);
 
           newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
           newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
 
-          const el = document.getElementById(`item-${activeDragId}`);
-          if (el) {
-            el.style.left = newX + 'px';
-            el.style.top = newY + 'px';
-          }
-        }
-
-        if (activeResizeId) {
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
+          currentElem.style.left = `${newX}px`;
+          currentElem.style.top = `${newY}px`;
+        } else if (isResizing) {
           let newW = Math.max(64, initialWidth + dx);
           let newH = Math.max(64, initialHeight + dy);
 
-          newW = Math.round(newW / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-          newH = Math.round(newH / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+          currentElem.style.width = `${newW}px`;
+          currentElem.style.height = `${newH}px`;
+        }
+      }
 
-          const el = document.getElementById(`item-${activeResizeId}`);
-          if (el) {
-            el.style.width = newW + 'px';
-            el.style.height = newH + 'px';
+      async function onPointerUp() {
+        if (currentElem) {
+          const id = currentElem.getAttribute('data-id');
+          const finalX = parseInt(currentElem.style.left, 10);
+          const finalY = parseInt(currentElem.style.top, 10);
+          const finalW = parseInt(currentElem.style.width, 10);
+          const finalH = parseInt(currentElem.style.height, 10);
+
+          const folder = state.folders.find(f => f.id === id);
+          if (folder) {
+            if (isDragging) { folder.x = finalX; folder.y = finalY; }
+            if (isResizing) { folder.width = finalW; folder.height = finalH; }
+            await saveFolder(folder);
+          }
+
+          const file = state.files.find(f => f.id === id);
+          if (file) {
+            if (isDragging) { file.x = finalX; file.y = finalY; }
+            if (isResizing) { file.width = finalW; file.height = finalH; }
+            await saveFile(file);
+          }
+
+          const bubble = state.textBubbles.find(b => b.id === id);
+          if (bubble) {
+            if (isDragging) { bubble.x = finalX; bubble.y = finalY; }
+            if (isResizing) { bubble.width = finalW; bubble.height = finalH; }
+            await saveTextBubble(bubble);
           }
         }
-      });
 
-      window.addEventListener('pointerup', (e) => {
-        if (activeDragId) {
-          const el = document.getElementById(`item-${activeDragId}`);
-          if (el) {
-            const x = parseInt(el.style.left) || 0;
-            const y = parseInt(el.style.top) || 0;
-            const folder = state.folders.find(f => f.id === activeDragId);
-            if (folder) { folder.x = x; folder.y = y; saveFolder(folder); }
-            const bubble = state.textBubbles.find(b => b.id === activeDragId);
-            if (bubble) { bubble.x = x; bubble.y = y; saveTextBubble(bubble); }
-            const file = state.files.find(f => f.id === activeDragId);
-            if (file) { file.x = x; file.y = y; saveFile(file); }
-          }
-          activeDragId = null;
-        }
-
-        if (activeResizeId) {
-          const el = document.getElementById(`item-${activeResizeId}`);
-          if (el) {
-            const w = el.offsetWidth;
-            const h = el.offsetHeight;
-            const folder = state.folders.find(f => f.id === activeResizeId);
-            if (folder) { folder.width = w; folder.height = h; saveFolder(folder); }
-            const bubble = state.textBubbles.find(b => b.id === activeResizeId);
-            if (bubble) { bubble.width = w; bubble.height = h; saveTextBubble(bubble); }
-            const file = state.files.find(f => f.id === activeResizeId);
-            if (file) { file.width = w; file.height = h; saveFile(file); }
-          }
-          activeResizeId = null;
-        }
-      });
+        isDragging = false;
+        isResizing = false;
+        currentElem = null;
+        document.onmousemove = null;
+        document.ontouchmove = null;
+        document.onmouseup = null;
+        document.ontouchend = null;
+      }
     }
 
-    document.getElementById('file-input').addEventListener('change', async (e) => {
+    document.getElementById('file-input').addEventListener('change', handleFileUpload);
+    document.getElementById('photo-input').addEventListener('change', handleFileUpload);
+
+    async function handleFileUpload(e) {
       const files = Array.from(e.target.files);
+      if (!files.length) return;
+
       for (let f of files) {
-        const id = uid();
-        const uploadObj = { id, name: f.name, progress: 0 };
+        const uploadObj = { id: uid(), name: f.name, progress: 0 };
         state.activeUploads.push(uploadObj);
         render();
 
-        const reader = new FileReader();
-        reader.onprogress = (ev) => {
-          if (ev.lengthComputable) {
-            uploadObj.progress = Math.round((ev.loaded / ev.total) * 100);
-            render();
-          }
-        };
-        reader.onload = async () => {
-          const fileData = {
-            id,
+        try {
+          const reader = new FileReader();
+          reader.onprogress = (evt) => {
+            if (evt.lengthComputable) {
+              uploadObj.progress = Math.round((evt.loaded / evt.total) * 100);
+              render();
+            }
+          };
+
+          const dataUrl = await new Promise((res, rej) => {
+            reader.onload = () => res(reader.result);
+            reader.onerror = rej;
+            reader.readAsDataURL(f);
+          });
+
+          const newFile = {
+            id: uploadObj.id,
             parentId: state.currentFolderId,
             name: f.name,
             fileType: f.type || 'application/octet-stream',
-            dataUrl: reader.result,
+            dataUrl: dataUrl,
+            rawBlob: f,
             width: 112,
-            height: 144
+            height: 144,
+            x: 20,
+            y: 20
           };
-          state.files.push(fileData);
-          await saveFile(fileData);
-          state.activeUploads = state.activeUploads.filter(u => u.id !== id);
+
+          if (isVideoFile(newFile) || isAudioFile(newFile)) {
+            await getOrCreateBlobUrl(newFile);
+          }
+
+          state.files.push(newFile);
+          await saveFile(newFile);
+        } catch (err) {
+          alert('Upload failed for file ' + f.name);
+        } finally {
+          state.activeUploads = state.activeUploads.filter(u => u.id !== uploadObj.id);
           render();
-        };
-        reader.readAsDataURL(f);
+        }
       }
       e.target.value = '';
-    });
+    }
 
-    document.getElementById('photo-input').addEventListener('change', async (e) => {
-      const files = Array.from(e.target.files);
-      for (let f of files) {
-        const id = uid();
-        const uploadObj = { id, name: f.name, progress: 0 };
-        state.activeUploads.push(uploadObj);
-        render();
+    document.getElementById('change-image-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !state.targetChangeImageId) return;
 
-        const reader = new FileReader();
-        reader.onprogress = (ev) => {
-          if (ev.lengthComputable) {
-            uploadObj.progress = Math.round((ev.loaded / ev.total) * 100);
-            render();
-          }
-        };
-        reader.onload = async () => {
-          const fileData = {
-            id,
-            parentId: state.currentFolderId,
-            name: f.name,
-            fileType: f.type || 'image/png',
-            dataUrl: reader.result,
-            width: 112,
-            height: 144
-          };
-          state.files.push(fileData);
-          await saveFile(fileData);
-          state.activeUploads = state.activeUploads.filter(u => u.id !== id);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const targetFile = state.files.find(f => f.id === state.targetChangeImageId);
+        if (targetFile) {
+          targetFile.thumbnailData = reader.result;
+          await saveFile(targetFile);
           render();
-        };
-        reader.readAsDataURL(f);
-      }
+        }
+        state.targetChangeImageId = null;
+      };
+      reader.readAsDataURL(file);
       e.target.value = '';
     });
 
-    document.getElementById('change-image-input').addEventListener('change', (e) => {
+    document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (file && state.targetChangeImageId) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const target = state.files.find(f => f.id === state.targetChangeImageId);
-          if (target) {
-            target.thumbnailData = reader.result;
-            saveFile(target);
-            render();
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-      e.target.value = '';
-    });
+      if (!file || !state.targetFolderCoverId) return;
 
-    document.getElementById('folder-cover-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file && state.targetFolderCoverId) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const target = state.folders.find(f => f.id === state.targetFolderCoverId);
-          if (target) {
-            target.coverUrl = reader.result;
-            saveFolder(target);
-            render();
-          }
-        };
-        reader.readAsDataURL(file);
-      }
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const targetFolder = state.folders.find(f => f.id === state.targetFolderCoverId);
+        if (targetFolder) {
+          targetFolder.coverUrl = reader.result;
+          await saveFolder(targetFolder);
+          render();
+        }
+        state.targetFolderCoverId = null;
+      };
+      reader.readAsDataURL(file);
       e.target.value = '';
     });
 
     document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          state.linkModalThumbData = reader.result;
-          render();
-        };
-        reader.readAsDataURL(file);
-      }
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.linkModalThumbData = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
       e.target.value = '';
     });
 
     document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          state.webVideoModalThumbData = reader.result;
-          render();
-        };
-        reader.readAsDataURL(file);
-      }
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.webVideoModalThumbData = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
       e.target.value = '';
     });
 
     document.getElementById('app-thumbnail-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          state.appModalThumbData = reader.result;
-          render();
-        };
-        reader.readAsDataURL(file);
-      }
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.appModalThumbData = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
       e.target.value = '';
     });
 
-    loadData();
+    window.onload = () => {
+      loadData();
+    };
   </script>
 </body>
 </html>
