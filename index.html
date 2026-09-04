@@ -407,6 +407,10 @@
                 <i data-lucide="message-square" class="w-4 h-4"></i>
                 <span>Text Bubble</span>
               </button>
+              <button onclick="openAddPhotoModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Photos">
+                <i data-lucide="image" class="w-4 h-4"></i>
+                <span>Add photos</span>
+              </button>
             </div>
           </div>
 
@@ -427,6 +431,9 @@
               </button>
               <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
+              </button>
+              <button onclick="openAddPhotoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Add photos
               </button>
               <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
@@ -660,7 +667,7 @@
       if (isBubbleItem) {
         return `
           <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
-            ${item.isChecklist ? '' : `<button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>`}
+            <button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> ${item.isChecklist ? 'Edit Checklist' : 'Edit Text & Format'}</button>
             <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
             <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
             <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
@@ -719,18 +726,22 @@
     }
 
     function renderChecklistModal() {
+      const ed = state.textEditorModal;
+      const isEditing = ed && ed.bubbleId;
+      const titleVal = isEditing ? (ed.title || 'Checklist') : (document.getElementById('checklist-title-input')?.value || 'Checklist');
+
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeChecklistModal()">
           <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
-            <h3 class="text-lg font-bold text-white">Add Checklist</h3>
-            <p class="text-xs text-zinc-400">Create a interactive task list to add to your workspace.</p>
+            <h3 class="text-lg font-bold text-white">${isEditing ? 'Edit Checklist' : 'Add Checklist'}</h3>
+            <p class="text-xs text-zinc-400">Create an interactive task list to add to your workspace.</p>
             <div class="flex flex-col gap-3 mt-1 text-left">
-              <input id="checklist-title-input" type="text" placeholder="Checklist Title (e.g. To-Do List)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="checklist-title-input" type="text" value="${titleVal}" placeholder="Checklist Title (e.g. To-Do List)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
               
               <div class="flex flex-col gap-2 max-h-48 overflow-y-auto no-scrollbar" id="checklist-items-container">
                 ${state.checklistDraftItems.map((item, idx) => `
                   <div class="flex items-center gap-2">
-                    <input type="text" value="${item}" onchange="updateChecklistDraftItem(${idx}, this.value)" placeholder="Item ${idx + 1}" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-amber-500" />
+                    <input type="text" value="${item.text || item}" onchange="updateChecklistDraftItem(${idx}, this.value)" placeholder="Item ${idx + 1}" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-amber-500" />
                     <button type="button" onclick="removeChecklistDraftItem(${idx})" class="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                   </div>
                 `).join('')}
@@ -743,31 +754,45 @@
 
             <div class="flex items-center gap-2 mt-2">
               <button onclick="closeChecklistModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveChecklistModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Create Checklist</button>
+              <button onclick="saveChecklistModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">${isEditing ? 'Save Changes' : 'Create Checklist'}</button>
             </div>
           </div>
         </div>
       `;
     }
 
-    function openChecklistModal() {
-      state.checklistDraftItems = [''];
+    function openChecklistModal(bubbleId = null) {
+      if (bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === bubbleId);
+        if (bubble) {
+          state.textEditorModal = { bubbleId, title: bubble.title };
+          state.checklistDraftItems = JSON.parse(JSON.stringify(bubble.checklist || []));
+        }
+      } else {
+        state.textEditorModal = null;
+        state.checklistDraftItems = [''];
+      }
       state.checklistModal = true;
       render();
     }
 
     function closeChecklistModal() {
       state.checklistModal = false;
+      state.textEditorModal = null;
       render();
     }
 
     function addChecklistDraftItem() {
-      state.checklistDraftItems.push('');
+      state.checklistDraftItems.push({ text: '', checked: false });
       render();
     }
 
     function updateChecklistDraftItem(index, val) {
-      state.checklistDraftItems[index] = val;
+      if (typeof state.checklistDraftItems[index] === 'string') {
+        state.checklistDraftItems[index] = { text: val, checked: false };
+      } else {
+        state.checklistDraftItems[index].text = val;
+      }
     }
 
     function removeChecklistDraftItem(index) {
@@ -776,29 +801,43 @@
     }
 
     async function saveChecklistModal() {
-      const title = (document.getElementById('checklist-title-input').value || 'Checklist').trim();
-      const validItems = state.checklistDraftItems.map(i => i.trim()).filter(i => i.length > 0);
+      const titleInput = document.getElementById('checklist-title-input');
+      const title = (titleInput ? titleInput.value : 'Checklist').trim() || 'Checklist';
+      const validItems = state.checklistDraftItems.map(i => {
+        const text = typeof i === 'string' ? i.trim() : (i.text || '').trim();
+        const checked = typeof i === 'object' ? !!i.checked : false;
+        return { text, checked };
+      }).filter(i => i.text.length > 0);
       
       if (validItems.length === 0) {
         alert('Please add at least one item to your checklist.');
         return;
       }
 
-      const newBubble = {
-        id: uid(),
-        parentId: state.currentFolderId,
-        title: title,
-        isBubble: true,
-        isChecklist: true,
-        checklist: validItems.map(text => ({ text, checked: false })),
-        width: 180,
-        height: 120,
-        x: 40,
-        y: 40
-      };
-
-      state.textBubbles.push(newBubble);
-      await saveTextBubble(newBubble);
+      const ed = state.textEditorModal;
+      if (ed && ed.bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === ed.bubbleId);
+        if (bubble) {
+          bubble.title = title;
+          bubble.checklist = validItems;
+          await saveTextBubble(bubble);
+        }
+      } else {
+        const newBubble = {
+          id: uid(),
+          parentId: state.currentFolderId,
+          title: title,
+          isBubble: true,
+          isChecklist: true,
+          checklist: validItems,
+          width: 180,
+          height: 120,
+          x: 40,
+          y: 40
+        };
+        state.textBubbles.push(newBubble);
+        await saveTextBubble(newBubble);
+      }
       closeChecklistModal();
     }
 
@@ -1041,6 +1080,12 @@
     }
 
     function openTextEditorModal(bubbleId = null, attachedFileId = null) {
+      let bubble = bubbleId ? state.textBubbles.find(b => b.id === bubbleId) : null;
+      if (bubble && bubble.isChecklist) {
+        openChecklistModal(bubbleId);
+        return;
+      }
+
       let ed = {
         bubbleId,
         attachedFileId,
@@ -1058,19 +1103,16 @@
         historyIndex: -1
       };
 
-      if (bubbleId) {
-        const bubble = state.textBubbles.find(b => b.id === bubbleId);
-        if (bubble) {
-          ed.text = bubble.text || '';
-          ed.fontFamily = bubble.fontFamily || ed.fontFamily;
-          ed.fontSize = bubble.fontSize || ed.fontSize;
-          ed.isBold = !!bubble.isBold;
-          ed.isItalic = !!bubble.isItalic;
-          ed.isUnderline = !!bubble.isUnderline;
-          ed.fontColor = bubble.fontColor || null;
-          ed.bgColour = bubble.bgColour || null;
-          ed.align = bubble.align || 'left';
-        }
+      if (bubble) {
+        ed.text = bubble.text || '';
+        ed.fontFamily = bubble.fontFamily || ed.fontFamily;
+        ed.fontSize = bubble.fontSize || ed.fontSize;
+        ed.isBold = !!bubble.isBold;
+        ed.isItalic = !!bubble.isItalic;
+        ed.isUnderline = !!bubble.isUnderline;
+        ed.fontColor = bubble.fontColor || null;
+        ed.bgColour = bubble.bgColour || null;
+        ed.align = bubble.align || 'left';
       }
 
       ed.history.push(getTextEditorSnapshot(ed));
@@ -1366,8 +1408,12 @@
         navigateTo(id);
       } else if (isBubbleItem) {
         const bubble = state.textBubbles.find(b => b.id === id);
-        if (bubble && !bubble.isChecklist) {
-          openTextEditorModal(id);
+        if (bubble) {
+          if (bubble.isChecklist) {
+            openChecklistModal(id);
+          } else {
+            openTextEditorModal(id);
+          }
         }
       } else {
         const file = state.files.find(f => f.id === id);
@@ -1406,6 +1452,32 @@
 
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
+
+    function openAddPhotoModal() {
+      const choice = prompt("Enter 'device' to pick photos from device, or 'url' to add a photo via web link:");
+      if (!choice) return;
+      if (choice.toLowerCase().includes('url')) {
+        let url = prompt("Enter photo direct URL (https://...):");
+        if (url && url.trim()) {
+          const newFile = {
+            id: uid(),
+            parentId: state.currentFolderId,
+            name: url.split('/').pop().split('?')[0] || 'Photo',
+            fileType: 'image/jpeg',
+            dataUrl: url.trim(),
+            width: 112,
+            height: 144,
+            x: 20,
+            y: 20
+          };
+          state.files.push(newFile);
+          saveFile(newFile);
+          render();
+        }
+      } else {
+        document.getElementById('photo-input').click();
+      }
+    }
 
     function openLinkModal() { state.linkModal = true; state.linkModalThumbData = null; render(); }
     function closeLinkModal() { state.linkModal = false; state.linkModalThumbData = null; render(); }
@@ -1529,9 +1601,13 @@
       if (isBubbleItem) {
         const bubble = state.textBubbles.find(b => b.id === id);
         if (!bubble) return;
-        const newName = prompt('Rename Text Bubble:', bubble.text ? bubble.text.substring(0, 20) : 'Text Bubble');
+        const newName = prompt('Rename Text Bubble / Checklist:', bubble.isChecklist ? (bubble.title || 'Checklist') : (bubble.text ? bubble.text.substring(0, 20) : 'Text Bubble'));
         if (newName !== null && newName.trim()) {
-          bubble.text = newName.trim();
+          if (bubble.isChecklist) {
+            bubble.title = newName.trim();
+          } else {
+            bubble.text = newName.trim();
+          }
           saveTextBubble(bubble);
           render();
         }
@@ -1597,8 +1673,8 @@
       }
       const bubble = state.textBubbles.find(b => b.id === id);
       if (bubble) {
-        bubble.width = 140;
-        bubble.height = 80;
+        bubble.width = bubble.isChecklist ? 180 : 140;
+        bubble.height = bubble.isChecklist ? 120 : 80;
         saveTextBubble(bubble);
         render();
         return;
@@ -1710,7 +1786,6 @@
       const availableFolders = state.folders.filter(f => !state.selectedIds.includes(f.id));
       let promptText = 'Enter target folder name (or leave empty for Home):\nAvailable: ' + availableFolders.map(f => f.name).join(', ');
       const targetName = prompt(promptText);
-
       if (targetName === null) return;
 
       let targetFolderId = null;
@@ -1723,24 +1798,25 @@
         targetFolderId = found.id;
       }
 
-      state.selectedIds.forEach(id => {
+      for (let id of state.selectedIds) {
         const folder = state.folders.find(f => f.id === id);
-        if (folder) {
+        if (folder && id !== 'root') {
           folder.parentId = targetFolderId;
           saveFolder(folder);
+          continue;
+        }
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble) {
+          bubble.parentId = targetFolderId;
+          saveTextBubble(bubble);
+          continue;
         }
         const file = state.files.find(f => f.id === id);
         if (file) {
           file.parentId = targetFolderId;
           saveFile(file);
         }
-        const bubble = state.textBubbles.find(b => b.id === id);
-        if (bubble) {
-          bubble.parentId = targetFolderId;
-          saveTextBubble(bubble);
-        }
-      });
-
+      }
       state.selectedIds = [];
       state.selectMode = false;
       render();
@@ -1752,273 +1828,292 @@
 
     async function bulkDelete() {
       if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
-
       for (let id of state.selectedIds) {
-        state.folders = state.folders.filter(f => f.id !== id);
-        await deleteFromDB('folders', id);
-
-        state.files = state.files.filter(f => f.id !== id);
-        await deleteFromDB('files', id);
-
-        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        await deleteFromDB('textBubbles', id);
+        if (state.folders.some(f => f.id === id && f.id !== 'root')) {
+          state.folders = state.folders.filter(f => f.id !== id);
+          await deleteFromDB('folders', id);
+        } else if (state.textBubbles.some(b => b.id === id)) {
+          state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+          await deleteFromDB('textBubbles', id);
+        } else if (state.files.some(f => f.id === id)) {
+          state.files = state.files.filter(f => f.id !== id);
+          await deleteFromDB('files', id);
+        }
       }
-
       state.selectedIds = [];
       state.selectMode = false;
       render();
-    }
-
-    function forcePullCloudData() {
-      if (confirm('Are you sure you want to pull data from GitHub Cloud? This will refresh your current view.')) {
-        syncWithGitHub(true);
-      }
     }
 
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
-      let isDragging = false;
-      let isResizing = false;
-      let currentElem = null;
-      let startX = 0, startY = 0;
-      let initialLeft = 0, initialTop = 0;
-      let initialWidth = 0, initialHeight = 0;
+      const items = container.querySelectorAll('[data-id]');
+      items.forEach(itemEl => {
+        const id = itemEl.getAttribute('data-id');
+        const handle = itemEl.querySelector('.resize-handle');
 
-      container.onmousedown = onPointerDown;
-      container.ontouchstart = onPointerDown;
+        let isDragging = false;
+        let isResizing = false;
+        let startX = 0, startY = 0;
+        let startLeft = 0, startTop = 0;
+        let startWidth = 0, startHeight = 0;
 
-      function onPointerDown(e) {
-        if (!state.editMode) return;
-
-        const target = e.target;
-        const resizeHandle = target.closest('.resize-handle');
-        const itemElem = target.closest('[id^="item-"]');
-
-        if (!itemElem) return;
-
-        const pointer = e.touches ? e.touches[0] : e;
-        startX = pointer.clientX;
-        startY = pointer.clientY;
-        currentElem = itemElem;
-
-        const rect = itemElem.getBoundingClientRect();
-
-        if (resizeHandle) {
-          isResizing = true;
-          initialWidth = rect.width;
-          initialHeight = rect.height;
-          e.preventDefault();
-        } else if (!target.closest('button')) {
+        itemEl.addEventListener('pointerdown', (e) => {
+          if (!state.editMode) return;
+          if (e.target.closest('button') || e.target.closest('.resize-handle') || e.target.closest('input')) return;
           isDragging = true;
-          initialLeft = itemElem.offsetLeft;
-          initialTop = itemElem.offsetTop;
-          e.preventDefault();
+          itemEl.setPointerCapture(e.pointerId);
+          startX = e.clientX;
+          startY = e.clientY;
+          startLeft = parseInt(itemEl.style.left) || 20;
+          startTop = parseInt(itemEl.style.top) || 20;
+          e.stopPropagation();
+        });
+
+        if (handle) {
+          handle.addEventListener('pointerdown', (e) => {
+            if (!state.editMode) return;
+            isResizing = true;
+            handle.setPointerCapture(e.pointerId);
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = itemEl.offsetWidth;
+            startHeight = itemEl.offsetHeight;
+            e.stopPropagation();
+          });
         }
 
-        document.onmousemove = onPointerMove;
-        document.ontouchmove = onPointerMove;
-        document.onmouseup = onPointerUp;
-        document.ontouchend = onPointerUp;
+        itemEl.addEventListener('pointermove', (e) => {
+          if (isDragging) {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const newX = Math.max(0, startLeft + dx);
+            const newY = Math.max(0, startTop + dy);
+            itemEl.style.left = newX + 'px';
+            itemEl.style.top = newY + 'px';
+          } else if (isResizing) {
+            const dw = e.clientX - startX;
+            const dh = e.clientY - startY;
+            const newW = Math.max(70, startWidth + dw);
+            const newH = Math.max(60, startHeight + dh);
+            itemEl.style.width = newW + 'px';
+            itemEl.style.height = newH + 'px';
+          }
+        });
+
+        const pointerUpHandler = async (e) => {
+          if (isDragging) {
+            isDragging = false;
+            const finalX = parseInt(itemEl.style.left) || 0;
+            const finalY = parseInt(itemEl.style.top) || 0;
+            updateItemPositionSize(id, finalX, finalY, null, null);
+          }
+          if (isResizing) {
+            isResizing = false;
+            const finalW = itemEl.offsetWidth;
+            const finalH = itemEl.offsetHeight;
+            updateItemPositionSize(id, null, null, finalW, finalH);
+          }
+        };
+
+        itemEl.addEventListener('pointerup', pointerUpHandler);
+        itemEl.addEventListener('pointercancel', pointerUpHandler);
+      });
+    }
+
+    async function updateItemPositionSize(id, x, y, width, height) {
+      const folder = state.folders.find(f => f.id === id);
+      if (folder) {
+        if (x !== null) folder.x = x;
+        if (y !== null) folder.y = y;
+        if (width !== null) folder.width = width;
+        if (height !== null) folder.height = height;
+        await saveFolder(folder);
+        return;
       }
-
-      function onPointerMove(e) {
-        if (!isDragging && !isResizing) return;
-        const pointer = e.touches ? e.touches[0] : e;
-        const dx = pointer.clientX - startX;
-        const dy = pointer.clientY - startY;
-        const id = currentElem.getAttribute('data-id');
-
-        if (isDragging) {
-          let newX = Math.max(0, initialLeft + dx);
-          let newY = Math.max(0, initialTop + dy);
-
-          newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-          newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
-
-          currentElem.style.left = `${newX}px`;
-          currentElem.style.top = `${newY}px`;
-        } else if (isResizing) {
-          let newW = Math.max(64, initialWidth + dx);
-          let newH = Math.max(64, initialHeight + dy);
-
-          currentElem.style.width = `${newW}px`;
-          currentElem.style.height = `${newH}px`;
-        }
+      const bubble = state.textBubbles.find(b => b.id === id);
+      if (bubble) {
+        if (x !== null) bubble.x = x;
+        if (y !== null) bubble.y = y;
+        if (width !== null) bubble.width = width;
+        if (height !== null) bubble.height = height;
+        await saveTextBubble(bubble);
+        return;
       }
-
-      async function onPointerUp() {
-        if (currentElem) {
-          const id = currentElem.getAttribute('data-id');
-          const finalX = parseInt(currentElem.style.left, 10);
-          const finalY = parseInt(currentElem.style.top, 10);
-          const finalW = parseInt(currentElem.style.width, 10);
-          const finalH = parseInt(currentElem.style.height, 10);
-
-          const folder = state.folders.find(f => f.id === id);
-          if (folder) {
-            if (isDragging) { folder.x = finalX; folder.y = finalY; }
-            if (isResizing) { folder.width = finalW; folder.height = finalH; }
-            await saveFolder(folder);
-          }
-
-          const file = state.files.find(f => f.id === id);
-          if (file) {
-            if (isDragging) { file.x = finalX; file.y = finalY; }
-            if (isResizing) { file.width = finalW; file.height = finalH; }
-            await saveFile(file);
-          }
-
-          const bubble = state.textBubbles.find(b => b.id === id);
-          if (bubble) {
-            if (isDragging) { bubble.x = finalX; bubble.y = finalY; }
-            if (isResizing) { bubble.width = finalW; bubble.height = finalH; }
-            await saveTextBubble(bubble);
-          }
-        }
-
-        isDragging = false;
-        isResizing = false;
-        currentElem = null;
-        document.onmousemove = null;
-        document.ontouchmove = null;
-        document.onmouseup = null;
-        document.ontouchend = null;
+      const file = state.files.find(f => f.id === id);
+      if (file) {
+        if (x !== null) file.x = x;
+        if (y !== null) file.y = y;
+        if (width !== null) file.width = width;
+        if (height !== null) file.height = height;
+        await saveFile(file);
       }
     }
 
-    document.getElementById('file-input').addEventListener('change', handleFileUpload);
-    document.getElementById('photo-input').addEventListener('change', handleFileUpload);
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
 
-    async function handleFileUpload(e) {
-      const files = Array.from(e.target.files);
-      if (!files.length) return;
+      const uploadId = uid();
+      state.activeUploads.push({ id: uploadId, name: `${files.length} file(s)`, progress: 10 });
+      render();
 
-      for (let f of files) {
-        const uploadObj = { id: uid(), name: f.name, progress: 0 };
-        state.activeUploads.push(uploadObj);
-        render();
-
-        try {
-          const reader = new FileReader();
-          reader.onprogress = (evt) => {
-            if (evt.lengthComputable) {
-              uploadObj.progress = Math.round((evt.loaded / evt.total) * 100);
-              render();
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        await new Promise((resolve) => {
+          reader.onload = async (evt) => {
+            const dataUrl = evt.target.result;
+            const newFile = {
+              id: uid(),
+              parentId: state.currentFolderId,
+              name: file.name,
+              fileType: file.type || 'application/octet-stream',
+              dataUrl: dataUrl,
+              rawBlob: file,
+              width: 112,
+              height: 144,
+              x: 20,
+              y: 20
+            };
+            if (isVideoFile(newFile) || isAudioFile(newFile)) {
+              await getOrCreateBlobUrl(newFile);
             }
+            state.files.push(newFile);
+            await saveFile(newFile);
+            resolve();
           };
+          reader.readAsDataURL(file);
+        });
+        state.activeUploads = state.activeUploads.map(u => u.id === uploadId ? { ...u, progress: Math.round(((i + 1) / files.length) * 100) } : u);
+        render();
+      }
 
-          const dataUrl = await new Promise((res, rej) => {
-            reader.onload = () => res(reader.result);
-            reader.onerror = rej;
-            reader.readAsDataURL(f);
-          });
+      state.activeUploads = state.activeUploads.filter(u => u.id !== uploadId);
+      e.target.value = '';
+      render();
+    });
 
-          const newFile = {
-            id: uploadObj.id,
-            parentId: state.currentFolderId,
-            name: f.name,
-            fileType: f.type || 'application/octet-stream',
-            dataUrl: dataUrl,
-            rawBlob: f,
-            width: 112,
-            height: 144,
-            x: 20,
-            y: 20
+    document.getElementById('photo-input').addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        await new Promise((resolve) => {
+          reader.onload = async (evt) => {
+            const dataUrl = evt.target.result;
+            const newFile = {
+              id: uid(),
+              parentId: state.currentFolderId,
+              name: file.name,
+              fileType: file.type || 'image/jpeg',
+              dataUrl: dataUrl,
+              rawBlob: file,
+              width: 112,
+              height: 144,
+              x: 20,
+              y: 20
+            };
+            if (isVideoFile(newFile) || isAudioFile(newFile)) {
+              await getOrCreateBlobUrl(newFile);
+            }
+            state.files.push(newFile);
+            await saveFile(newFile);
+            resolve();
           };
-
-          if (isVideoFile(newFile) || isAudioFile(newFile)) {
-            await getOrCreateBlobUrl(newFile);
-          }
-
-          state.files.push(newFile);
-          await saveFile(newFile);
-        } catch (err) {
-          alert('Upload failed for file ' + f.name);
-        } finally {
-          state.activeUploads = state.activeUploads.filter(u => u.id !== uploadObj.id);
-          render();
-        }
+          reader.readAsDataURL(file);
+        });
       }
       e.target.value = '';
-    }
+      render();
+    });
 
     document.getElementById('change-image-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (!file || !state.targetChangeImageId) return;
+      const targetId = state.targetChangeImageId;
+      if (!file || !targetId) return;
 
       const reader = new FileReader();
-      reader.onload = async () => {
-        const targetFile = state.files.find(f => f.id === state.targetChangeImageId);
+      reader.onload = async (evt) => {
+        const dataUrl = evt.target.result;
+        const targetFile = state.files.find(f => f.id === targetId);
         if (targetFile) {
-          targetFile.thumbnailData = reader.result;
+          targetFile.dataUrl = dataUrl;
+          targetFile.thumbnailData = dataUrl;
+          targetFile.rawBlob = file;
           await saveFile(targetFile);
           render();
         }
-        state.targetChangeImageId = null;
       };
       reader.readAsDataURL(file);
       e.target.value = '';
+      state.targetChangeImageId = null;
     });
 
     document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (!file || !state.targetFolderCoverId) return;
+      const targetId = state.targetFolderCoverId;
+      if (!file || !targetId) return;
 
       const reader = new FileReader();
-      reader.onload = async () => {
-        const targetFolder = state.folders.find(f => f.id === state.targetFolderCoverId);
+      reader.onload = async (evt) => {
+        const dataUrl = evt.target.result;
+        const targetFolder = state.folders.find(f => f.id === targetId);
         if (targetFolder) {
-          targetFolder.coverUrl = reader.result;
+          targetFolder.coverUrl = dataUrl;
           await saveFolder(targetFolder);
           render();
         }
-        state.targetFolderCoverId = null;
       };
       reader.readAsDataURL(file);
       e.target.value = '';
-    });
-
-    document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        state.linkModalThumbData = reader.result;
-        render();
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    });
-
-    document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        state.webVideoModalThumbData = reader.result;
-        render();
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
+      state.targetFolderCoverId = null;
     });
 
     document.getElementById('app-thumbnail-input').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => {
-        state.appModalThumbData = reader.result;
+      reader.onload = (evt) => {
+        state.appModalThumbData = evt.target.result;
         render();
       };
       reader.readAsDataURL(file);
-      e.target.value = '';
     });
 
-    window.onload = () => {
+    document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        state.linkModalThumbData = evt.target.result;
+        render();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        state.webVideoModalThumbData = evt.target.result;
+        render();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    async function forcePullCloudData() {
+      await syncWithGitHub(true);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
       loadData();
-    };
+    });
   </script>
 </body>
 </html>
