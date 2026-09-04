@@ -12,6 +12,7 @@
             --text-color: #1d1d1f;
             --secondary-text: #86868b;
             --border-color: #d2d2d7;
+            --danger-color: #ff3b30;
         }
 
         body {
@@ -94,6 +95,10 @@
             font-size: 16px;
         }
 
+        .task-title:hover {
+            color: var(--primary-color);
+        }
+
         .edit-btn {
             background: none;
             border: none;
@@ -126,6 +131,21 @@
 
         .action-btn:hover {
             opacity: 0.9;
+        }
+
+        .media-preview-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .media-thumbnail {
+            width: 100%;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
         }
 
         /* Modal / Dialog Styles */
@@ -231,6 +251,9 @@
             <button class="action-btn" onclick="openSourceDialog()">
                 <span>＋ Add Photos or Files</span>
             </button>
+            <div id="media-preview" class="media-preview-container">
+                <!-- Uploaded media/files preview will appear here -->
+            </div>
         </div>
     </div>
 
@@ -269,6 +292,7 @@
             { id: 3, title: "Prepare deployment notes" }
         ];
 
+        let uploadedFiles = [];
         let currentEditingId = null;
 
         function renderTasks() {
@@ -282,6 +306,7 @@
                 // Checkbox: checking instantly deletes/completes it
                 const checkbox = document.createElement('div');
                 checkbox.className = 'checkbox';
+                checkbox.title = "Mark as done and delete";
                 checkbox.onclick = () => deleteTask(task.id);
 
                 // Task Title: clicking opens the edit view
@@ -353,9 +378,33 @@
         function handleFileSelected(event) {
             const file = event.target.files[0];
             if (file) {
-                alert(`Selected file: ${file.name}`);
+                uploadedFiles.push(file);
+                renderMediaPreviews();
             }
             event.target.value = ''; // Reset input
+        }
+
+        function renderMediaPreviews() {
+            const previewContainer = document.getElementById('media-preview');
+            previewContainer.innerHTML = '';
+
+            uploadedFiles.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.className = 'media-thumbnail';
+                    img.src = URL.createObjectURL(file);
+                    previewContainer.appendChild(img);
+                } else {
+                    const badge = document.createElement('div');
+                    badge.style.fontSize = '12px';
+                    badge.style.padding = '8px';
+                    badge.style.background = 'var(--background-color)';
+                    badge.style.borderRadius = '8px';
+                    badge.style.border = '1px solid var(--border-color)';
+                    badge.textContent = file.name;
+                    previewContainer.appendChild(badge);
+                }
+            });
         }
 
         // Initial render
