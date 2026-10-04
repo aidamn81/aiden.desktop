@@ -111,7 +111,10 @@
       appModal: false,
       appModalThumbData: null,
       activeUploads: [],
-      popupVideoUrl: null
+      popupVideoUrl: null,
+      percentageModal: false,
+      percentageValue: 20,
+      percentageInputNumber: 100
     };
 
     const uid = () => Math.random().toString(36).substring(2, 9);
@@ -406,26 +409,20 @@
                 </button>
               ` : ''}
               
-              <!-- Original Options -->
-              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-                ${state.selectMode ? 'Cancel' : 'Select'}
-              </button>
+              <!-- Rearranged order right next to hamburger menu: EDIT, ADD IMG, ADD TXT, SELECT -->
               <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
                 ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
               </button>
-              <button onclick="openTextEditorModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Text Bubble">
-                <i data-lucide="message-square" class="w-4 h-4"></i>
-                <span>Text Bubble</span>
-              </button>
-
-              <!-- New Options Added Here -->
               <button onclick="document.getElementById('photo-input').click()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add IMG">
                 <i data-lucide="image" class="w-4 h-4"></i>
-                <span>Add IMG</span>
+                <span>ADD IMG</span>
               </button>
-              <button onclick="window.location.href='lyrics.html'" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Lyrics">
-                <i data-lucide="mic" class="w-4 h-4"></i>
-                <span>Lyrics</span>
+              <button onclick="openTextEditorModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Text Bubble">
+                <i data-lucide="message-square" class="w-4 h-4"></i>
+                <span>ADD TXT</span>
+              </button>
+              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.selectMode ? 'Cancel' : 'SELECT'}
               </button>
             </div>
           </div>
@@ -459,6 +456,14 @@
               </button>
               <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
+              </button>
+              <div class="h-px bg-zinc-800 my-1"></div>
+              <!-- New Menu Options Below -->
+              <button onclick="window.location.href='lyrics.html'; closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="mic" class="w-4 h-4 text-amber-400"></i> LYRICS
+              </button>
+              <button onclick="openPercentageModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="percent" class="w-4 h-4 text-amber-400"></i> %
               </button>
               <div class="h-px bg-zinc-800 my-1"></div>
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
@@ -537,6 +542,7 @@
         ${state.webVideoModal ? renderWebVideoModal() : ''}
         ${state.appModal ? renderAppModal() : ''}
         ${state.checklistModal ? renderChecklistModal() : ''}
+        ${state.percentageModal ? renderPercentageModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
         ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
@@ -544,6 +550,57 @@
 
       if (window.lucide) window.lucide.createIcons();
       attachDragAndResizeListeners();
+    }
+
+    function renderPercentageModal() {
+      const calculatedResult = (state.percentageInputNumber * (state.percentageValue / 100)).toFixed(2);
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closePercentageModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white flex items-center justify-center gap-2">
+              <i data-lucide="percent" class="w-5 h-5 text-amber-400"></i> Percentage Calculator
+            </h3>
+            <p class="text-xs text-zinc-400">Calculate percentages instantly. Default rate is set to 20%.</p>
+            <div class="flex flex-col gap-3 mt-1 text-left">
+              <div class="flex flex-col gap-1">
+                <label class="text-xs text-zinc-300 font-semibold">Percentage Rate (%)</label>
+                <input id="calc-rate-input" type="number" value="${state.percentageValue}" oninput="state.percentageValue = parseFloat(this.value) || 0; renderPercentageResultOnly();" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500 font-bold text-amber-400" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs text-zinc-300 font-semibold">Amount / Number</label>
+                <input id="calc-amount-input" type="number" value="${state.percentageInputNumber}" oninput="state.percentageInputNumber = parseFloat(this.value) || 0; renderPercentageResultOnly();" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              </div>
+              
+              <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center justify-center gap-1 mt-2">
+                <span class="text-xs text-zinc-400">Result</span>
+                <span id="calc-result-display" class="text-xl font-extrabold text-amber-400">${calculatedResult}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closePercentageModal()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Done</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openPercentageModal() {
+      state.percentageModal = true;
+      render();
+    }
+
+    function closePercentageModal() {
+      state.percentageModal = false;
+      render();
+    }
+
+    function renderPercentageResultOnly() {
+      const resDisplay = document.getElementById('calc-result-display');
+      if (resDisplay) {
+        const val = (state.percentageInputNumber * (state.percentageValue / 100)).toFixed(2);
+        resDisplay.innerText = val;
+      }
     }
 
     function getFileIcon(type, name) {
@@ -1669,196 +1726,14 @@
       }
     }
 
-    function moveToFolder(id, isFolderItem, isBubbleItem = false) {
-      state.activeMenuId = null;
-      const availableFolders = state.folders.filter(f => f.id !== id && f.id !== state.currentFolderId);
-      let promptText = 'Move to folder:\n0: Home (Root)\n';
-      availableFolders.forEach((f, idx) => {
-        promptText += `${idx + 1}: ${f.name}\n`;
-      });
-      const choice = prompt(promptText);
-      if (choice === null) return;
-
-      let targetParentId = null;
-      if (choice.trim() === '0') {
-        targetParentId = null;
-      } else {
-        const index = parseInt(choice.trim()) - 1;
-        if (isNaN(index) || index < 0 || index >= availableFolders.length) {
-          alert('Invalid folder selection.');
-          return;
-        }
-        targetParentId = availableFolders[index].id;
-      }
-
-      if (isBubbleItem) {
-        const bubble = state.textBubbles.find(b => b.id === id);
-        if (bubble) {
-          bubble.parentId = targetParentId;
-          saveTextBubble(bubble);
-        }
-      } else if (isFolderItem) {
-        const folder = state.folders.find(f => f.id === id);
-        if (folder) {
-          folder.parentId = targetParentId;
-          saveFolder(folder);
-        }
-      } else {
-        const file = state.files.find(f => f.id === id);
-        if (file) {
-          file.parentId = targetParentId;
-          saveFile(file);
-        }
-      }
-      render();
-    }
-
-    function resizeByFinger(id, isFolderItem) {
-      state.activeMenuId = null;
-      const w = prompt('Enter custom width in pixels (e.g., 150):');
-      if (!w) return;
-      const h = prompt('Enter custom height in pixels (e.g., 200):');
-      if (!h) return;
-
-      const width = parseInt(w);
-      const height = parseInt(h);
-      if (isNaN(width) || isNaN(height)) {
-        alert('Invalid numbers entered.');
-        return;
-      }
-
-      if (isFolderItem) {
-        const folder = state.folders.find(f => f.id === id);
-        if (folder) {
-          folder.width = width;
-          folder.height = height;
-          saveFolder(folder);
-        }
-      } else {
-        const file = state.files.find(f => f.id === id);
-        if (file) {
-          file.width = width;
-          file.height = height;
-          saveFile(file);
-        } else {
-          const bubble = state.textBubbles.find(b => b.id === id);
-          if (bubble) {
-            bubble.width = width;
-            bubble.height = height;
-            saveTextBubble(bubble);
-          }
-        }
-      }
-      render();
-    }
-
-    function copySingleFileClipboard(id) {
-      state.activeMenuId = null;
-      state.selectedIds = [id];
-      bulkCopy();
-    }
-
-    function bulkCopy() {
-      localStorage.setItem('af_clipboard', JSON.stringify(state.selectedIds));
-      alert(`${state.selectedIds.length} item(s) copied to clipboard! Navigate to destination folder and use Paste or move.`);
-      state.selectMode = false;
-      state.selectedIds = [];
-      render();
-    }
-
-    function bulkMove() {
-      const availableFolders = state.folders.filter(f => !state.selectedIds.includes(f.id) && f.id !== state.currentFolderId);
-      let promptText = 'Move selected items to folder:\n0: Home (Root)\n';
-      availableFolders.forEach((f, idx) => {
-        promptText += `${idx + 1}: ${f.name}\n`;
-      });
-      const choice = prompt(promptText);
-      if (choice === null) return;
-
-      let targetParentId = null;
-      if (choice.trim() !== '0') {
-        const index = parseInt(choice.trim()) - 1;
-        if (isNaN(index) || index < 0 || index >= availableFolders.length) {
-          alert('Invalid folder selection.');
-          return;
-        }
-        targetParentId = availableFolders[index].id;
-      }
-
-      state.selectedIds.forEach(id => {
-        const folder = state.folders.find(f => f.id === id);
-        if (folder) { folder.parentId = targetParentId; saveFolder(folder); return; }
-        const file = state.files.find(f => f.id === id);
-        if (file) { file.parentId = targetParentId; saveFile(file); return; }
-        const bubble = state.textBubbles.find(b => b.id === id);
-        if (bubble) { bubble.parentId = targetParentId; saveTextBubble(bubble); }
-      });
-
-      state.selectMode = false;
-      state.selectedIds = [];
-      render();
-    }
-
-    async function bulkDelete() {
-      if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} selected item(s)?`)) return;
-
-      for (let id of state.selectedIds) {
-        state.folders = state.folders.filter(f => f.id !== id);
-        await deleteFromDB('folders', id);
-        state.files = state.files.filter(f => f.id !== id);
-        await deleteFromDB('files', id);
-        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
-        await deleteFromDB('textBubbles', id);
-      }
-
-      state.selectMode = false;
-      state.selectedIds = [];
-      render();
-    }
-
-    async function shareFile(id) {
-      state.activeMenuId = null;
-      const file = state.files.find(f => f.id === id);
-      if (!file) return;
-
-      if (navigator.share) {
-        try {
-          if (file.dataUrl) {
-            const res = await fetch(file.dataUrl);
-            const blob = await res.blob();
-            const fObj = new File([blob], file.name, { type: file.fileType || 'application/octet-stream' });
-            if (navigator.canShare && navigator.canShare({ files: [fObj] })) {
-              await navigator.share({ files: [fObj], title: file.name });
-              return;
-            }
-          }
-          await navigator.share({ title: file.name, url: file.url || window.location.href });
-        } catch (e) {
-          if (e.name !== 'AbortError') alert('Share error: ' + e.message);
-        }
-      } else {
-        alert('Web Share API is not supported on this browser.');
-      }
-    }
-
-    function bulkShare() {
-      alert('Batch sharing is available via individual file menus.');
-    }
-
-    function forcePullCloudData() {
-      if (confirm('This will overwrite local state with the latest backup from GitHub. Continue?')) {
-        syncWithGitHub(true);
-      }
-    }
-
     function attachDragAndResizeListeners() {
       const container = document.getElementById('canvas-container');
       if (!container) return;
 
       const items = container.querySelectorAll('[data-id]');
-      items.forEach(itemElem => {
-        const id = itemElem.getAttribute('data-id');
-        const handle = itemElem.querySelector('.resize-handle');
+      items.forEach(el => {
+        const id = el.getAttribute('data-id');
+        const resizeHandle = el.querySelector('.resize-handle');
 
         let isDragging = false;
         let isResizing = false;
@@ -1866,119 +1741,226 @@
         let startLeft = 0, startTop = 0;
         let startWidth = 0, startHeight = 0;
 
-        itemElem.addEventListener('pointerdown', (e) => {
+        el.addEventListener('pointerdown', (e) => {
           if (!state.editMode) return;
-          if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.classList.contains('resize-handle')) return;
+          if (e.target.closest('button') || e.target.closest('.resize-handle') || e.target.closest('input') || e.target.closest('select')) return;
           
           isDragging = true;
-          itemElem.setPointerCapture(e.pointerId);
           startX = e.clientX;
           startY = e.clientY;
-          startLeft = parseInt(itemElem.style.left) || 0;
-          startTop = parseInt(itemElem.style.top) || 0;
+          startLeft = parseInt(el.style.left) || 20;
+          startTop = parseInt(el.style.top) || 20;
+
+          el.setPointerCapture(e.pointerId);
           e.stopPropagation();
         });
 
-        if (handle) {
-          handle.addEventListener('pointerdown', (e) => {
+        if (resizeHandle) {
+          resizeHandle.addEventListener('pointerdown', (e) => {
             if (!state.editMode) return;
             isResizing = true;
-            handle.setPointerCapture(e.pointerId);
             startX = e.clientX;
             startY = e.clientY;
-            startWidth = itemElem.offsetWidth;
-            startHeight = itemElem.offsetHeight;
+            startWidth = el.offsetWidth;
+            startHeight = el.offsetHeight;
+
+            resizeHandle.setPointerCapture(e.pointerId);
             e.stopPropagation();
+            e.preventDefault();
           });
         }
 
-        itemElem.addEventListener('pointermove', (e) => {
-          if (isDragging) {
+        el.addEventListener('pointermove', (e) => {
+          if (isDragging && state.editMode) {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-            const newX = Math.max(0, startLeft + dx);
-            const newY = Math.max(0, startTop + dy);
-            itemElem.style.left = newX + 'px';
-            itemElem.style.top = newY + 'px';
-          } else if (isResizing) {
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const newW = Math.max(60, startWidth + dx);
-            const newH = Math.max(60, startHeight + dy);
-            itemElem.style.width = newW + 'px';
-            if (!itemElem.classList.contains('folder-cube')) {
-              itemElem.style.height = newH + 'px';
-            }
+            const newLeft = Math.max(10, startLeft + dx);
+            const newTop = Math.max(10, startTop + dy);
+            el.style.left = newLeft + 'px';
+            el.style.top = newTop + 'px';
           }
         });
 
-        const endDragResize = async (e) => {
+        if (resizeHandle) {
+          resizeHandle.addEventListener('pointermove', (e) => {
+            if (isResizing && state.editMode) {
+              const dx = e.clientX - startX;
+              const dy = e.clientY - startY;
+              const newW = Math.max(80, startWidth + dx);
+              const newH = Math.max(60, startHeight + dy);
+              el.style.width = newW + 'px';
+              el.style.height = newH + 'px';
+            }
+          });
+        }
+
+        const handlePointerUp = async (e) => {
           if (isDragging) {
             isDragging = false;
-            const finalX = parseInt(itemElem.style.left) || 0;
-            const finalY = parseInt(itemElem.style.top) || 0;
+            const finalX = parseInt(el.style.left) || 20;
+            const finalY = parseInt(el.style.top) || 20;
 
             const folder = state.folders.find(f => f.id === id);
-            if (folder) { folder.x = finalX; folder.y = finalY; saveFolder(folder); }
-            else {
-              const file = state.files.find(f => f.id === id);
-              if (file) { file.x = finalX; file.y = finalY; saveFile(file); }
-              else {
-                const bubble = state.textBubbles.find(b => b.id === id);
-                if (bubble) { bubble.x = finalX; bubble.y = finalY; saveTextBubble(bubble); }
+            if (folder) {
+              folder.x = finalX;
+              folder.y = finalY;
+              saveFolder(folder);
+            } else {
+              const bubble = state.textBubbles.find(b => b.id === id);
+              if (bubble) {
+                bubble.x = finalX;
+                bubble.y = finalY;
+                saveTextBubble(bubble);
+              } else {
+                const file = state.files.find(f => f.id === id);
+                if (file) {
+                  file.x = finalX;
+                  file.y = finalY;
+                  saveFile(file);
+                }
               }
             }
           }
+
           if (isResizing) {
             isResizing = false;
-            const finalW = itemElem.offsetWidth;
-            const finalH = itemElem.offsetHeight;
+            const finalW = el.offsetWidth;
+            const finalH = el.offsetHeight;
 
             const folder = state.folders.find(f => f.id === id);
-            if (folder) { folder.width = finalW; folder.height = finalH; saveFolder(folder); }
-            else {
-              const file = state.files.find(f => f.id === id);
-              if (file) { file.width = finalW; file.height = finalH; saveFile(file); }
-              else {
-                const bubble = state.textBubbles.find(b => b.id === id);
-                if (bubble) { bubble.width = finalW; bubble.height = finalH; saveTextBubble(bubble); }
+            if (folder) {
+              folder.width = finalW;
+              folder.height = finalH;
+              saveFolder(folder);
+            } else {
+              const bubble = state.textBubbles.find(b => b.id === id);
+              if (bubble) {
+                bubble.width = finalW;
+                bubble.height = finalH;
+                saveTextBubble(bubble);
+              } else {
+                const file = state.files.find(f => f.id === id);
+                if (file) {
+                  file.width = finalW;
+                  file.height = finalH;
+                  saveFile(file);
+                }
               }
             }
           }
         };
 
-        itemElem.addEventListener('pointerup', endDragResize);
-        itemElem.addEventListener('pointercancel', endDragResize);
+        el.addEventListener('pointerup', handlePointerUp);
+        el.addEventListener('pointercancel', handlePointerUp);
+        if (resizeHandle) {
+          resizeHandle.addEventListener('pointerup', handlePointerUp);
+          resizeHandle.addEventListener('pointercancel', handlePointerUp);
+        }
       });
     }
 
-    // Handle File / Photo inputs
     document.getElementById('file-input').addEventListener('change', async (e) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      await processUploadedFiles(files);
+      
+      const uploadToken = uid();
+      for (let file of files) {
+        state.activeUploads.push({ id: uid(), name: file.name, progress: 10 });
+      }
+      render();
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const upObj = state.activeUploads[state.activeUploads.length - files.length + i];
+        if (upObj) upObj.progress = 50;
+
+        const reader = new FileReader();
+        const dataUrl = await new Promise((resolve) => {
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.readAsDataURL(file);
+        });
+
+        if (upObj) upObj.progress = 90;
+
+        const newFile = {
+          id: uid(),
+          parentId: state.currentFolderId,
+          name: file.name,
+          fileType: file.type || 'application/octet-stream',
+          dataUrl: dataUrl,
+          rawBlob: file,
+          width: 112,
+          height: 144,
+          x: 20,
+          y: 20
+        };
+
+        await getOrCreateBlobUrl(newFile);
+        state.files.push(newFile);
+        await saveFile(newFile);
+      }
+
+      state.activeUploads = [];
       e.target.value = '';
+      render();
     });
 
     document.getElementById('photo-input').addEventListener('change', async (e) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      await processUploadedFiles(files);
+
+      for (let file of files) {
+        state.activeUploads.push({ id: uid(), name: file.name, progress: 30 });
+      }
+      render();
+
+      for (let file of files) {
+        const reader = new FileReader();
+        const dataUrl = await new Promise((resolve) => {
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.readAsDataURL(file);
+        });
+
+        const newFile = {
+          id: uid(),
+          parentId: state.currentFolderId,
+          name: file.name,
+          fileType: file.type || 'image/png',
+          dataUrl: dataUrl,
+          rawBlob: file,
+          width: 112,
+          height: 144,
+          x: 20,
+          y: 20
+        };
+
+        await getOrCreateBlobUrl(newFile);
+        state.files.push(newFile);
+        await saveFile(newFile);
+      }
+
+      state.activeUploads = [];
       e.target.value = '';
+      render();
     });
 
     document.getElementById('change-image-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (!file || !state.targetChangeImageId) return;
+      const targetId = state.targetChangeImageId;
+      state.targetChangeImageId = null;
+      if (!file || !targetId) return;
+
       const reader = new FileReader();
       reader.onload = async (ev) => {
-        const targetFile = state.files.find(f => f.id === state.targetChangeImageId);
-        if (targetFile) {
-          targetFile.thumbnailData = ev.target.result;
-          await saveFile(targetFile);
+        const dataUrl = ev.target.result;
+        const fileObj = state.files.find(f => f.id === targetId);
+        if (fileObj) {
+          fileObj.dataUrl = dataUrl;
+          fileObj.thumbnailData = dataUrl;
+          fileObj.rawBlob = file;
+          await saveFile(fileObj);
           render();
         }
-        state.targetChangeImageId = null;
       };
       reader.readAsDataURL(file);
       e.target.value = '';
@@ -1986,16 +1968,19 @@
 
     document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
-      if (!file || !state.targetFolderCoverId) return;
+      const targetFolderId = state.targetFolderCoverId;
+      state.targetFolderCoverId = null;
+      if (!file || !targetFolderId) return;
+
       const reader = new FileReader();
       reader.onload = async (ev) => {
-        const folder = state.folders.find(f => f.id === state.targetFolderCoverId);
-        if (folder) {
-          folder.coverUrl = ev.target.result;
-          await saveFolder(folder);
+        const dataUrl = ev.target.result;
+        const folderObj = state.folders.find(f => f.id === targetFolderId);
+        if (folderObj) {
+          folderObj.coverUrl = dataUrl;
+          await saveFolder(folderObj);
           render();
         }
-        state.targetFolderCoverId = null;
       };
       reader.readAsDataURL(file);
       e.target.value = '';
@@ -2010,6 +1995,7 @@
         render();
       };
       reader.readAsDataURL(file);
+      e.target.value = '';
     });
 
     document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
@@ -2021,6 +2007,7 @@
         render();
       };
       reader.readAsDataURL(file);
+      e.target.value = '';
     });
 
     document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
@@ -2032,62 +2019,10 @@
         render();
       };
       reader.readAsDataURL(file);
+      e.target.value = '';
     });
 
-    async function processUploadedFiles(fileList) {
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        const uploadId = uid();
-        state.activeUploads.push({ id: uploadId, name: file.name, progress: 10 });
-        render();
-
-        try {
-          const dataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onprogress = (pe) => {
-              if (pe.lengthComputable) {
-                let p = Math.round((pe.loaded / pe.total) * 80);
-                const up = state.activeUploads.find(u => u.id === uploadId);
-                if (up) { up.progress = Math.max(15, p); render(); }
-              }
-            };
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-
-          const newFile = {
-            id: uid(),
-            parentId: state.currentFolderId,
-            name: file.name,
-            fileType: file.type || 'application/octet-stream',
-            size: file.size,
-            dataUrl: dataUrl,
-            rawBlob: file,
-            width: 112,
-            height: 144,
-            x: 20,
-            y: 20
-          };
-
-          if (isVideoFile(newFile) || isAudioFile(newFile)) {
-            await getOrCreateBlobUrl(newFile);
-          }
-
-          state.files.push(newFile);
-          await saveFile(newFile);
-        } catch (err) {
-          console.error('Upload error:', err);
-        } finally {
-          state.activeUploads = state.activeUploads.filter(u => u.id !== uploadId);
-          render();
-        }
-      }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
+    window.addEventListener('DOMContentLoaded', loadData);
   </script>
 </body>
 </html>
