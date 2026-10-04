@@ -34,11 +34,6 @@
             <i data-lucide="menu" class="w-5 h-5"></i>
           </button>
           
-          <script>
-            // Conditional rendering logic placeholder for Back button
-            // state.currentFolderId !== null checks if inside a folder
-          </script>
-          
           <button onclick="toggleEditMode()" id="edit-mode-btn" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-400 shrink-0">
             Edit Mode Locked
           </button>
@@ -60,19 +55,31 @@
         </div>
       </div>
 
-      <!-- New Menu Row Underneath: LYRICS & % -->
+      <!-- Second Menu Row: LYRICS, %, Add Link, Add Web Video, Add Checklist -->
       <div class="flex items-center gap-2 border-t border-zinc-800/80 pt-2 overflow-x-auto no-scrollbar">
         <button onclick="window.location.href='lyrics.html'" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 cursor-pointer">
           <i data-lucide="mic" class="w-3.5 h-3.5"></i>
           <span>LYRICS</span>
         </button>
-        <button onclick="openPercentageModal()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 cursor-pointer">
+        <button onclick="openPercentageModal(event)" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 cursor-pointer">
           <i data-lucide="percent" class="w-3.5 h-3.5"></i>
           <span>%</span>
         </button>
+        <button onclick="openLinkModal()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 cursor-pointer">
+          <i data-lucide="link" class="w-3.5 h-3.5"></i>
+          <span>Add Link</span>
+        </button>
+        <button onclick="openWebVideoModal()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 cursor-pointer">
+          <i data-lucide="video" class="w-3.5 h-3.5"></i>
+          <span>Add Web Video</span>
+        </button>
+        <button onclick="openChecklistModal()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 cursor-pointer">
+          <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+          <span>Add Checklist</span>
+        </button>
       </div>
 
-      <!-- Hamburger Menu Dropdown (Updated without LYRICS & %) -->
+      <!-- Hamburger Menu Dropdown (Cleaned up) -->
       <div id="hamburger-dropdown" class="hidden absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
         <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
           <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
@@ -83,17 +90,8 @@
         <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
           <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
         </button>
-        <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-          <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
-        </button>
-        <button onclick="openWebVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-          <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
-        </button>
         <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
           <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
-        </button>
-        <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-          <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
         </button>
         <div class="h-px bg-zinc-800 my-1"></div>
         <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
@@ -114,6 +112,32 @@
       <p>Main content area goes here.</p>
     </main>
 
+  </div>
+
+  <!-- Percentage Modal Element -->
+  <div id="percentage-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onclick="event.stopPropagation()">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-80 p-5 text-white shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm text-amber-400 flex items-center gap-2"><i data-lucide="percent" class="w-4 h-4"></i> Percentage Calculator</h3>
+        <button onclick="closePercentageModal()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="flex flex-col gap-3 text-xs">
+        <div class="flex flex-col gap-1">
+          <label class="text-zinc-400 font-semibold">What is</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="calc-val1" placeholder="e.g. 50" oninput="calculatePercentage()" class="w-full bg-black border border-zinc-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400">
+            <span class="text-zinc-400">% of</span>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <input type="number" id="calc-val2" placeholder="e.g. 200" oninput="calculatePercentage()" class="w-full bg-black border border-zinc-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-400">
+        </div>
+        <div class="bg-black/60 border border-zinc-800 rounded-xl p-3 flex flex-col items-center justify-center">
+          <span class="text-zinc-400 text-[10px]">Result</span>
+          <span id="calc-result" class="text-lg font-bold text-amber-400 mt-0.5">0</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Hidden File Input for Images -->
@@ -146,7 +170,8 @@
 
     function closeHamburgerMenu() {
       state.hamburgerMenuOpen = false;
-      document.getElementById('hamburger-dropdown').classList.add('hidden');
+      const dropdown = document.getElementById('hamburger-dropdown');
+      if (dropdown) dropdown.classList.add('hidden');
     }
 
     function closeAllMenus() {
@@ -179,23 +204,41 @@
 
     function navigateTo(folderId) {
       state.currentFolderId = folderId;
-      console.log("Navigating to folder:", folderId);
     }
 
-    function openPercentageModal() {
-      alert("Opening Percentage Modal...");
+    // Percentage Calculator Handlers
+    function openPercentageModal(event) {
+      if (event) event.stopPropagation();
+      closeHamburgerMenu();
+      document.getElementById('percentage-modal').classList.remove('hidden');
+      document.getElementById('calc-val1').focus();
     }
 
-    function openTextEditorModal() {
-      alert("Opening Text Editor Modal...");
+    function closePercentageModal() {
+      document.getElementById('percentage-modal').classList.add('hidden');
     }
 
+    function calculatePercentage() {
+      const v1 = parseFloat(document.getElementById('calc-val1').value);
+      const v2 = parseFloat(document.getElementById('calc-val2').value);
+      const resultEl = document.getElementById('calc-result');
+
+      if (isNaN(v1) || isNaN(v2)) {
+        resultEl.innerText = "0";
+        return;
+      }
+
+      const res = (v1 * v2) / 100;
+      resultEl.innerText = Number.isInteger(res) ? res : res.toFixed(2);
+    }
+
+    function openTextEditorModal() { alert("Opening Text Editor Modal..."); }
     function openNewFolderModal() { alert("New Folder"); }
     function openUploadModal() { alert("Add Item"); }
-    function openLinkModal() { alert("Add Link"); }
-    function openWebVideoModal() { alert("Add Web Video"); }
+    function openLinkModal() { alert("Add Link Modal"); }
+    function openWebVideoModal() { alert("Add Web Video Modal"); }
     function openAppModal() { alert("Add App"); }
-    function openChecklistModal() { alert("Add Checklist"); }
+    function openChecklistModal() { alert("Add Checklist Modal"); }
     function syncWithGitHub() { alert("Syncing..."); }
     function resetToken() { alert("Reset Token"); }
     function forcePullCloudData() { alert("Pulling Cloud Data"); }
