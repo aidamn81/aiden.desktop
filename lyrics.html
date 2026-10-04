@@ -70,12 +70,18 @@
         <!-- Top Navigation Bar (Always Stays Fixed) -->
         <header class="h-16 border-b border-borderCol bg-panelDark/95 backdrop-blur-md px-6 flex items-center justify-between shrink-0 z-20">
             <div class="flex items-center space-x-4">
-                <button id="menu-toggle" class="w-10 h-10 rounded-xl bg-controlDark hover:bg-neutral-800 active:scale-95 transition flex items-center justify-center text-white text-lg shadow-sm shrink-0" title="Song Library">
-                    <i class="fa-solid fa-bars-staggered"></i>
-                </button>
+                <div class="flex items-center space-x-2">
+                    <!-- Home Button -->
+                    <a href="index.html" class="w-10 h-10 rounded-xl bg-controlDark hover:bg-neutral-800 active:scale-95 transition flex items-center justify-center text-white text-base shadow-sm shrink-0" title="Home">
+                        <i class="fa-solid fa-house"></i>
+                    </a>
+                    <button id="menu-toggle" class="w-10 h-10 rounded-xl bg-controlDark hover:bg-neutral-800 active:scale-95 transition flex items-center justify-center text-white text-lg shadow-sm shrink-0" title="Song Library">
+                        <i class="fa-solid fa-bars-staggered"></i>
+                    </button>
+                </div>
                 <div class="overflow-hidden">
-                    <h1 id="current-song-title" class="text-base md:text-lg font-bold tracking-tight text-white truncate max-w-[160px] sm:max-w-[200px] md:max-w-md">Select a Song</h1>
-                    <p id="current-song-artist" class="text-xs text-neutral-400 truncate max-w-[160px] sm:max-w-[200px] md:max-w-md">Tap menu to choose or add lyrics</p>
+                    <h1 id="current-song-title" class="text-base md:text-lg font-bold tracking-tight text-white truncate max-w-[140px] sm:max-w-[180px] md:max-w-md">Select a Song</h1>
+                    <p id="current-song-artist" class="text-xs text-neutral-400 truncate max-w-[140px] sm:max-w-[180px] md:max-w-md">Tap menu to choose or add lyrics</p>
                 </div>
             </div>
 
