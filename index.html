@@ -18,6 +18,12 @@
       -ms-overflow-style: none;  /* IE and Edge */
       scrollbar-width: none;  /* Firefox */
     }
+    .draggable-widget {
+      position: absolute;
+      resize: both;
+      overflow: auto;
+      cursor: move;
+    }
   </style>
 </head>
 <body class="bg-black text-white h-screen flex flex-col overflow-hidden select-none" onclick="closeAllMenus()">
@@ -106,11 +112,68 @@
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main id="main-content" class="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-zinc-500">
-      <p>Main content area goes here.</p>
+    <!-- Main Content Area / Dashboard Canvas -->
+    <main id="main-canvas" class="flex-1 overflow-auto p-4 relative bg-black">
+      <div id="canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 pointer-events-none">
+        <p>Main content area goes here. Drag and drop items freely.</p>
+      </div>
     </main>
 
+  </div>
+
+  <!-- Text Editor Modal -->
+  <div id="text-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onclick="event.stopPropagation()">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-80 p-5 text-white shadow-2xl flex flex-col gap-4" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm text-amber-400 flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4"></i> Add Text Bubble</h3>
+        <button onclick="closeTextEditorModal()" class="text-zinc-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="flex flex-col gap-3 text-xs">
+        <div class="flex flex-col gap-1">
+          <label class="text-zinc-400 font-semibold">Content</label>
+          <textarea id="txt-content" placeholder="Type your text here..." class="w-full bg-black border border-zinc-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-400 h-20 resize-none"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 font-semibold">Font Type</label>
+            <select id="txt-font" class="bg-black border border-zinc-700 rounded-xl p-2 text-white focus:outline-none focus:border-amber-400">
+              <option value="sans-serif">Sans-Serif</option>
+              <option value="serif">Serif</option>
+              <option value="monospace">Monospace</option>
+              <option value="cursive">Cursive</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 font-semibold">Font Size</label>
+            <select id="txt-size" class="bg-black border border-zinc-700 rounded-xl p-2 text-white focus:outline-none focus:border-amber-400">
+              <option value="12px">Small (12px)</option>
+              <option value="16px" selected>Normal (16px)</option>
+              <option value="20px">Large (20px)</option>
+              <option value="28px">Heading (28px)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 font-semibold">Alignment</label>
+            <select id="txt-align" class="bg-black border border-zinc-700 rounded-xl p-2 text-white focus:outline-none focus:border-amber-400">
+              <option value="left" selected>Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-zinc-400 font-semibold">Text Color</label>
+            <input type="color" id="txt-color" value="#ffffff" class="w-full h-9 bg-black border border-zinc-700 rounded-xl cursor-pointer p-1">
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-zinc-400 font-semibold">Background Color</label>
+          <input type="color" id="txt-bg" value="#27272a" class="w-full h-9 bg-black border border-zinc-700 rounded-xl cursor-pointer p-1">
+        </div>
+        <button onclick="createTextWidget()" class="w-full mt-2 py-2.5 bg-amber-400 hover:bg-amber-500 text-black font-bold rounded-xl cursor-pointer transition-colors">Add to Dashboard</button>
+      </div>
+    </div>
   </div>
 
   <!-- Percentage Modal Element -->
@@ -140,20 +203,18 @@
   </div>
 
   <!-- Hidden File Input for Images -->
-  <input type="file" id="photo-input" class="hidden" accept="image/*">
+  <input type="file" id="photo-input" class="hidden" accept="image/*" onchange="handleImageUpload(event)">
 
   <!-- Core JavaScript Handlers -->
   <script>
     // Initialize Lucide icons
     lucide.createIcons();
 
-    // App State
     let state = {
       hamburgerMenuOpen: false,
       editMode: false,
       selectMode: false,
-      currentFolderId: null,
-      isSyncing: false
+      currentFolderId: null
     };
 
     function toggleHamburgerMenu(event) {
@@ -206,12 +267,133 @@
     function navigateTo(event, folderId) {
       if (event) event.stopPropagation();
       state.currentFolderId = folderId;
-      console.log("Navigated to folder:", folderId);
     }
 
+    // Trigger Image Input
     function triggerPhotoInput(event) {
       if (event) event.stopPropagation();
       document.getElementById('photo-input').click();
+    }
+
+    // Handle Image Upload & Thumbnail creation
+    function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        createImageWidget(e.target.result);
+      };
+      reader.readAsDataURL(file);
+      event.target.value = ''; // Reset input
+    }
+
+    function createImageWidget(imgSrc) {
+      const canvas = document.getElementById('main-canvas');
+      const placeholder = document.getElementById('canvas-placeholder');
+      if (placeholder) placeholder.remove();
+
+      const widget = document.createElement('div');
+      widget.className = "draggable-widget bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-2 flex flex-col";
+      widget.style.width = "220px";
+      widget.style.height = "220px";
+      widget.style.left = "60px";
+      widget.style.top = "60px";
+
+      widget.innerHTML = `
+        <div class="flex items-center justify-between pb-1 mb-1 border-b border-zinc-800 cursor-grab">
+          <span class="text-[10px] text-zinc-400 font-bold px-1">Image</span>
+          <button onclick="this.closest('.draggable-widget').remove()" class="text-zinc-500 hover:text-red-400 p-0.5"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+        </div>
+        <div class="flex-1 w-full h-[calc(100%-24px)] overflow-hidden rounded-lg bg-black flex items-center justify-center">
+          <img src="${imgSrc}" class="w-full h-full object-contain pointer-events-none" />
+        </div>
+      `;
+
+      makeDraggable(widget);
+      canvas.appendChild(widget);
+      lucide.createIcons();
+    }
+
+    // Text Editor Modal Handlers
+    function openTextEditorModal(event) {
+      if (event) event.stopPropagation();
+      closeHamburgerMenu();
+      document.getElementById('text-editor-modal').classList.remove('hidden');
+      document.getElementById('txt-content').focus();
+    }
+
+    function closeTextEditorModal() {
+      document.getElementById('text-editor-modal').classList.add('hidden');
+    }
+
+    function createTextWidget() {
+      const content = document.getElementById('txt-content').value || "Empty note";
+      const font = document.getElementById('txt-font').value;
+      const size = document.getElementById('txt-size').value;
+      const align = document.getElementById('txt-align').value;
+      const color = document.getElementById('txt-color').value;
+      const bg = document.getElementById('txt-bg').value;
+
+      const canvas = document.getElementById('main-canvas');
+      const placeholder = document.getElementById('canvas-placeholder');
+      if (placeholder) placeholder.remove();
+
+      const widget = document.createElement('div');
+      widget.className = "draggable-widget rounded-2xl shadow-2xl p-4 flex flex-col border border-zinc-700/50";
+      widget.style.width = "240px";
+      widget.style.height = "160px";
+      widget.style.left = "100px";
+      widget.style.top = "100px";
+      widget.style.backgroundColor = bg;
+      widget.style.color = color;
+      widget.style.fontFamily = font;
+
+      widget.innerHTML = `
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-white/10 cursor-grab">
+          <span class="text-[10px] opacity-70 font-bold uppercase">Text Bubble</span>
+          <button onclick="this.closest('.draggable-widget').remove()" class="opacity-70 hover:opacity-100 p-0.5"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+        </div>
+        <div class="flex-1 overflow-auto outline-none" contenteditable="true" style="font-size: ${size}; text-align: ${align};">${content}</div>
+      `;
+
+      makeDraggable(widget);
+      canvas.appendChild(widget);
+      lucide.createIcons();
+      closeTextEditorModal();
+      document.getElementById('txt-content').value = "";
+    }
+
+    // Generic Drag and Drop behavior for widgets
+    function makeDraggable(elmnt) {
+      let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+      const header = elmnt.querySelector('.cursor-grab') || elmnt;
+
+      header.onpointerdown = dragMouseDown;
+
+      function dragMouseDown(e) {
+        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+        e.preventDefault();
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onpointerup = closeDragElement;
+        document.onpointermove = elementDrag;
+      }
+
+      function elementDrag(e) {
+        e.preventDefault();
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+        elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+      }
+
+      function closeDragElement() {
+        document.onpointerup = null;
+        document.onpointermove = null;
+      }
     }
 
     // Percentage Calculator Handlers
@@ -240,12 +422,11 @@
       resultEl.innerText = Number.isInteger(res) ? res : res.toFixed(2);
     }
 
-    // Feature / Modal Action Handlers with Event Propagation Protection
+    // Other Menu Action Handlers
     function openLyrics(event) { if (event) event.stopPropagation(); window.location.href = 'lyrics.html'; }
     function openLinkModal(event) { if (event) event.stopPropagation(); alert("Opening Add Link Modal..."); }
     function openWebVideoModal(event) { if (event) event.stopPropagation(); alert("Opening Add Web Video Modal..."); }
     function openChecklistModal(event) { if (event) event.stopPropagation(); alert("Opening Add Checklist Modal..."); }
-    function openTextEditorModal(event) { if (event) event.stopPropagation(); alert("Opening Text Editor Modal..."); }
     function openNewFolderModal(event) { if (event) event.stopPropagation(); alert("Opening New Folder Modal..."); }
     function openUploadModal(event) { if (event) event.stopPropagation(); alert("Opening Add Item Modal..."); }
     function openAppModal(event) { if (event) event.stopPropagation(); alert("Opening Add App Modal..."); }
