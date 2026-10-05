@@ -442,11 +442,14 @@
               </button>
               <div class="h-px bg-zinc-800 my-1"></div>
               
-              <!-- Two empty horizontally scrollable menu rows -->
-              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+              <!-- Two horizontally scrollable menu rows -->
+              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0 items-center">
+                <button onclick="toggleEditMode()" class="px-3 py-1.5 bg-zinc-900 border ${state.editMode ? 'border-yellow-500 text-yellow-400' : 'border-zinc-800 text-zinc-300'} rounded-lg shrink-0 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  <span>${state.editMode ? 'Disable Edit Mode' : 'Enable Edit Mode'}</span>
+                </button>
+                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
               </div>
               <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
                 <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
@@ -497,4 +500,68 @@
           ${items.length === 0 && state.activeUploads.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
-              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl
+              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl">Pull from Cloud</button>
+            </div>
+          ` : ''}
+        </main>
+      `;
+
+      lucide.createIcons();
+    }
+
+    function toggleHamburgerMenu(e) {
+      if (e) e.stopPropagation();
+      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
+      render();
+    }
+
+    function closeHamburgerMenu() {
+      if (state.hamburgerMenuOpen) {
+        state.hamburgerMenuOpen = false;
+        render();
+      }
+    }
+
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      render();
+    }
+
+    function toggleSelectMode() {
+      state.selectMode = !state.selectMode;
+      if (!state.selectMode) state.selectedIds = [];
+      render();
+    }
+
+    function navigateTo(folderId) {
+      state.currentFolderId = folderId;
+      state.selectMode = false;
+      state.selectedIds = [];
+      render();
+    }
+
+    function navigateBack() {
+      if (state.currentFolderId === null) return;
+      const current = state.folders.find(f => f.id === state.currentFolderId);
+      if (current) {
+        navigateTo(current.parentId);
+      } else {
+        navigateTo(null);
+      }
+    }
+
+    function closeMenu() {
+      if (state.activeMenuId !== null) {
+        state.activeMenuId = null;
+        render();
+      }
+    }
+
+    function forcePullCloudData() {
+      syncWithGitHub(true);
+    }
+
+    window.onload = loadData;
+  </script>
+</body>
+</html>
