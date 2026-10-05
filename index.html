@@ -22,6 +22,8 @@
       position: absolute;
       resize: both;
       overflow: auto;
+      min-width: 100px;
+      min-height: 80px;
     }
   </style>
 </head>
@@ -114,7 +116,7 @@
     <!-- Main Content Area / Dashboard Canvas -->
     <main id="main-canvas" class="flex-1 overflow-auto p-4 relative bg-black" onclick="closeImageContextMenu()">
       <div id="canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 pointer-events-none">
-        <p>Main content area goes here. Drag items in edit mode, resize from any corner.</p>
+        <p>Main content area goes here. Drag widgets in edit mode, resize from any corner.</p>
       </div>
     </main>
 
@@ -132,7 +134,7 @@
   <div id="text-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onclick="event.stopPropagation()">
     <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-96 p-5 text-white shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between">
-        <h3 class="font-bold text-sm text-amber-400 flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4"></i> Add Text Bubble</h3>
+        <h3 id="txt-modal-title" class="font-bold text-sm text-amber-400 flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4"></i> Add Text Bubble</h3>
         <button onclick="closeTextEditorModal()" class="text-zinc-400 hover:text-white cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
       </div>
       
@@ -187,7 +189,7 @@
           <label class="text-zinc-400 font-semibold">Background Color</label>
           <input type="color" id="txt-bg" value="#27272a" oninput="updateTextPreview()" class="w-full h-9 bg-black border border-zinc-700 rounded-xl cursor-pointer p-1">
         </div>
-        <button onclick="createTextWidget()" class="w-full mt-2 py-2.5 bg-amber-400 hover:bg-amber-500 text-black font-bold rounded-xl cursor-pointer transition-colors">Add to Dashboard</button>
+        <button id="txt-submit-btn" onclick="saveTextWidget()" class="w-full mt-2 py-2.5 bg-amber-400 hover:bg-amber-500 text-black font-bold rounded-xl cursor-pointer transition-colors">Add to Dashboard</button>
       </div>
     </div>
   </div>
@@ -240,7 +242,8 @@
       editMode: false,
       selectMode: false,
       currentFolderId: null,
-      activeImageWidget: null
+      activeImageWidget: null,
+      editingTextId: null
     };
 
     // Load persisted items upon page start
@@ -336,10 +339,10 @@
       const widget = document.createElement('div');
       widget.className = "draggable-widget overflow-hidden rounded-xl shadow-2xl flex items-center justify-center";
       widget.id = data.id;
-      widget.style.width = data.width;
-      widget.style.height = data.height;
-      widget.style.top = data.top;
-      widget.style.left = data.left;
+      widget.style.width = data.width || '200px';
+      widget.style.height = data.height || '200px';
+      widget.style.top = data.top || '60px';
+      widget.style.left = data.left || '60px';
       widget.dataset.imgSrc = data.imgSrc;
       widget.dataset.type = 'image';
 
@@ -416,16 +419,45 @@
       }
     }
 
-    function openTextEditorModal(event) {
+    // Text Editor Modal Handlers & Double-Tap Edit Platform Pop-up
+    function openTextEditorModal(event, existingData = null) {
       if (event) event.stopPropagation();
       closeHamburgerMenu();
-      document.getElementById('text-editor-modal').classList.remove('hidden');
+      
+      const modal = document.getElementById('text-editor-modal');
+      const titleEl = document.getElementById('txt-modal-title');
+      const submitBtn = document.getElementById('txt-submit-btn');
+
+      if (existingData) {
+        state.editingTextId = existingData.id;
+        titleEl.innerHTML = `<i data-lucide="message-square" class="w-4 h-4"></i> Edit Text Bubble`;
+        submitBtn.innerText = "Save Changes";
+        document.getElementById('txt-content').value = existingData.content || "";
+        document.getElementById('txt-font').value = existingData.font || "sans-serif";
+        document.getElementById('txt-size').value = existingData.size || "16px";
+        document.getElementById('txt-align').value = existingData.align || "left";
+        document.getElementById('txt-color').value = existingData.color || "#ffffff";
+        document.getElementById('txt-bg').value = existingData.bg || "#27272a";
+      } else {
+        state.editingTextId = null;
+        titleEl.innerHTML = `<i data-lucide="message-square" class="w-4 h-4"></i> Add Text Bubble`;
+        submitBtn.innerText = "Add to Dashboard";
+        document.getElementById('txt-content').value = "";
+        document.getElementById('txt-font').value = "sans-serif";
+        document.getElementById('txt-size').value = "16px";
+        document.getElementById('txt-align').value = "left";
+        document.getElementById('txt-color').value = "#ffffff";
+        document.getElementById('txt-bg').value = "#27272a";
+      }
+
+      modal.classList.remove('hidden');
       updateTextPreview();
       document.getElementById('txt-content').focus();
     }
 
     function closeTextEditorModal() {
       document.getElementById('text-editor-modal').classList.add('hidden');
+      state.editingTextId = null;
     }
 
     function updateTextPreview() {
@@ -447,7 +479,7 @@
       previewText.innerText = content;
     }
 
-    function createTextWidget() {
+    function saveTextWidget() {
       const content = document.getElementById('txt-content').value || "Empty note";
       const font = document.getElementById('txt-font').value;
       const size = document.getElementById('txt-size').value;
@@ -455,20 +487,36 @@
       const color = document.getElementById('txt-color').value;
       const bg = document.getElementById('txt-bg').value;
 
-      const widgetData = {
-        type: 'text',
-        id: 'txt_' + Date.now(),
-        content, font, size, align, color, bg,
-        width: '240px',
-        height: '160px',
-        top: '100px',
-        left: '100px'
-      };
-
-      saveWidgetToStorage(widgetData);
-      createTextNodeWidget(widgetData);
+      if (state.editingTextId) {
+        // Update existing widget
+        const widget = document.getElementById(state.editingTextId);
+        if (widget) {
+          widget.style.backgroundColor = bg;
+          widget.style.color = color;
+          widget.style.fontFamily = font;
+          const textBox = widget.querySelector('.text-box-content');
+          if (textBox) {
+            textBox.style.fontSize = size;
+            textBox.style.textAlign = align;
+            textBox.innerText = content;
+          }
+          updateWidgetStorage(state.editingTextId, { content, font, size, align, color, bg });
+        }
+      } else {
+        // Create new widget
+        const widgetData = {
+          type: 'text',
+          id: 'txt_' + Date.now(),
+          content, font, size, align, color, bg,
+          width: '240px',
+          height: '160px',
+          top: '100px',
+          left: '100px'
+        };
+        saveWidgetToStorage(widgetData);
+        createTextNodeWidget(widgetData);
+      }
       closeTextEditorModal();
-      document.getElementById('txt-content').value = "";
     }
 
     function createTextNodeWidget(data) {
@@ -479,41 +527,42 @@
       const widget = document.createElement('div');
       widget.className = "draggable-widget rounded-2xl shadow-2xl p-4 flex flex-col border border-zinc-700/50";
       widget.id = data.id;
-      widget.style.width = data.width;
-      widget.style.height = data.height;
-      widget.style.top = data.top;
-      widget.style.left = data.left;
+      widget.style.width = data.width || '240px';
+      widget.style.height = data.height || '160px';
+      widget.style.top = data.top || '100px';
+      widget.style.left = data.left || '100px';
       widget.style.backgroundColor = data.bg;
       widget.style.color = data.color;
       widget.style.fontFamily = data.font;
       widget.dataset.type = 'text';
 
       const textBox = document.createElement('div');
-      textBox.className = "flex-1 overflow-auto outline-none";
+      textBox.className = "text-box-content flex-1 overflow-auto outline-none pointer-events-none";
       textBox.style.fontSize = data.size;
       textBox.style.textAlign = data.align;
       textBox.innerText = data.content;
-      textBox.contentEditable = "false";
 
       let textClickTimeout = null;
       widget.addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
         e.stopPropagation();
         if (textClickTimeout) {
           clearTimeout(textClickTimeout);
           textClickTimeout = null;
-          textBox.contentEditable = "true";
-          textBox.focus();
+          // Open edit modal on double tap
+          openTextEditorModal(null, {
+            id: widget.id,
+            content: textBox.innerText,
+            font: widget.style.fontFamily,
+            size: textBox.style.fontSize,
+            align: textBox.style.textAlign,
+            color: widget.style.color,
+            bg: widget.style.backgroundColor
+          });
         } else {
           textClickTimeout = setTimeout(() => {
             textClickTimeout = null;
           }, 300);
         }
-      });
-
-      textBox.addEventListener('blur', () => {
-        textBox.contentEditable = "false";
-        updateWidgetStorage(widget.id, { content: textBox.innerText });
       });
 
       widget.appendChild(textBox);
@@ -529,7 +578,7 @@
 
       function dragMouseDown(e) {
         if (!state.editMode) return; 
-        if (e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.isContentEditable) return;
+        if (e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
         e.preventDefault();
         pos3 = e.clientX;
         pos4 = e.clientY;
