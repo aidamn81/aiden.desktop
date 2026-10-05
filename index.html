@@ -217,14 +217,6 @@
       }
     }
 
-    async function deleteFromDB(storeName, id) {
-      const db = await openDB();
-      if (db) {
-        const tx = db.transaction(storeName, 'readwrite');
-        tx.objectStore(storeName).delete(id);
-      }
-    }
-
     function resetToken() {
       const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
       if (token !== null) {
@@ -376,7 +368,6 @@
       const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
       const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
-      const allChildrenSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
 
       if (state.editMode) {
         document.body.classList.add('edit-mode');
@@ -403,10 +394,6 @@
               <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
                 ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
               </button>
-              <button onclick="openTextEditorModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Text Bubble">
-                <i data-lucide="message-square" class="w-4 h-4"></i>
-                <span>Text Bubble</span>
-              </button>
             </div>
           </div>
 
@@ -419,22 +406,6 @@
 
           ${state.hamburgerMenuOpen ? `
             <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
-              <!-- Two horizontally scrollable menu rows right under the hamburger menu icon / header top of dropdown -->
-              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0 items-center">
-                <button onclick="toggleEditMode()" class="px-3 py-1.5 bg-zinc-900 border ${state.editMode ? 'border-yellow-500 text-yellow-400' : 'border-zinc-800 text-zinc-300'} rounded-lg shrink-0 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                  <span>${state.editMode ? 'Disable Edit Mode' : 'Enable Edit Mode'}</span>
-                </button>
-                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-              </div>
-              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-              </div>
-              <div class="h-px bg-zinc-800 my-1"></div>
-
               <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
               </button>
@@ -444,20 +415,6 @@
               <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
               </button>
-              <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
-              </button>
-              <button onclick="openWebVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
-              </button>
-              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
-              </button>
-              <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
-                <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
-              </button>
-              <div class="h-px bg-zinc-800 my-1"></div>
-
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
                 <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
                 <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
@@ -465,39 +422,61 @@
               <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
                 <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
               </button>
-              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
-                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
-              </button>
             </div>
           ` : ''}
         </header>
 
-        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
+        <!-- Two horizontally scrollable menu rows located on the main screen directly under the header/hamburger icon area -->
+        <div class="shrink-0 bg-black/80 border-b border-zinc-900 px-3 py-2 flex flex-col gap-1.5 z-40">
+          <div class="flex overflow-x-auto no-scrollbar gap-2 w-full shrink-0 items-center">
+            <button onclick="toggleEditMode()" class="px-3 py-1.5 bg-zinc-900 border ${state.editMode ? 'border-yellow-500 text-yellow-400' : 'border-zinc-800 text-zinc-300'} rounded-lg shrink-0 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+              <span>${state.editMode ? 'Disable Edit Mode' : 'Enable Edit Mode'}</span>
+            </button>
+            <button onclick="syncWithGitHub()" class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg shrink-0 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="cloud" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>Sync Cloud</span>
+            </button>
+            <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 flex items-center justify-center text-[11px] text-zinc-500">Quick Menu 1</div>
+            <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 flex items-center justify-center text-[11px] text-zinc-500">Quick Menu 2</div>
+          </div>
+          <div class="flex overflow-x-auto no-scrollbar gap-2 w-full shrink-0 items-center">
+            <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 flex items-center justify-center text-[11px] text-zinc-500">Scroll Row 2 - Item 1</div>
+            <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 flex items-center justify-center text-[11px] text-zinc-500">Scroll Row 2 - Item 2</div>
+            <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0 flex items-center justify-center text-[11px] text-zinc-500">Scroll Row 2 - Item 3</div>
+          </div>
+        </div>
+
+        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto p-4 ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
           ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
           
-          ${state.activeUploads.length > 0 ? `
-            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
-              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
-                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
-                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
-              </div>
-              <div class="flex flex-col gap-2">
-                ${state.activeUploads.map(up => `
-                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
-                    <div class="flex items-center justify-between text-xs">
-                      <span class="truncate font-medium text-white max-w-[70%]" title="${up.name}">${up.name}</span>
-                      <span class="text-amber-400 font-bold">${up.progress}%</span>
-                    </div>
-                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
-                    </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            ${items.map(item => {
+              if (isFolder(item)) {
+                return `
+                  <div onclick="navigateTo('${item.id}')" class="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-zinc-800 transition">
+                    <i data-lucide="folder" class="w-10 h-10 text-amber-400"></i>
+                    <span class="text-xs font-semibold truncate w-full text-center">${item.name}</span>
                   </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
+                `;
+              } else if (isBubble(item)) {
+                return `
+                  <div class="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-start justify-between gap-2">
+                    <span class="text-xs text-zinc-200">${item.content || ''}</span>
+                  </div>
+                `;
+              } else {
+                return `
+                  <div class="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center justify-center gap-2">
+                    <i data-lucide="file" class="w-10 h-10 text-indigo-400"></i>
+                    <span class="text-xs font-semibold truncate w-full text-center">${item.name || 'File'}</span>
+                  </div>
+                `;
+              }
+            }).join('')}
+          </div>
 
-          ${items.length === 0 && state.activeUploads.length === 0 ? `
+          ${items.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
               <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl">Pull from Cloud</button>
