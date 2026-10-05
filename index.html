@@ -20,11 +20,26 @@
     }
     .draggable-widget {
       position: absolute;
-      resize: both;
-      overflow: auto;
       min-width: 100px;
       min-height: 80px;
     }
+    /* Custom tiny black resize handles */
+    .resize-handle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: black;
+      border: 1px solid #52525b;
+      display: none;
+      z-index: 10;
+    }
+    .edit-mode-active .resize-handle {
+      display: block;
+    }
+    .handle-se { bottom: -4px; right: -4px; cursor: se-resize; }
+    .handle-sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+    .handle-ne { top: -4px; right: -4px; cursor: ne-resize; }
+    .handle-nw { top: -4px; left: -4px; cursor: nw-resize; }
   </style>
 </head>
 <body class="bg-black text-white h-screen flex flex-col overflow-hidden select-none" onclick="closeAllMenus()">
@@ -116,7 +131,7 @@
     <!-- Main Content Area / Dashboard Canvas -->
     <main id="main-canvas" class="flex-1 overflow-auto p-4 relative bg-black" onclick="closeImageContextMenu()">
       <div id="canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 pointer-events-none">
-        <p>Main content area goes here. Drag widgets in edit mode, resize from any corner.</p>
+        <p>Main content area goes here. Drag widgets in edit mode, resize from any corner using tiny handles.</p>
       </div>
     </main>
 
@@ -130,7 +145,7 @@
     <img id="fullscreen-img-element" src="" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl" />
   </div>
 
-  <!-- Text Editor Modal with Live Preview -->
+  <!-- Text Editor Modal with Live Preview & Formatting Tools -->
   <div id="text-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onclick="event.stopPropagation()">
     <div class="bg-zinc-900 border border-zinc-800 rounded-2xl w-96 p-5 text-white shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between">
@@ -151,6 +166,14 @@
           <label class="text-zinc-400 font-semibold">Content</label>
           <textarea id="txt-content" placeholder="Type your text here..." oninput="updateTextPreview()" class="w-full bg-black border border-zinc-700 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-400 h-16 resize-none"></textarea>
         </div>
+        
+        <!-- Formatting Options Row: Bold, Italic, Underline -->
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="toggleFormat('bold')" id="fmt-bold-btn" class="px-3 py-1.5 bg-black border border-zinc-700 hover:bg-zinc-800 rounded-lg font-bold text-zinc-400 cursor-pointer">B</button>
+          <button type="button" onclick="toggleFormat('italic')" id="fmt-italic-btn" class="px-3 py-1.5 bg-black border border-zinc-700 hover:bg-zinc-800 rounded-lg italic text-zinc-400 cursor-pointer">I</button>
+          <button type="button" onclick="toggleFormat('underline')" id="fmt-underline-btn" class="px-3 py-1.5 bg-black border border-zinc-700 hover:bg-zinc-800 rounded-lg underline text-zinc-400 cursor-pointer">U</button>
+        </div>
+
         <div class="grid grid-cols-2 gap-2">
           <div class="flex flex-col gap-1">
             <label class="text-zinc-400 font-semibold">Font Type</label>
@@ -243,7 +266,10 @@
       selectMode: false,
       currentFolderId: null,
       activeImageWidget: null,
-      editingTextId: null
+      editingTextId: null,
+      formatBold: false,
+      formatItalic: false,
+      formatUnderline: false
     };
 
     // Load persisted items upon page start
@@ -277,12 +303,16 @@
       if (event) event.stopPropagation();
       state.editMode = !state.editMode;
       const btn = document.getElementById('edit-mode-btn');
+      const appContainer = document.getElementById('app');
+      
       if (state.editMode) {
         btn.className = "px-3 py-2 rounded-xl text-xs font-bold border bg-yellow-500/20 border-yellow-500 text-yellow-400 shrink-0 cursor-pointer";
         btn.innerText = "Edit Mode On";
+        appContainer.classList.add('edit-mode-active');
       } else {
         btn.className = "px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-400 shrink-0 cursor-pointer";
         btn.innerText = "Edit Mode Locked";
+        appContainer.classList.remove('edit-mode-active');
       }
     }
 
@@ -331,13 +361,76 @@
       event.target.value = '';
     }
 
+    function addResizeHandles(widget) {
+      const handles = ['se', 'sw', 'ne', 'nw'];
+      handles.forEach(pos => {
+        const handle = document.createElement('div');
+        handle.className = `resize-handle handle-${pos}`;
+        widget.appendChild(handle);
+
+        handle.onpointerdown = (e) => {
+          if (!state.editMode) return;
+          e.stopPropagation();
+          e.preventDefault();
+
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const startWidth = parseInt(document.defaultView.getComputedStyle(widget).width, 10);
+          const startHeight = parseInt(document.defaultView.getComputedStyle(widget).height, 10);
+          const startTop = widget.offsetTop;
+          const startLeft = widget.offsetLeft;
+
+          function onPointerMove(moveEvent) {
+            moveEvent.preventDefault();
+            const dx = moveEvent.clientX - startX;
+            const dy = moveEvent.clientY - startY;
+
+            if (pos.includes('e')) {
+              widget.style.width = Math.max(80, startWidth + dx) + 'px';
+            }
+            if (pos.includes('s')) {
+              widget.style.height = Math.max(60, startHeight + dy) + 'px';
+            }
+            if (pos.includes('w')) {
+              const newWidth = Math.max(80, startWidth - dx);
+              if (newWidth > 80) {
+                widget.style.width = newWidth + 'px';
+                widget.style.left = (startLeft + (startWidth - newWidth)) + 'px';
+              }
+            }
+            if (pos.includes('n')) {
+              const newHeight = Math.max(60, startHeight - dy);
+              if (newHeight > 60) {
+                widget.style.height = newHeight + 'px';
+                widget.style.top = (startTop + (startHeight - newHeight)) + 'px';
+              }
+            }
+          }
+
+          function onPointerUp() {
+            document.removeEventListener('pointermove', onPointerMove);
+            document.removeEventListener('pointerup', onPointerUp);
+            updateWidgetStorage(widget.id, {
+              top: widget.style.top,
+              left: widget.style.left,
+              width: widget.style.width,
+              height: widget.style.height
+            });
+          }
+
+          document.addEventListener('pointermove', onPointerMove);
+          document.addEventListener('pointerup', onPointerUp);
+        };
+      });
+    }
+
     function createImageWidget(data) {
       const canvas = document.getElementById('main-canvas');
       const placeholder = document.getElementById('canvas-placeholder');
       if (placeholder) placeholder.remove();
 
       const widget = document.createElement('div');
-      widget.className = "draggable-widget overflow-hidden rounded-xl shadow-2xl flex items-center justify-center";
+      widget.className = "draggable-widget overflow-hidden rounded-xl shadow-2xl flex items-center justify-center relative";
       widget.id = data.id;
       widget.style.width = data.width || '200px';
       widget.style.height = data.height || '200px';
@@ -350,6 +443,8 @@
       img.src = data.imgSrc;
       img.className = "w-full h-full object-cover pointer-events-none";
       widget.appendChild(img);
+
+      addResizeHandles(widget);
 
       let clickTimeout = null;
       widget.addEventListener('click', (e) => {
@@ -420,6 +515,23 @@
     }
 
     // Text Editor Modal Handlers & Double-Tap Edit Platform Pop-up
+    function toggleFormat(type) {
+      if (type === 'bold') {
+        state.formatBold = !state.formatBold;
+        document.getElementById('fmt-bold-btn').classList.toggle('bg-amber-400', state.formatBold);
+        document.getElementById('fmt-bold-btn').classList.toggle('text-black', state.formatBold);
+      } else if (type === 'italic') {
+        state.formatItalic = !state.formatItalic;
+        document.getElementById('fmt-italic-btn').classList.toggle('bg-amber-400', state.formatItalic);
+        document.getElementById('fmt-italic-btn').classList.toggle('text-black', state.formatItalic);
+      } else if (type === 'underline') {
+        state.formatUnderline = !state.formatUnderline;
+        document.getElementById('fmt-underline-btn').classList.toggle('bg-amber-400', state.formatUnderline);
+        document.getElementById('fmt-underline-btn').classList.toggle('text-black', state.formatUnderline);
+      }
+      updateTextPreview();
+    }
+
     function openTextEditorModal(event, existingData = null) {
       if (event) event.stopPropagation();
       closeHamburgerMenu();
@@ -438,6 +550,10 @@
         document.getElementById('txt-align').value = existingData.align || "left";
         document.getElementById('txt-color').value = existingData.color || "#ffffff";
         document.getElementById('txt-bg').value = existingData.bg || "#27272a";
+        
+        state.formatBold = !!existingData.bold;
+        state.formatItalic = !!existingData.italic;
+        state.formatUnderline = !!existingData.underline;
       } else {
         state.editingTextId = null;
         titleEl.innerHTML = `<i data-lucide="message-square" class="w-4 h-4"></i> Add Text Bubble`;
@@ -448,7 +564,18 @@
         document.getElementById('txt-align').value = "left";
         document.getElementById('txt-color').value = "#ffffff";
         document.getElementById('txt-bg').value = "#27272a";
+        
+        state.formatBold = false;
+        state.formatItalic = false;
+        state.formatUnderline = false;
       }
+
+      document.getElementById('fmt-bold-btn').classList.toggle('bg-amber-400', state.formatBold);
+      document.getElementById('fmt-bold-btn').classList.toggle('text-black', state.formatBold);
+      document.getElementById('fmt-italic-btn').classList.toggle('bg-amber-400', state.formatItalic);
+      document.getElementById('fmt-italic-btn').classList.toggle('text-black', state.formatItalic);
+      document.getElementById('fmt-underline-btn').classList.toggle('bg-amber-400', state.formatUnderline);
+      document.getElementById('fmt-underline-btn').classList.toggle('text-black', state.formatUnderline);
 
       modal.classList.remove('hidden');
       updateTextPreview();
@@ -476,6 +603,9 @@
       previewText.style.fontFamily = font;
       previewText.style.fontSize = size;
       previewText.style.textAlign = align;
+      previewText.style.fontWeight = state.formatBold ? 'bold' : 'normal';
+      previewText.style.fontStyle = state.formatItalic ? 'italic' : 'normal';
+      previewText.style.textDecoration = state.formatUnderline ? 'underline' : 'none';
       previewText.innerText = content;
     }
 
@@ -486,6 +616,9 @@
       const align = document.getElementById('txt-align').value;
       const color = document.getElementById('txt-color').value;
       const bg = document.getElementById('txt-bg').value;
+      const bold = state.formatBold;
+      const italic = state.formatItalic;
+      const underline = state.formatUnderline;
 
       if (state.editingTextId) {
         // Update existing widget
@@ -498,16 +631,19 @@
           if (textBox) {
             textBox.style.fontSize = size;
             textBox.style.textAlign = align;
+            textBox.style.fontWeight = bold ? 'bold' : 'normal';
+            textBox.style.fontStyle = italic ? 'italic' : 'normal';
+            textBox.style.textDecoration = underline ? 'underline' : 'none';
             textBox.innerText = content;
           }
-          updateWidgetStorage(state.editingTextId, { content, font, size, align, color, bg });
+          updateWidgetStorage(state.editingTextId, { content, font, size, align, color, bg, bold, italic, underline });
         }
       } else {
         // Create new widget
         const widgetData = {
           type: 'text',
           id: 'txt_' + Date.now(),
-          content, font, size, align, color, bg,
+          content, font, size, align, color, bg, bold, italic, underline,
           width: '240px',
           height: '160px',
           top: '100px',
@@ -525,7 +661,7 @@
       if (placeholder) placeholder.remove();
 
       const widget = document.createElement('div');
-      widget.className = "draggable-widget rounded-2xl shadow-2xl p-4 flex flex-col border border-zinc-700/50";
+      widget.className = "draggable-widget rounded-2xl shadow-2xl p-4 flex flex-col border border-zinc-700/50 relative";
       widget.id = data.id;
       widget.style.width = data.width || '240px';
       widget.style.height = data.height || '160px';
@@ -540,7 +676,13 @@
       textBox.className = "text-box-content flex-1 overflow-auto outline-none pointer-events-none";
       textBox.style.fontSize = data.size;
       textBox.style.textAlign = data.align;
+      textBox.style.fontWeight = data.bold ? 'bold' : 'normal';
+      textBox.style.fontStyle = data.italic ? 'italic' : 'normal';
+      textBox.style.textDecoration = data.underline ? 'underline' : 'none';
       textBox.innerText = data.content;
+
+      widget.appendChild(textBox);
+      addResizeHandles(widget);
 
       let textClickTimeout = null;
       widget.addEventListener('click', (e) => {
@@ -556,7 +698,10 @@
             size: textBox.style.fontSize,
             align: textBox.style.textAlign,
             color: widget.style.color,
-            bg: widget.style.backgroundColor
+            bg: widget.style.backgroundColor,
+            bold: textBox.style.fontWeight === 'bold',
+            italic: textBox.style.fontStyle === 'italic',
+            underline: textBox.style.textDecoration.includes('underline')
           });
         } else {
           textClickTimeout = setTimeout(() => {
@@ -565,12 +710,11 @@
         }
       });
 
-      widget.appendChild(textBox);
       makeDraggable(widget);
       canvas.appendChild(widget);
     }
 
-    // Generic Drag (Edit Mode restricted) & Resize Observer
+    // Generic Drag (Edit Mode restricted)
     function makeDraggable(elmnt) {
       let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
 
@@ -578,6 +722,7 @@
 
       function dragMouseDown(e) {
         if (!state.editMode) return; 
+        if (e.target.classList.contains('resize-handle')) return;
         if (e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
         e.preventDefault();
         pos3 = e.clientX;
@@ -606,14 +751,6 @@
           height: elmnt.style.height
         });
       }
-
-      const observer = new ResizeObserver(() => {
-        updateWidgetStorage(elmnt.id, {
-          width: elmnt.style.width,
-          height: elmnt.style.height
-        });
-      });
-      observer.observe(elmnt);
     }
 
     // Persistence Layer Helpers using localStorage
