@@ -62,7 +62,6 @@
 <body class="bg-black min-h-screen text-zinc-100 selection:bg-zinc-800 overflow-hidden">
   <div id="app" class="h-screen w-screen bg-black text-white flex flex-col overflow-hidden"></div>
 
-  <!-- Hidden File Inputs -->
   <input id="file-input" type="file" multiple class="hidden" />
   <input id="photo-input" type="file" accept="image/*,video/*,audio/*" multiple class="hidden" />
   <input id="change-image-input" type="file" accept="image/*" class="hidden" />
@@ -218,12 +217,155 @@
       }
     }
 
+    async function deleteFromDB(storeName, id) {
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).delete(id);
+      }
+    }
+
     function resetToken() {
       const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
       if (token !== null) {
         state.ghToken = token.trim();
         localStorage.setItem('af_gh_token', state.ghToken);
         alert('New token saved successfully!');
+        syncWithGitHub();
+      }
+    }
+
+    async function syncWithGitHub(forcePull = false) {
+      if (!state.ghToken) {
+        resetToken();
+        if (!state.ghToken) return;
+      }
+
+      state.isSyncing = true;
+      render();
+
+      try {
+        let cleanToken = state.ghToken.replace(/^(token|Bearer)\s+/i, '').trim();
+        const authHeader = `token ${cleanToken}`;
+        const headers = {
+          'Authorization': authHeader,
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        };
+
+        const metaUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/aiden_meta.json`;
+
+        if (forcePull) {
+          const getRes = await fetch(metaUrl, { headers });
+          if (getRes.ok) {
+            const getJson = await getRes.json();
+            const manifest = JSON.parse(decodeURIComponent(escape(atob(getJson.content))));
+
+            let allFolders = [];
+            let allFiles = [];
+            let allBubbles = [];
+
+            for (let chunkFileName of manifest.chunks) {
+              const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
+              const chunkRes = await fetch(chunkUrl, { headers });
+              if (chunkRes.ok) {
+                const chunkJson = await chunkRes.json();
+                const chunkData = JSON.parse(decodeURIComponent(escape(atob(chunkJson.content))));
+                if (chunkData.folders) allFolders.push(...chunkData.folders);
+                if (chunkData.files) allFiles.push(...chunkData.files);
+                if (chunkData.textBubbles) allBubbles.push(...chunkData.textBubbles);
+              }
+            }
+
+            state.folders = allFolders.length > 0 ? allFolders : state.folders;
+            state.files = allFiles.length > 0 ? allFiles : state.files;
+            state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
+
+            for (let f of state.folders) await saveFolder(f);
+            for (let fi of state.files) await saveFile(fi);
+            for (let b of state.textBubbles) await saveTextBubble(b);
+            alert('Synced chunks down from Cloud successfully!');
+            state.isSyncing = false;
+            render();
+            return;
+          }
+        }
+
+        const sanitizedFiles = state.files.map(file => {
+          const copy = { ...file };
+          delete copy.blobUrl;
+          delete copy.rawBlob;
+          return copy;
+        });
+
+        const CHUNK_SIZE = 15;
+        const fileChunks = [];
+        for (let i = 0; i < sanitizedFiles.length; i += CHUNK_SIZE) {
+          fileChunks.push(sanitizedFiles.slice(i, i + CHUNK_SIZE));
+        }
+        if (fileChunks.length === 0) fileChunks.push([]);
+
+        const chunkFileNames = [];
+
+        for (let index = 0; index < fileChunks.length; index++) {
+          const chunkFileName = `chunk_${index}.json`;
+          chunkFileNames.push(chunkFileName);
+          const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
+
+          let chunkSha = null;
+          const existingChunkRes = await fetch(chunkUrl, { headers });
+          if (existingChunkRes.ok) {
+            const existingData = await existingChunkRes.json();
+            chunkSha = existingData.sha;
+          }
+
+          const chunkPayloadData = {
+            folders: index === 0 ? state.folders : [],
+            files: fileChunks[index],
+            textBubbles: index === 0 ? state.textBubbles : []
+          };
+
+          const chunkPutPayload = {
+            message: `Sync Aiden Files Chunk ${index}`,
+            content: btoa(unescape(encodeURIComponent(JSON.stringify(chunkPayloadData)))),
+            ...(chunkSha && { sha: chunkSha })
+          };
+
+          let putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
+          if (putRes.status === 500) {
+            await new Promise(r => setTimeout(r, 1500));
+            putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
+          }
+          if (!putRes.ok) {
+            throw new Error(`Failed to upload chunk ${index} (status ${putRes.status})`);
+          }
+        }
+
+        let metaSha = null;
+        const existingMetaRes = await fetch(metaUrl, { headers });
+        if (existingMetaRes.ok) {
+          const metaJson = await existingMetaRes.json();
+          metaSha = metaJson.sha;
+        }
+
+        const metaManifest = { chunks: chunkFileNames, updatedAt: new Date().toISOString() };
+        const metaPutPayload = {
+          message: 'Update Aiden Files Manifest',
+          content: btoa(unescape(encodeURIComponent(JSON.stringify(metaManifest)))),
+          ...(metaSha && { sha: metaSha })
+        };
+
+        const metaPutRes = await fetch(metaUrl, { method: 'PUT', headers, body: JSON.stringify(metaPutPayload) });
+        if (!metaPutRes.ok) {
+          throw new Error('Failed to update manifest file on GitHub.');
+        }
+
+        alert('Chunked Sync Successful! Cloud backup updated safely without server errors.');
+      } catch (err) {
+        alert('Sync error: ' + err.message);
+      } finally {
+        state.isSyncing = false;
+        render();
       }
     }
 
@@ -243,70 +385,35 @@
       }
 
       app.innerHTML = `
-        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-950 px-3 py-2 flex flex-col gap-1.5 relative">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
-                  <i data-lucide="menu" class="w-5 h-5"></i>
+        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="toggleHamburgerMenu(event)" class="p-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center justify-center shadow-md cursor-pointer shrink-0">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+              </button>
+              ${state.currentFolderId !== null ? `
+                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                  <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                  <span>Back</span>
                 </button>
-                ${state.currentFolderId !== null ? `
-                  <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                    <span>Back</span>
-                  </button>
-                ` : ''}
-                <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-                  ${state.selectMode ? 'Cancel' : 'Select'}
-                </button>
-                <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
-                  ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
-                </button>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
-                <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
-                ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
-              </div>
+              ` : ''}
+              <button onclick="toggleSelectMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.selectMode ? 'Cancel' : 'Select'}
+              </button>
+              <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
+                ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
+              </button>
+              <button onclick="openTextEditorModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Text Bubble">
+                <i data-lucide="message-square" class="w-4 h-4"></i>
+                <span>Text Bubble</span>
+              </button>
             </div>
           </div>
 
-          <!-- Two scrollable quick action menu lines -->
-          <div class="flex flex-col gap-1 pt-1 border-t border-zinc-900">
-            <!-- Line 1 -->
-            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 whitespace-nowrap">
-              <button onclick="toggleEditMode()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-yellow-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit Mode
-              </button>
-              <button onclick="openUploadModal()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Item
-              </button>
-              <button onclick="openTextEditorModal()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="message-square" class="w-3.5 h-3.5"></i> Add Txt
-              </button>
-              <button onclick="openNewFolderModal()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i> New Folder
-              </button>
-            </div>
-            <!-- Line 2 -->
-            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 whitespace-nowrap">
-              <button onclick="window.location.href='lyrics.html'" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="music" class="w-3.5 h-3.5"></i> Lyrics
-              </button>
-              <button onclick="openPercentageCalculator()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="percent" class="w-3.5 h-3.5"></i> % Calculator
-              </button>
-              <button onclick="openChecklistModal()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="check-square" class="w-3.5 h-3.5"></i> Add Checklist
-              </button>
-              <button onclick="openLinkModal()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="link" class="w-3.5 h-3.5"></i> Add Link
-              </button>
-              <button onclick="openWebVideoModal()" class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-xs font-bold text-amber-400 flex items-center gap-1.5 shrink-0 cursor-pointer">
-                <i data-lucide="video" class="w-3.5 h-3.5"></i> Add Web Video
-              </button>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 text-xs text-zinc-400 truncate px-2 shrink-0">
+              <span onclick="navigateTo(null)" class="cursor-pointer hover:text-white">Home</span>
+              ${currentFolder ? `<span class="text-zinc-600">/</span><span class="text-white font-semibold truncate">${currentFolder.name}</span>` : ''}
             </div>
           </div>
 
@@ -327,8 +434,25 @@
               <button onclick="openWebVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
               </button>
+              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
+              </button>
               <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
+              </button>
+              <button onclick="openTextEditorModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble
+              </button>
+              <div class="h-px bg-zinc-800 my-1"></div>
+              <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
+                <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
+              </button>
+              <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
+              </button>
+              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
               </button>
             </div>
           ` : ''}
@@ -336,10 +460,35 @@
 
         <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
           ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
+          
+          ${state.activeUploads.length > 0 ? `
+            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
+              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
+                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
+                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                ${state.activeUploads.map(up => `
+                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="truncate font-medium text-white max-w-[70%]" title="${up.name}">${up.name}</span>
+                      <span class="text-amber-400 font-bold">${up.progress}%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
 
-          ${items.length === 0 ? `
+          ${items.length === 0 && state.activeUploads.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
+              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-amber-400 font-bold flex items-center gap-2">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Restore / Sync from Cloud Backup
+              </button>
             </div>
           ` : `
             <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
@@ -347,6 +496,24 @@
             </div>
           `}
         </main>
+
+        ${state.selectMode ? `
+          <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900/95 border border-zinc-700 backdrop-blur-xl px-6 py-3.5 rounded-2xl shadow-2xl z-40 flex items-center gap-4 flex-wrap justify-center">
+            <button onclick="toggleSelectAll()" class="px-3 py-2 bg-indigo-950 border border-indigo-700 rounded-xl text-xs font-bold text-indigo-300 flex items-center gap-1.5 shadow-sm shrink-0">
+              <i data-lucide="${allChildrenSelected ? 'check-square' : 'square'}" class="w-4 h-4"></i>
+              ${allChildrenSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            ${state.selectedIds.length > 0 ? `
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <span class="text-xs font-bold text-zinc-300">${state.selectedIds.length} Selected</span>
+              <div class="h-4 w-px bg-zinc-800"></div>
+              <button onclick="bulkCopy()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="copy" class="w-4 h-4"></i> Copy</button>
+              <button onclick="bulkMove()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="folder-output" class="w-4 h-4"></i> Move to folder</button>
+              <button onclick="bulkShare()" class="flex items-center gap-1.5 text-xs text-zinc-200 hover:text-amber-400 font-bold"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+              <button onclick="bulkDelete()" class="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+            ` : ''}
+          </div>
+        ` : ''}
 
         ${state.showUploadModal ? renderUploadModal() : ''}
         ${state.linkModal ? renderLinkModal() : ''}
@@ -359,30 +526,43 @@
       `;
 
       if (window.lucide) window.lucide.createIcons();
-    }
-
-    function openPercentageCalculator() {
-      let val1 = prompt('Enter the base number (or part):');
-      if (val1 === null) return;
-      let val2 = prompt('Enter the percentage or total:');
-      if (val2 === null) return;
-      let num1 = parseFloat(val1);
-      let num2 = parseFloat(val2);
-      if (isNaN(num1) || isNaN(num2)) {
-        alert('Please enter valid numbers.');
-        return;
-      }
-      let result = (num1 * num2) / 100;
-      alert(`${num2}% of ${num1} is: ${result}`);
+      attachDragAndResizeListeners();
     }
 
     function getFileIcon(type, name) {
       if (type === 'link' || name.startsWith('http')) return 'link';
       if (type === 'web-video') return 'video';
       if (type === 'app' || type === 'ios-app') return 'smartphone';
-      if (type.startsWith('video/') || name.endsWith('.mp4')) return 'video';
+      if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.mkv')) return 'video';
       if (type.startsWith('audio/')) return 'music';
+      if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
+      if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.html') || name.endsWith('.json') || name.endsWith('.csv')) return 'file-text';
+      if (name.endsWith('.docx') || name.endsWith('.doc') || name.endsWith('.xlsx') || name.endsWith('.xls')) return 'file-spreadsheet';
       return 'file';
+    }
+
+    function bubbleInlineStyle(item) {
+      let style = '';
+      if (item.fontFamily) style += `font-family:${item.fontFamily};`;
+      if (item.fontSize === 'lg') style += 'font-size:16px;';
+      else if (item.fontSize === 'sm') style += 'font-size:10px;';
+      else style += 'font-size:11px;';
+      if (item.isBold) style += 'font-weight:bold;';
+      if (item.isItalic) style += 'font-style:italic;';
+      if (item.isUnderline) style += 'text-decoration:underline;';
+      if (item.fontColor) style += `color:${item.fontColor};`;
+      if (item.bgColour) style += `background-color:${item.bgColour};`;
+      if (item.align) style += `text-align:${item.align};`;
+      return style;
+    }
+
+    function toggleChecklistItem(event, bubbleId, index) {
+      event.stopPropagation();
+      const bubble = state.textBubbles.find(b => b.id === bubbleId);
+      if (!bubble || !bubble.checklist) return;
+      bubble.checklist[index].checked = !bubble.checklist[index].checked;
+      saveTextBubble(bubble);
+      render();
     }
 
     function renderItem(item, index) {
@@ -390,38 +570,133 @@
       const row = Math.floor(index / 4);
       const posX = item.x !== undefined ? item.x : (20 + col * 140);
       const posY = item.y !== undefined ? item.y : (20 + row * 160);
+      const itemWidth = item.width || (isFolder(item) ? 96 : isBubble(item) ? 160 : 112);
+      const itemHeight = item.height || (isFolder(item) ? 96 : isBubble(item) ? 100 : 144);
       const folder = isFolder(item);
       const bubble = isBubble(item);
+      const isMenuOpen = state.activeMenuId === item.id;
+      const isSelected = state.selectedIds.includes(item.id);
 
       if (bubble) {
+        let bubbleCustomBg = item.bgColour ? `background-color:${item.bgColour};` : '';
+        const isChecklist = item.isChecklist && Array.isArray(item.checklist);
+
         return `
-          <div style="left: ${posX}px; top: ${posY}px; width: 160px; min-height: 100px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border border-zinc-700 rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden">
-              <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none text-xs text-zinc-200">${item.text || 'Empty bubble'}</div>
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; min-height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false, true)">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-700')} rounded-2xl p-3 shadow-lg relative flex flex-col justify-between overflow-hidden" style="${bubbleCustomBg}">
+              ${isChecklist ? `
+                <div class="flex flex-col gap-1.5 w-full">
+                  <div class="text-xs font-bold border-b border-zinc-700/50 pb-1 text-amber-400 truncate">${item.title || 'Checklist'}</div>
+                  <div class="flex flex-col gap-1 overflow-y-auto max-h-48 no-scrollbar pr-1">
+                    ${item.checklist.map((chk, idx) => `
+                      <div onclick="toggleChecklistItem(event, '${item.id}', ${idx})" class="flex items-center gap-2 text-xs hover:bg-white/5 p-1 rounded cursor-pointer select-none">
+                        <div class="w-4 h-4 rounded border ${chk.checked ? 'bg-amber-500 border-amber-500' : 'border-zinc-500'} flex items-center justify-center shrink-0">
+                          ${chk.checked ? '<i data-lucide="check" class="w-3 h-3 text-black stroke-[3]"></i>' : ''}
+                        </div>
+                        <span class="${chk.checked ? 'line-through text-zinc-500' : 'text-zinc-200'} truncate">${chk.text}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : `
+                <div class="w-full h-full whitespace-pre-wrap break-words leading-tight select-none pointer-events-none" style="${bubbleInlineStyle(item)}">${item.text || 'Empty bubble'}</div>
+              `}
+              <div class="select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-3.5 h-3.5 pointer-events-none"></i></button>
             </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, false, true) : ''}
           </div>
         `;
       } else if (folder) {
         return `
-          <div style="left: ${posX}px; top: ${posY}px; width: 96px; height: 96px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
-            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border border-zinc-700/60 flex flex-col items-center justify-center relative overflow-hidden">
-              <i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>
-              <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md">${item.name}</span>
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', true)">
+            <div class="folder-cube w-full h-full shrink-0 bg-gradient-to-b from-zinc-800 to-zinc-950 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-zinc-700/60'} flex flex-col items-center justify-center relative overflow-hidden group">
+              ${item.coverUrl ? `<img src="${item.coverUrl}" class="w-full h-full object-cover rounded-[20px] pointer-events-none" />` : `<i data-lucide="folder" class="w-10 h-10 text-amber-400 fill-amber-400/20 stroke-[1.5] pointer-events-none"></i>`}
+              <div class="select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+              <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
+              <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
             </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, true) : ''}
           </div>
         `;
       } else {
+        const type = item.fileType || '';
+        const isImage = type.startsWith('image/');
+        const isVideo = isVideoFile(item);
+        const isWebVideo = type === 'web-video';
+        const isLink = type === 'link';
+        const isApp = type === 'app' || type === 'ios-app';
+        const imgSrc = item.thumbnailData || item.dataUrl;
+        const icon = getFileIcon(type, item.name);
+
         return `
-          <div style="left: ${posX}px; top: ${posY}px; width: 112px; height: 144px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
-            <div class="w-full h-full shrink-0 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
+          <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
+            <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
               <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                <i data-lucide="file" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
-                <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md">${item.name}</span>
+                ${(isImage || ((isApp || isLink || isWebVideo) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                  <div class="flex flex-col items-center gap-1 text-zinc-400">
+                    <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
+                    ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
+                    ${isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Web Video</span>' : ''}
+                    ${isApp ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">iOS App</span>' : ''}
+                    ${isVideo && !isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
+                    ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
+                    ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
+                    ${type.startsWith('text/') || item.name.endsWith('.txt') || item.name.endsWith('.html') || item.name.endsWith('.json') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">DOC</span>' : ''}
+                  </div>
+                `}
+                <div class="select-checkbox absolute top-2 left-2 w-5 h-5 rounded-md border border-zinc-400 items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-black/60'} pointer-events-none">${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-white"></i>' : ''}</div>
+                <button type="button" onclick="toggleMenu(event, '${item.id}')" class="absolute top-1.5 right-1.5 p-2 bg-black/70 hover:bg-black rounded-full text-zinc-200 backdrop-blur-sm z-30 cursor-pointer shadow-md"><i data-lucide="more-vertical" class="w-4 h-4 pointer-events-none"></i></button>
+                <span class="absolute bottom-2 left-2 right-2 text-[11px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-lg truncate text-center pointer-events-none shadow-md" title="${item.name}">${item.name}</span>
               </div>
             </div>
+            <div class="resize-handle absolute bottom-0 right-0 bg-yellow-500 rounded-tl-xl cursor-se-resize items-center justify-center z-20 shadow-md"><i data-lucide="arrow-down-right" class="w-3 h-3 text-black stroke-[3]"></i></div>
+            ${isMenuOpen ? renderContextMenu(item, false) : ''}
           </div>
         `;
       }
+    }
+
+    function renderContextMenu(item, isFolderItem, isBubbleItem = false) {
+      if (isBubbleItem) {
+        return `
+          <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+            ${item.isChecklist ? '' : `<button type="button" onclick="openTextEditorModal('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Edit Text & Format</button>`}
+            <button type="button" onclick="moveToFolder('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <button type="button" onclick="renameItem('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false, true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          </div>
+        `;
+      }
+      return `
+        <div onclick="event.stopPropagation()" class="absolute left-full top-0 ml-2 w-48 bg-black border border-zinc-700/90 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-1">
+          ${isFolderItem ? `
+            <button type="button" onclick="triggerFolderCover('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change cover image</button>
+            <button type="button" onclick="renameItem('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="moveToFolder('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', true)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          ` : `
+            <button type="button" onclick="openQuickView('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Quick Look</button>
+            <button type="button" onclick="openTextEditorModal(null, '${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-amber-400 font-medium cursor-pointer"><i data-lucide="message-square" class="w-3.5 h-3.5 text-amber-400 pointer-events-none"></i> Add Text Bubble</button>
+            <button type="button" onclick="copySingleFileClipboard('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="copy" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Copy to Clipboard</button>
+            <button type="button" onclick="shareFile('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="share" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> iOS Share</button>
+            <button type="button" onclick="triggerChangeImage('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="image" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Change Image</button>
+            <button type="button" onclick="renameItem('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="edit-3" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Rename</button>
+            <button type="button" onclick="moveToFolder('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="folder-output" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Move to folder</button>
+            <button type="button" onclick="resizeByFinger('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="maximize-2" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Resize by finger</button>
+            <button type="button" onclick="snapToOriginalShape('${item.id}')" class="w-full px-3 py-2 text-left hover:bg-zinc-800 flex items-center gap-2 text-zinc-200 cursor-pointer"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-zinc-400 pointer-events-none"></i> Snap to original shape</button>
+            <div class="h-px bg-zinc-800 my-1"></div>
+            <button type="button" onclick="deleteItemConfirm('${item.id}', false)" class="w-full px-3 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 font-medium cursor-pointer"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-red-400 pointer-events-none"></i> Delete with confirmation</button>
+          `}
+        </div>
+      `;
     }
 
     function renderUploadModal() {
@@ -429,9 +704,13 @@
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeUploadModal()">
           <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
             <h3 class="text-lg font-bold text-white">Add Item</h3>
+            <p class="text-xs text-zinc-400">Where do you want to upload your files from?</p>
             <div class="flex flex-col gap-2.5 mt-2">
+              <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
+              <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
-              <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video</button>
+              <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video / Embed</button>
+              <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
               <button onclick="openChecklistModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Checklist</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
               <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
@@ -447,14 +726,83 @@
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeChecklistModal()">
           <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
             <h3 class="text-lg font-bold text-white">Add Checklist</h3>
-            <input id="checklist-title-input" type="text" placeholder="Checklist Title" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+            <p class="text-xs text-zinc-400">Create a interactive task list to add to your workspace.</p>
+            <div class="flex flex-col gap-3 mt-1 text-left">
+              <input id="checklist-title-input" type="text" placeholder="Checklist Title (e.g. To-Do List)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              
+              <div class="flex flex-col gap-2 max-h-48 overflow-y-auto no-scrollbar" id="checklist-items-container">
+                ${state.checklistDraftItems.map((item, idx) => `
+                  <div class="flex items-center gap-2">
+                    <input type="text" value="${item}" onchange="updateChecklistDraftItem(${idx}, this.value)" placeholder="Item ${idx + 1}" class="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-amber-500" />
+                    <button type="button" onclick="removeChecklistDraftItem(${idx})" class="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                  </div>
+                `).join('')}
+              </div>
+
+              <button type="button" onclick="addChecklistDraftItem()" class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-amber-400 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-zinc-700/50">
+                <i data-lucide="plus" class="w-4 h-4"></i> Add Line Item
+              </button>
+            </div>
+
             <div class="flex items-center gap-2 mt-2">
               <button onclick="closeChecklistModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveChecklistModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs">Create</button>
+              <button onclick="saveChecklistModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Create Checklist</button>
             </div>
           </div>
         </div>
       `;
+    }
+
+    function openChecklistModal() {
+      state.checklistDraftItems = [''];
+      state.checklistModal = true;
+      render();
+    }
+
+    function closeChecklistModal() {
+      state.checklistModal = false;
+      render();
+    }
+
+    function addChecklistDraftItem() {
+      state.checklistDraftItems.push('');
+      render();
+    }
+
+    function updateChecklistDraftItem(index, val) {
+      state.checklistDraftItems[index] = val;
+    }
+
+    function removeChecklistDraftItem(index) {
+      state.checklistDraftItems.splice(index, 1);
+      render();
+    }
+
+    async function saveChecklistModal() {
+      const title = (document.getElementById('checklist-title-input').value || 'Checklist').trim();
+      const validItems = state.checklistDraftItems.map(i => i.trim()).filter(i => i.length > 0);
+      
+      if (validItems.length === 0) {
+        alert('Please add at least one item to your checklist.');
+        return;
+      }
+
+      const newBubble = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        title: title,
+        isBubble: true,
+        isChecklist: true,
+        checklist: validItems.map(text => ({ text, checked: false })),
+        width: 180,
+        height: 120,
+        x: 40,
+        y: 40
+      };
+
+      state.textBubbles.push(newBubble);
+      await saveTextBubble(newBubble);
+      closeChecklistModal();
     }
 
     function renderLinkModal() {
@@ -462,10 +810,21 @@
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeLinkModal()">
           <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
             <h3 class="text-lg font-bold text-white">Add Web Link</h3>
-            <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+            <p class="text-xs text-zinc-400">Enter the URL and an optional display thumbnail.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="link-url-input" type="text" placeholder="https://example.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="link-name-input" type="text" placeholder="Site Name (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Display Thumbnail</span>
+                <button type="button" onclick="document.getElementById('link-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.linkModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.linkModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.linkModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
             <div class="flex items-center gap-2 mt-2">
               <button onclick="closeLinkModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveLinkModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs">Add Link</button>
+              <button onclick="saveLinkModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add Link</button>
             </div>
           </div>
         </div>
@@ -476,11 +835,102 @@
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeWebVideoModal()">
           <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
-            <h3 class="text-lg font-bold text-white">Add Web Video</h3>
-            <input id="web-video-url-input" type="text" placeholder="https://youtube.com/..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+            <h3 class="text-lg font-bold text-white">Add Web Video / Embed</h3>
+            <p class="text-xs text-zinc-400">Enter a direct video URL, YouTube, Videa, Dailymotion link or embed code.</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="web-video-url-input" type="text" placeholder="https://youtube.com/... or embed link" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="web-video-name-input" type="text" placeholder="Video Title (Optional)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">Video Thumbnail</span>
+                <button type="button" onclick="document.getElementById('web-video-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.webVideoModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.webVideoModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.webVideoModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
             <div class="flex items-center gap-2 mt-2">
               <button onclick="closeWebVideoModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveWebVideoModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs">Add Video</button>
+              <button onclick="saveWebVideoModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add Video</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPopupVideoModal() {
+      let embedHtml = '';
+      let url = state.popupVideoUrl || '';
+      
+      let ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      let dmMatch = url.match(/(?:dailymotion\.com\/(?:video\/|embed\/video\/)|dai\.ly\/)([\w-]+)/);
+      
+      if (ytMatch && ytMatch[1]) {
+        embedHtml = `<iframe class="w-full h-full" src="https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+      } else if (dmMatch && dmMatch[1]) {
+        embedHtml = `<iframe class="w-full h-full" src="https://www.dailymotion.com/embed/video/${dmMatch[1]}?autoplay=1" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+      } else if (url.includes('<iframe') || url.includes('<object')) {
+        embedHtml = url;
+      } else {
+        embedHtml = `<video id="popup-video-element" controls autoplay playsinline webkit-playsinline class="w-full h-full object-contain" src="${url}"></video>`;
+      }
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onclick="closePopupVideo()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden w-full max-w-3xl flex flex-col shadow-2xl relative" onclick="event.stopPropagation()">
+            <div class="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-300">
+              <span class="font-bold text-amber-400 flex items-center gap-2"><i data-lucide="video" class="w-4 h-4"></i> Pop-up Video Player / Embed</span>
+              <button onclick="closePopupVideo()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="relative w-full bg-black flex items-center justify-center aspect-video">
+              ${embedHtml}
+            </div>
+            <div class="bg-zinc-950 px-4 py-3 border-t border-zinc-800 flex items-center justify-between text-xs">
+              <span class="text-zinc-400">Stream or Embed Player</span>
+              <button onclick="closePopupVideo()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl flex items-center gap-2">
+                Close Player
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function toggleVideoPip() {
+      const vid = document.getElementById('popup-video-element');
+      if (!vid) return;
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else if (vid.requestPictureInPicture) {
+          await vid.requestPictureInPicture();
+        } else {
+          alert('Picture-in-Picture is not supported in this browser.');
+        }
+      } catch (e) {
+        alert('PiP mode could not be activated: ' + e.message);
+      }
+    }
+
+    function renderAppModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAppModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white">Add iOS Device App</h3>
+            <p class="text-xs text-zinc-400">Enter the custom iOS URL scheme or App Store deep link (e.g., <code class="text-amber-400">photos-redirect://</code> or <code class="text-amber-400">shortcuts://</code>).</p>
+            <div class="flex flex-col gap-3 mt-2">
+              <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
+                <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
+                  ${state.appModalThumbData ? 'Change Image' : 'Upload Image'}
+                </button>
+              </div>
+              ${state.appModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.appModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeAppModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button onclick="saveAppModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add App</button>
             </div>
           </div>
         </div>
@@ -488,80 +938,1086 @@
     }
 
     function renderTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return '';
+
+      const colorSwatches = ['#ffffff', '#fbbf24', '#f87171', '#34d399', '#60a5fa', '#a78bfa', '#f472b6', '#fdba74', '#000000'];
+      const bgSwatches = ['#09090b', '#18181b', '#27272a', '#7f1d1d', '#14532d', '#1e3a8a', '#581c87', '#701a75', '#78350f'];
+      const fonts = [
+        { name: 'Sans-Serif', value: 'system-ui, -apple-system, sans-serif' },
+        { name: 'Serif', value: 'Georgia, Cambria, "Times New Roman", Times, serif' },
+        { name: 'Monospace', value: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' },
+        { name: 'Display', value: '"Impact", Charcoal, sans-serif' }
+      ];
+      const aligns = [
+        { key: 'left', icon: 'align-left' },
+        { key: 'center', icon: 'align-center' },
+        { key: 'right', icon: 'align-right' }
+      ];
+
       return `
         <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeTextEditorModal()">
-          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl" onclick="event.stopPropagation()">
-            <h3 class="text-sm font-bold text-white">New Text Bubble</h3>
-            <div id="modal-text-input" contenteditable="true" data-placeholder="Type your note here..." class="w-full min-h-[100px] bg-zinc-950 border border-zinc-800 rounded-2xl p-3 text-white text-xs"></div>
-            <button onclick="saveTextEditorModal()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs">Save</button>
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 class="text-sm font-bold text-white">${ed.isNew ? 'New Text Bubble' : 'Edit Text Bubble'}</h3>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="textEditorUndo()" ${ed.historyIndex <= 0 ? 'disabled' : ''} class="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-full text-zinc-300" title="Undo"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                <button type="button" onclick="textEditorRedo()" ${ed.historyIndex >= ed.history.length - 1 ? 'disabled' : ''} class="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-full text-zinc-300" title="Redo"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
+                <button onclick="closeTextEditorModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 ml-1"><i data-lucide="x" class="w-4 h-4"></i></button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 bg-zinc-950 p-2 rounded-xl border border-zinc-800 flex-wrap">
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'sm')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'sm' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Small</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'md')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'md' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Normal</button>
+                <button type="button" onclick="applyTextEditorFormat('fontSize', 'lg')" class="px-2.5 py-1 rounded-md text-xs font-semibold ${ed.fontSize === 'lg' ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}">Large</button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <select onchange="applyTextEditorFormat('fontFamily', this.value)" class="bg-zinc-950 text-zinc-200 text-xs px-2 py-1 rounded-md border border-zinc-800 outline-none cursor-pointer">
+                  ${fonts.map(f => `<option value="${f.value}" ${ed.fontFamily === f.value ? 'selected' : ''}>${f.name}</option>`).join('')}
+                </select>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                <button type="button" onclick="applyTextEditorFormat('isBold')" class="p-1.5 rounded-md ${ed.isBold ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Bold"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isItalic')" class="p-1.5 rounded-md ${ed.isItalic ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Italic"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                <button type="button" onclick="applyTextEditorFormat('isUnderline')" class="p-1.5 rounded-md ${ed.isUnderline ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Underline"><i data-lucide="underline" class="w-4 h-4"></i></button>
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+                ${aligns.map(a => `
+                  <button type="button" onclick="applyTextEditorFormat('align', '${a.key}')" class="p-1.5 rounded-md ${ed.align === a.key ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-zinc-800'}" title="Align ${a.key}"><i data-lucide="${a.icon}" class="w-4 h-4"></i></button>
+                `).join('')}
+              </div>
+              <div class="h-5 w-px bg-zinc-800"></div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 items-center">
+                <span class="text-[10px] text-zinc-400 font-bold px-1">Text:</span>
+                <label class="cursor-pointer relative" title="Text colour">
+                  <input type="color" value="${ed.fontColor || '#ffffff'}" oninput="applyTextEditorFormat('fontColor', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <span class="p-1 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="palette" class="w-4 h-4" style="color:${ed.fontColor || '#ffffff'}"></i></span>
+                </label>
+                ${colorSwatches.slice(0, 4).map(c => `
+                  <button type="button" onclick="applyTextEditorFormat('fontColor', '${c}')" class="w-4 h-4 rounded-full border ${ed.fontColor === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
+                `).join('')}
+                <button type="button" onclick="applyTextEditorFormat('fontColor', null)" class="p-1 rounded-md text-zinc-400 hover:bg-zinc-800" title="Reset text colour"><i data-lucide="eraser" class="w-3.5 h-3.5"></i></button>
+              </div>
+              <div class="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 items-center">
+                <span class="text-[10px] text-zinc-400 font-bold px-1">Bg:</span>
+                <label class="cursor-pointer relative" title="Background colour">
+                  <input type="color" value="${ed.bgColour || '#18181b'}" oninput="applyTextEditorFormat('bgColour', this.value)" class="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  <span class="p-1 rounded-md text-zinc-300 hover:bg-zinc-800 flex items-center"><i data-lucide="paint-bucket" class="w-4 h-4" style="color:${ed.bgColour || '#18181b'}"></i></span>
+                </label>
+                ${bgSwatches.slice(0, 4).map(c => `
+                  <button type="button" onclick="applyTextEditorFormat('bgColour', '${c}')" class="w-4 h-4 rounded-full border ${ed.bgColour === c ? 'ring-2 ring-amber-400 border-amber-400' : 'border-zinc-600'}" style="background:${c}" title="${c}"></button>
+                `).join('')}
+                <button type="button" onclick="applyTextEditorFormat('bgColour', null)" class="p-1 rounded-md text-zinc-400 hover:bg-zinc-800" title="Reset background colour"><i data-lucide="eraser" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+
+            <div class="relative w-full min-h-[140px] bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-col justify-between" style="${ed.bgColour ? `background-color:${ed.bgColour};` : ''}">
+              <div id="modal-text-input" contenteditable="true" oninput="handleTextEditorInput(this)" data-placeholder="Type your note or thoughts here..." class="w-full min-h-[100px] max-h-[300px] overflow-y-auto leading-relaxed select-text text-white" style="${editorPreviewStyle(ed)}"></div>
+            </div>
+
+            <div class="flex items-center gap-2 mt-1">
+              <button type="button" onclick="closeTextEditorModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
+              <button type="button" onclick="saveTextEditorModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Save Text Bubble</button>
+            </div>
           </div>
         </div>
       `;
     }
 
-    function toggleHamburgerMenu(e) { e.stopPropagation(); state.hamburgerMenuOpen = !state.hamburgerMenuOpen; render(); }
-    function closeHamburgerMenu() { if (state.hamburgerMenuOpen) { state.hamburgerMenuOpen = false; render(); } }
-    function toggleEditMode() { state.editMode = !state.editMode; render(); }
-    function toggleSelectMode() { state.selectMode = !state.selectMode; render(); }
-    function navigateTo(folderId) { state.currentFolderId = folderId; render(); }
-    function navigateBack() {
-      const cur = state.folders.find(f => f.id === state.currentFolderId);
-      navigateTo(cur ? cur.parentId : null);
+    function editorPreviewStyle(ed) {
+      let style = '';
+      if (ed.fontFamily) style += `font-family:${ed.fontFamily};`;
+      if (ed.fontSize === 'lg') style += 'font-size:16px;';
+      else if (ed.fontSize === 'sm') style += 'font-size:10px;';
+      else style += 'font-size:12px;';
+      if (ed.isBold) style += 'font-weight:bold;';
+      if (ed.isItalic) style += 'font-style:italic;';
+      if (ed.isUnderline) style += 'text-decoration:underline;';
+      if (ed.fontColor) style += `color:${ed.fontColor};`;
+      if (ed.align) style += `text-align:${ed.align};`;
+      return style;
     }
-    function closeMenu() { state.activeMenuId = null; render(); }
-    
+
+    function openTextEditorModal(bubbleId = null, attachedFileId = null) {
+      let ed = {
+        bubbleId,
+        attachedFileId,
+        isNew: !bubbleId,
+        text: '',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: 'md',
+        isBold: false,
+        isItalic: false,
+        isUnderline: false,
+        fontColor: null,
+        bgColour: null,
+        align: 'left',
+        history: [],
+        historyIndex: -1
+      };
+
+      if (bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === bubbleId);
+        if (bubble) {
+          ed.text = bubble.text || '';
+          ed.fontFamily = bubble.fontFamily || ed.fontFamily;
+          ed.fontSize = bubble.fontSize || ed.fontSize;
+          ed.isBold = !!bubble.isBold;
+          ed.isItalic = !!bubble.isItalic;
+          ed.isUnderline = !!bubble.isUnderline;
+          ed.fontColor = bubble.fontColor || null;
+          ed.bgColour = bubble.bgColour || null;
+          ed.align = bubble.align || 'left';
+        }
+      }
+
+      ed.history.push(getTextEditorSnapshot(ed));
+      ed.historyIndex = 0;
+
+      state.textEditorModal = ed;
+      render();
+
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) {
+          inp.innerText = ed.text;
+          inp.focus();
+        }
+      }, 50);
+    }
+
+    function getTextEditorSnapshot(ed) {
+      return {
+        text: ed.text,
+        fontSize: ed.fontSize,
+        fontFamily: ed.fontFamily,
+        isBold: ed.isBold,
+        isItalic: ed.isItalic,
+        isUnderline: ed.isUnderline,
+        fontColor: ed.fontColor,
+        bgColour: ed.bgColour,
+        align: ed.align
+      };
+    }
+
+    function pushTextEditorHistory() {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+      if (ed.historyIndex < ed.history.length - 1) {
+        ed.history = ed.history.slice(0, ed.historyIndex + 1);
+      }
+      ed.history.push(getTextEditorSnapshot(ed));
+      ed.historyIndex = ed.history.length - 1;
+    }
+
+    function handleTextEditorInput(elem) {
+      if (!state.textEditorModal) return;
+      state.textEditorModal.text = elem.innerText;
+    }
+
+    function applyTextEditorFormat(key, value = undefined) {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+
+      if (typeof ed[key] === 'boolean') {
+        ed[key] = !ed[key];
+      } else {
+        ed[key] = value;
+      }
+      pushTextEditorHistory();
+      render();
+
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) {
+          inp.innerText = ed.text;
+        }
+      }, 30);
+    }
+
+    function textEditorUndo() {
+      const ed = state.textEditorModal;
+      if (!ed || ed.historyIndex <= 0) return;
+      ed.historyIndex--;
+      const snap = ed.history[ed.historyIndex];
+      Object.assign(ed, snap);
+      render();
+
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) inp.innerText = ed.text;
+      }, 30);
+    }
+
+    function textEditorRedo() {
+      const ed = state.textEditorModal;
+      if (!ed || ed.historyIndex >= ed.history.length - 1) return;
+      ed.historyIndex++;
+      const snap = ed.history[ed.historyIndex];
+      Object.assign(ed, snap);
+      render();
+
+      setTimeout(() => {
+        const inp = document.getElementById('modal-text-input');
+        if (inp) inp.innerText = ed.text;
+      }, 30);
+    }
+
+    function closeTextEditorModal() {
+      state.textEditorModal = null;
+      render();
+    }
+
+    async function saveTextEditorModal() {
+      const ed = state.textEditorModal;
+      if (!ed) return;
+
+      const inp = document.getElementById('modal-text-input');
+      if (inp) ed.text = inp.innerText.trim();
+
+      if (ed.bubbleId) {
+        const bubble = state.textBubbles.find(b => b.id === ed.bubbleId);
+        if (bubble) {
+          bubble.text = ed.text;
+          bubble.fontFamily = ed.fontFamily;
+          bubble.fontSize = ed.fontSize;
+          bubble.isBold = ed.isBold;
+          bubble.isItalic = ed.isItalic;
+          bubble.isUnderline = ed.isUnderline;
+          bubble.fontColor = ed.fontColor;
+          bubble.bgColour = ed.bgColour;
+          bubble.align = ed.align;
+          await saveTextBubble(bubble);
+        }
+      } else {
+        const newBubble = {
+          id: uid(),
+          parentId: state.currentFolderId,
+          attachedFileId: ed.attachedFileId || null,
+          isBubble: true,
+          text: ed.text,
+          fontFamily: ed.fontFamily,
+          fontSize: ed.fontSize,
+          isBold: ed.isBold,
+          isItalic: ed.isItalic,
+          isUnderline: ed.isUnderline,
+          fontColor: ed.fontColor,
+          bgColour: ed.bgColour,
+          align: ed.align,
+          width: 140,
+          height: 80,
+          x: 20,
+          y: 20
+        };
+        state.textBubbles.push(newBubble);
+        await saveTextBubble(newBubble);
+      }
+
+      closeTextEditorModal();
+    }
+
+    function renderQuickViewModal() {
+      const file = state.files.find(f => f.id === state.quickViewFileId);
+      if (!file) return '';
+
+      const type = file.fileType || '';
+      const isImg = type.startsWith('image/');
+      const isVid = isVideoFile(file);
+      const isAud = isAudioFile(file);
+      const isWebVideo = type === 'web-video';
+
+      let contentHtml = '';
+      if (isImg) {
+        contentHtml = `<img src="${file.dataUrl}" class="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl" />`;
+      } else if (isVid && !isWebVideo) {
+        const src = file.blobUrl || file.dataUrl;
+        contentHtml = `<video src="${src}" controls autoplay playsinline webkit-playsinline class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl bg-black"></video>`;
+      } else if (isWebVideo) {
+        contentHtml = `
+          <div class="flex flex-col items-center gap-4 text-center">
+            <button onclick="playPopupVideo('${file.videoUrl}')" class="px-6 py-4 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-2xl flex items-center gap-2 shadow-xl shadow-amber-500/20 text-sm">
+              <i data-lucide="play" class="w-5 h-5 fill-black"></i> Launch Video Player / Embed
+            </button>
+            <span class="text-xs text-zinc-400 break-all">${file.videoUrl}</span>
+          </div>
+        `;
+      } else if (isAud) {
+        const src = file.blobUrl || file.dataUrl;
+        contentHtml = `
+          <div class="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col items-center gap-4 w-full max-w-sm">
+            <i data-lucide="music" class="w-16 h-16 text-amber-400 animate-pulse"></i>
+            <span class="text-sm font-bold text-white text-center">${file.name}</span>
+            <audio src="${src}" controls autoplay class="w-full"></audio>
+          </div>
+        `;
+      } else {
+        contentHtml = `
+          <div class="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl flex flex-col items-center gap-3 text-center max-w-xs">
+            <i data-lucide="file-text" class="w-12 h-12 text-amber-400"></i>
+            <span class="text-xs font-bold text-white">${file.name}</span>
+            <span class="text-[10px] text-zinc-500">Preview not directly streamable. You can open or share it below.</span>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onclick="closeQuickView()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 max-w-2xl w-full flex flex-col items-center gap-4 relative shadow-2xl" onclick="event.stopPropagation()">
+            <div class="w-full flex items-center justify-between border-b border-zinc-800 pb-3">
+              <span class="text-xs font-bold text-zinc-300 truncate max-w-[80%]">${file.name}</span>
+              <button onclick="closeQuickView()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="w-full flex items-center justify-center min-h-[200px] py-2">
+              ${contentHtml}
+            </div>
+            <div class="w-full flex items-center justify-end gap-2 border-t border-zinc-800 pt-3">
+              <button onclick="shareFile('${file.id}')" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-xs font-bold text-zinc-200 flex items-center gap-2"><i data-lucide="share" class="w-4 h-4"></i> Share</button>
+              <button onclick="closeQuickView()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs">Done</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleHamburgerMenu(e) {
+      if (e) e.stopPropagation();
+      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
+      render();
+    }
+    function closeHamburgerMenu() {
+      if (state.hamburgerMenuOpen) {
+        state.hamburgerMenuOpen = false;
+        render();
+      }
+    }
+
+    function toggleEditMode() {
+      state.editMode = !state.editMode;
+      render();
+    }
+
+    function toggleSelectMode() {
+      state.selectMode = !state.selectMode;
+      if (!state.selectMode) state.selectedIds = [];
+      render();
+    }
+
+    function toggleSelectAll() {
+      const childrenFolders = state.folders.filter(f => f.parentId === state.currentFolderId && f.id !== 'root');
+      const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
+      const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
+      const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
+
+      const allSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
+      if (allSelected) {
+        state.selectedIds = [];
+      } else {
+        state.selectedIds = items.map(item => item.id);
+      }
+      render();
+    }
+
+    function navigateTo(folderId) {
+      state.currentFolderId = folderId;
+      state.selectedIds = [];
+      state.activeMenuId = null;
+      render();
+    }
+
+    function navigateBack() {
+      if (state.currentFolderId === null) return;
+      const cur = state.folders.find(f => f.id === state.currentFolderId);
+      if (cur) {
+        navigateTo(cur.parentId);
+      } else {
+        navigateTo(null);
+      }
+    }
+
+    function toggleMenu(e, id) {
+      e.stopPropagation();
+      state.activeMenuId = state.activeMenuId === id ? null : id;
+      render();
+    }
+
+    function closeMenu() {
+      if (state.activeMenuId !== null) {
+        state.activeMenuId = null;
+        render();
+      }
+    }
+
+    function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
+      if (e.target.closest('button')) return;
+
+      if (state.selectMode) {
+        if (state.selectedIds.includes(id)) {
+          state.selectedIds = state.selectedIds.filter(i => i !== id);
+        } else {
+          state.selectedIds.push(id);
+        }
+        render();
+        return;
+      }
+
+      if (isFolderItem) {
+        navigateTo(id);
+      } else if (isBubbleItem) {
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble && !bubble.isChecklist) {
+          openTextEditorModal(id);
+        }
+      } else {
+        const file = state.files.find(f => f.id === id);
+        if (!file) return;
+
+        if (file.fileType === 'link' && file.url) {
+          window.open(file.url, '_blank');
+        } else if (file.fileType === 'web-video' && file.videoUrl) {
+          playPopupVideo(file.videoUrl);
+        } else if ((file.fileType === 'app' || file.fileType === 'ios-app') && file.appScheme) {
+          window.location.href = file.appScheme;
+        } else {
+          openQuickView(id);
+        }
+      }
+    }
+
+    function playPopupVideo(url) {
+      state.popupVideoUrl = url;
+      render();
+    }
+    function closePopupVideo() {
+      state.popupVideoUrl = null;
+      render();
+    }
+
+    function openQuickView(id) {
+      state.quickViewFileId = id;
+      state.activeMenuId = null;
+      render();
+    }
+    function closeQuickView() {
+      state.quickViewFileId = null;
+      render();
+    }
+
     function openUploadModal() { state.showUploadModal = true; render(); }
     function closeUploadModal() { state.showUploadModal = false; render(); }
-    function openLinkModal() { state.linkModal = true; render(); }
-    function closeLinkModal() { state.linkModal = false; render(); }
-    function openWebVideoModal() { state.webVideoModal = true; render(); }
-    function closeWebVideoModal() { state.webVideoModal = false; render(); }
-    function openChecklistModal() { state.checklistModal = true; render(); }
-    function closeChecklistModal() { state.checklistModal = false; render(); }
-    function openTextEditorModal() { state.textEditorModal = { text: '' }; render(); }
-    function closeTextEditorModal() { state.textEditorModal = null; render(); }
+
+    function openLinkModal() { state.linkModal = true; state.linkModalThumbData = null; render(); }
+    function closeLinkModal() { state.linkModal = false; state.linkModalThumbData = null; render(); }
+
+    function openWebVideoModal() { state.webVideoModal = true; state.webVideoModalThumbData = null; render(); }
+    function closeWebVideoModal() { state.webVideoModal = false; state.webVideoModalThumbData = null; render(); }
+
+    function openAppModal() { state.appModal = true; state.appModalThumbData = null; render(); }
+    function closeAppModal() { state.appModal = false; state.appModalThumbData = null; render(); }
 
     async function saveLinkModal() {
-      const url = document.getElementById('link-url-input').value.trim();
-      if (!url) return;
-      state.files.push({ id: uid(), parentId: state.currentFolderId, name: url, fileType: 'link', url });
+      const urlInp = document.getElementById('link-url-input');
+      const nameInp = document.getElementById('link-name-input');
+      if (!urlInp || !urlInp.value.trim()) {
+        alert('Please enter a valid URL.');
+        return;
+      }
+      let url = urlInp.value.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      const name = nameInp && nameInp.value.trim() ? nameInp.value.trim() : url.replace(/^https?:\/\//, '').split('/')[0];
+
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: name,
+        fileType: 'link',
+        url: url,
+        thumbnailData: state.linkModalThumbData || null,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
       closeLinkModal();
       render();
     }
 
     async function saveWebVideoModal() {
-      const videoUrl = document.getElementById('web-video-url-input').value.trim();
-      if (!videoUrl) return;
-      state.files.push({ id: uid(), parentId: state.currentFolderId, name: 'Web Video', fileType: 'web-video', videoUrl });
+      const urlInp = document.getElementById('web-video-url-input');
+      const nameInp = document.getElementById('web-video-name-input');
+      if (!urlInp || !urlInp.value.trim()) {
+        alert('Please enter a valid video link or embed code.');
+        return;
+      }
+      const videoUrl = urlInp.value.trim();
+      const name = nameInp && nameInp.value.trim() ? nameInp.value.trim() : 'Web Video';
+
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: name,
+        fileType: 'web-video',
+        videoUrl: videoUrl,
+        thumbnailData: state.webVideoModalThumbData || null,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
       closeWebVideoModal();
       render();
     }
 
-    async function saveChecklistModal() {
-      const title = document.getElementById('checklist-title-input').value.trim() || 'Checklist';
-      state.textBubbles.push({ id: uid(), parentId: state.currentFolderId, title, isBubble: true, isChecklist: true, checklist: [] });
-      closeChecklistModal();
-      render();
-    }
+    async function saveAppModal() {
+      const schemeInp = document.getElementById('app-scheme-input');
+      const nameInp = document.getElementById('app-name-input');
+      if (!schemeInp || !schemeInp.value.trim()) {
+        alert('Please enter a valid App URL scheme or deep link.');
+        return;
+      }
+      const appScheme = schemeInp.value.trim();
+      const name = nameInp && nameInp.value.trim() ? nameInp.value.trim() : 'iOS App';
 
-    async function saveTextEditorModal() {
-      const text = document.getElementById('modal-text-input').innerText.trim();
-      state.textBubbles.push({ id: uid(), parentId: state.currentFolderId, isBubble: true, text });
-      closeTextEditorModal();
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: name,
+        fileType: 'app',
+        appScheme: appScheme,
+        thumbnailData: state.appModalThumbData || null,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAppModal();
       render();
     }
 
     function openNewFolderModal() {
       const name = prompt('Enter new folder name:');
       if (name && name.trim()) {
-        state.folders.push({ id: uid(), name: name.trim(), parentId: state.currentFolderId });
+        const newFolder = {
+          id: uid(),
+          name: name.trim(),
+          parentId: state.currentFolderId,
+          width: 96,
+          height: 96,
+          x: 20,
+          y: 20
+        };
+        state.folders.push(newFolder);
+        saveFolder(newFolder);
         render();
       }
     }
 
-    function handleItemClick(e, id, isFolderItem, isBubbleItem) {
-      if (isFolderItem) navigateTo(id);
+    function renameItem(id, isFolderItem, isBubbleItem = false) {
+      state.activeMenuId = null;
+      if (isBubbleItem) {
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (!bubble) return;
+        const newName = prompt('Rename Text Bubble:', bubble.text ? bubble.text.substring(0, 20) : 'Text Bubble');
+        if (newName !== null && newName.trim()) {
+          bubble.text = newName.trim();
+          saveTextBubble(bubble);
+          render();
+        }
+      } else if (isFolderItem) {
+        const folder = state.folders.find(f => f.id === id);
+        if (!folder) return;
+        const newName = prompt('Rename folder:', folder.name);
+        if (newName !== null && newName.trim()) {
+          folder.name = newName.trim();
+          saveFolder(folder);
+          render();
+        }
+      } else {
+        const file = state.files.find(f => f.id === id);
+        if (!file) return;
+        const newName = prompt('Rename file:', file.name);
+        if (newName !== null && newName.trim()) {
+          file.name = newName.trim();
+          saveFile(file);
+          render();
+        }
+      }
     }
+
+    async function deleteItemConfirm(id, isFolderItem, isBubbleItem = false) {
+      state.activeMenuId = null;
+      if (!confirm('Are you sure you want to delete this item?')) return;
+
+      if (isBubbleItem) {
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('textBubbles', id);
+      } else if (isFolderItem) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        await deleteFromDB('folders', id);
+      } else {
+        state.files = state.files.filter(f => f.id !== id);
+        await deleteFromDB('files', id);
+      }
+      render();
+    }
+
+    function triggerFolderCover(folderId) {
+      state.targetFolderCoverId = folderId;
+      state.activeMenuId = null;
+      document.getElementById('folder-cover-input').click();
+    }
+
+    function triggerChangeImage(fileId) {
+      state.targetChangeImageId = fileId;
+      state.activeMenuId = null;
+      document.getElementById('change-image-input').click();
+    }
+
+    function snapToOriginalShape(id) {
+      state.activeMenuId = null;
+      const folder = state.folders.find(f => f.id === id);
+      if (folder) {
+        folder.width = 96;
+        folder.height = 96;
+        saveFolder(folder);
+        render();
+        return;
+      }
+      const bubble = state.textBubbles.find(b => b.id === id);
+      if (bubble) {
+        bubble.width = 140;
+        bubble.height = 80;
+        saveTextBubble(bubble);
+        render();
+        return;
+      }
+      const file = state.files.find(f => f.id === id);
+      if (file) {
+        file.width = 112;
+        file.height = 144;
+        saveFile(file);
+        render();
+      }
+    }
+
+    function resizeByFinger(id, isFolderItem) {
+      state.activeMenuId = null;
+      alert('Edit Mode activated. Drag the yellow handle on the bottom right corner of the item to resize.');
+      state.editMode = true;
+      render();
+    }
+
+    function moveToFolder(id, isFolderItem, isBubbleItem = false) {
+      state.activeMenuId = null;
+      const availableFolders = state.folders.filter(f => f.id !== id);
+      let promptText = 'Enter target folder name (or leave empty for Home):\nAvailable: ' + availableFolders.map(f => f.name).join(', ');
+      const targetName = prompt(promptText);
+
+      if (targetName === null) return;
+
+      let targetFolderId = null;
+      if (targetName.trim() !== '') {
+        const found = availableFolders.find(f => f.name.toLowerCase() === targetName.trim().toLowerCase());
+        if (!found) {
+          alert('Folder not found.');
+          return;
+        }
+        targetFolderId = found.id;
+      }
+
+      if (isBubbleItem) {
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble) {
+          bubble.parentId = targetFolderId;
+          saveTextBubble(bubble);
+        }
+      } else if (isFolderItem) {
+        const folder = state.folders.find(f => f.id === id);
+        if (folder) {
+          folder.parentId = targetFolderId;
+          saveFolder(folder);
+        }
+      } else {
+        const file = state.files.find(f => f.id === id);
+        if (file) {
+          file.parentId = targetFolderId;
+          saveFile(file);
+        }
+      }
+      render();
+    }
+
+    async function copySingleFileClipboard(id) {
+      state.activeMenuId = null;
+      const file = state.files.find(f => f.id === id);
+      if (!file) return;
+
+      try {
+        if (navigator.clipboard && window.ClipboardItem && file.dataUrl && file.fileType.startsWith('image/')) {
+          const res = await fetch(file.dataUrl);
+          const blob = await res.blob();
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          alert('Image copied to clipboard!');
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(file.url || file.videoUrl || file.name);
+          alert('Copied to clipboard!');
+        } else {
+          alert('Clipboard not available.');
+        }
+      } catch (err) {
+        alert('Could not copy to clipboard: ' + err.message);
+      }
+    }
+
+    async function shareFile(id) {
+      state.activeMenuId = null;
+      const file = state.files.find(f => f.id === id);
+      if (!file) return;
+
+      try {
+        if (navigator.share) {
+          if (file.rawBlob) {
+            const f = new File([file.rawBlob], file.name, { type: file.fileType });
+            await navigator.share({ files: [f], title: file.name });
+          } else {
+            await navigator.share({ title: file.name, url: file.url || file.videoUrl || window.location.href });
+          }
+        } else {
+          alert('Sharing is not supported on this device/browser.');
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') alert('Share error: ' + e.message);
+      }
+    }
+
+    function bulkCopy() {
+      alert(`${state.selectedIds.length} items ready to copy.`);
+    }
+
+    function bulkMove() {
+      const availableFolders = state.folders.filter(f => !state.selectedIds.includes(f.id));
+      let promptText = 'Enter target folder name (or leave empty for Home):\nAvailable: ' + availableFolders.map(f => f.name).join(', ');
+      const targetName = prompt(promptText);
+
+      if (targetName === null) return;
+
+      let targetFolderId = null;
+      if (targetName.trim() !== '') {
+        const found = availableFolders.find(f => f.name.toLowerCase() === targetName.trim().toLowerCase());
+        if (!found) {
+          alert('Folder not found.');
+          return;
+        }
+        targetFolderId = found.id;
+      }
+
+      state.selectedIds.forEach(id => {
+        const folder = state.folders.find(f => f.id === id);
+        if (folder) {
+          folder.parentId = targetFolderId;
+          saveFolder(folder);
+        }
+        const file = state.files.find(f => f.id === id);
+        if (file) {
+          file.parentId = targetFolderId;
+          saveFile(file);
+        }
+        const bubble = state.textBubbles.find(b => b.id === id);
+        if (bubble) {
+          bubble.parentId = targetFolderId;
+          saveTextBubble(bubble);
+        }
+      });
+
+      state.selectedIds = [];
+      state.selectMode = false;
+      render();
+    }
+
+    function bulkShare() {
+      alert(`Sharing ${state.selectedIds.length} items.`);
+    }
+
+    async function bulkDelete() {
+      if (!confirm(`Are you sure you want to delete ${state.selectedIds.length} items?`)) return;
+
+      for (let id of state.selectedIds) {
+        state.folders = state.folders.filter(f => f.id !== id);
+        await deleteFromDB('folders', id);
+
+        state.files = state.files.filter(f => f.id !== id);
+        await deleteFromDB('files', id);
+
+        state.textBubbles = state.textBubbles.filter(b => b.id !== id);
+        await deleteFromDB('textBubbles', id);
+      }
+
+      state.selectedIds = [];
+      state.selectMode = false;
+      render();
+    }
+
+    function forcePullCloudData() {
+      if (confirm('Are you sure you want to pull data from GitHub Cloud? This will refresh your current view.')) {
+        syncWithGitHub(true);
+      }
+    }
+
+    function attachDragAndResizeListeners() {
+      const container = document.getElementById('canvas-container');
+      if (!container) return;
+
+      let isDragging = false;
+      let isResizing = false;
+      let currentElem = null;
+      let startX = 0, startY = 0;
+      let initialLeft = 0, initialTop = 0;
+      let initialWidth = 0, initialHeight = 0;
+
+      container.onmousedown = onPointerDown;
+      container.ontouchstart = onPointerDown;
+
+      function onPointerDown(e) {
+        if (!state.editMode) return;
+
+        const target = e.target;
+        const resizeHandle = target.closest('.resize-handle');
+        const itemElem = target.closest('[id^="item-"]');
+
+        if (!itemElem) return;
+
+        const pointer = e.touches ? e.touches[0] : e;
+        startX = pointer.clientX;
+        startY = pointer.clientY;
+        currentElem = itemElem;
+
+        const rect = itemElem.getBoundingClientRect();
+
+        if (resizeHandle) {
+          isResizing = true;
+          initialWidth = rect.width;
+          initialHeight = rect.height;
+          e.preventDefault();
+        } else if (!target.closest('button')) {
+          isDragging = true;
+          initialLeft = itemElem.offsetLeft;
+          initialTop = itemElem.offsetTop;
+          e.preventDefault();
+        }
+
+        document.onmousemove = onPointerMove;
+        document.ontouchmove = onPointerMove;
+        document.onmouseup = onPointerUp;
+        document.ontouchend = onPointerUp;
+      }
+
+      function onPointerMove(e) {
+        if (!isDragging && !isResizing) return;
+        const pointer = e.touches ? e.touches[0] : e;
+        const dx = pointer.clientX - startX;
+        const dy = pointer.clientY - startY;
+        const id = currentElem.getAttribute('data-id');
+
+        if (isDragging) {
+          let newX = Math.max(0, initialLeft + dx);
+          let newY = Math.max(0, initialTop + dy);
+
+          newX = Math.round(newX / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+          newY = Math.round(newY / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+
+          currentElem.style.left = `${newX}px`;
+          currentElem.style.top = `${newY}px`;
+        } else if (isResizing) {
+          let newW = Math.max(64, initialWidth + dx);
+          let newH = Math.max(64, initialHeight + dy);
+
+          currentElem.style.width = `${newW}px`;
+          currentElem.style.height = `${newH}px`;
+        }
+      }
+
+      async function onPointerUp() {
+        if (currentElem) {
+          const id = currentElem.getAttribute('data-id');
+          const finalX = parseInt(currentElem.style.left, 10);
+          const finalY = parseInt(currentElem.style.top, 10);
+          const finalW = parseInt(currentElem.style.width, 10);
+          const finalH = parseInt(currentElem.style.height, 10);
+
+          const folder = state.folders.find(f => f.id === id);
+          if (folder) {
+            if (isDragging) { folder.x = finalX; folder.y = finalY; }
+            if (isResizing) { folder.width = finalW; folder.height = finalH; }
+            await saveFolder(folder);
+          }
+
+          const file = state.files.find(f => f.id === id);
+          if (file) {
+            if (isDragging) { file.x = finalX; file.y = finalY; }
+            if (isResizing) { file.width = finalW; file.height = finalH; }
+            await saveFile(file);
+          }
+
+          const bubble = state.textBubbles.find(b => b.id === id);
+          if (bubble) {
+            if (isDragging) { bubble.x = finalX; bubble.y = finalY; }
+            if (isResizing) { bubble.width = finalW; bubble.height = finalH; }
+            await saveTextBubble(bubble);
+          }
+        }
+
+        isDragging = false;
+        isResizing = false;
+        currentElem = null;
+        document.onmousemove = null;
+        document.ontouchmove = null;
+        document.onmouseup = null;
+        document.ontouchend = null;
+      }
+    }
+
+    document.getElementById('file-input').addEventListener('change', handleFileUpload);
+    document.getElementById('photo-input').addEventListener('change', handleFileUpload);
+
+    async function handleFileUpload(e) {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      for (let f of files) {
+        const uploadObj = { id: uid(), name: f.name, progress: 0 };
+        state.activeUploads.push(uploadObj);
+        render();
+
+        try {
+          const reader = new FileReader();
+          reader.onprogress = (evt) => {
+            if (evt.lengthComputable) {
+              uploadObj.progress = Math.round((evt.loaded / evt.total) * 100);
+              render();
+            }
+          };
+
+          const dataUrl = await new Promise((res, rej) => {
+            reader.onload = () => res(reader.result);
+            reader.onerror = rej;
+            reader.readAsDataURL(f);
+          });
+
+          const newFile = {
+            id: uploadObj.id,
+            parentId: state.currentFolderId,
+            name: f.name,
+            fileType: f.type || 'application/octet-stream',
+            dataUrl: dataUrl,
+            rawBlob: f,
+            width: 112,
+            height: 144,
+            x: 20,
+            y: 20
+          };
+
+          if (isVideoFile(newFile) || isAudioFile(newFile)) {
+            await getOrCreateBlobUrl(newFile);
+          }
+
+          state.files.push(newFile);
+          await saveFile(newFile);
+        } catch (err) {
+          alert('Upload failed for file ' + f.name);
+        } finally {
+          state.activeUploads = state.activeUploads.filter(u => u.id !== uploadObj.id);
+          render();
+        }
+      }
+      e.target.value = '';
+    }
+
+    document.getElementById('change-image-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !state.targetChangeImageId) return;
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const targetFile = state.files.find(f => f.id === state.targetChangeImageId);
+        if (targetFile) {
+          targetFile.thumbnailData = reader.result;
+          await saveFile(targetFile);
+          render();
+        }
+        state.targetChangeImageId = null;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    document.getElementById('folder-cover-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !state.targetFolderCoverId) return;
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const targetFolder = state.folders.find(f => f.id === state.targetFolderCoverId);
+        if (targetFolder) {
+          targetFolder.coverUrl = reader.result;
+          await saveFolder(targetFolder);
+          render();
+        }
+        state.targetFolderCoverId = null;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    document.getElementById('app-thumbnail-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.appModalThumbData = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    document.getElementById('link-thumbnail-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.linkModalThumbData = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    document.getElementById('web-video-thumbnail-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.webVideoModalThumbData = reader.result;
+        render();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
 
     loadData();
   </script>
