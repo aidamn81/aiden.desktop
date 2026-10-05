@@ -419,6 +419,22 @@
 
           ${state.hamburgerMenuOpen ? `
             <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
+              <!-- Two horizontally scrollable menu rows right under the hamburger menu icon / header top of dropdown -->
+              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0 items-center">
+                <button onclick="toggleEditMode()" class="px-3 py-1.5 bg-zinc-900 border ${state.editMode ? 'border-yellow-500 text-yellow-400' : 'border-zinc-800 text-zinc-300'} rounded-lg shrink-0 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  <span>${state.editMode ? 'Disable Edit Mode' : 'Enable Edit Mode'}</span>
+                </button>
+                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+              </div>
+              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+              </div>
+              <div class="h-px bg-zinc-800 my-1"></div>
+
               <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
               </button>
@@ -440,22 +456,6 @@
               <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
               </button>
-              <div class="h-px bg-zinc-800 my-1"></div>
-              
-              <!-- Two horizontally scrollable menu rows -->
-              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0 items-center">
-                <button onclick="toggleEditMode()" class="px-3 py-1.5 bg-zinc-900 border ${state.editMode ? 'border-yellow-500 text-yellow-400' : 'border-zinc-800 text-zinc-300'} rounded-lg shrink-0 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                  <span>${state.editMode ? 'Disable Edit Mode' : 'Enable Edit Mode'}</span>
-                </button>
-                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[100px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-              </div>
-              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
-              </div>
               <div class="h-px bg-zinc-800 my-1"></div>
 
               <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
