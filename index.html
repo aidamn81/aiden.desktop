@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Aiden's Desktop</title>
+  <title>Aiden Files</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -217,41 +217,155 @@
       }
     }
 
-    function toggleHamburgerMenu(e) {
-      if (e) e.stopPropagation();
-      state.hamburgerMenuOpen = !state.hamburgerMenuOpen;
-      render();
-    }
-
-    function closeHamburgerMenu() {
-      if (state.hamburgerMenuOpen) {
-        state.hamburgerMenuOpen = false;
-        render();
+    async function deleteFromDB(storeName, id) {
+      const db = await openDB();
+      if (db) {
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).delete(id);
       }
     }
 
-    function toggleEditMode() {
-      state.editMode = !state.editMode;
-      render();
+    function resetToken() {
+      const token = prompt('Enter your GitHub Personal Access Token:', state.ghToken);
+      if (token !== null) {
+        state.ghToken = token.trim();
+        localStorage.setItem('af_gh_token', state.ghToken);
+        alert('New token saved successfully!');
+        syncWithGitHub();
+      }
     }
 
-    function toggleSelectMode() {
-      state.selectMode = !state.selectMode;
-      if (!state.selectMode) state.selectedIds = [];
-      render();
-    }
+    async function syncWithGitHub(forcePull = false) {
+      if (!state.ghToken) {
+        resetToken();
+        if (!state.ghToken) return;
+      }
 
-    function navigateTo(folderId) {
-      state.currentFolderId = folderId;
-      state.selectedIds = [];
+      state.isSyncing = true;
       render();
-    }
 
-    function navigateBack() {
-      if (state.currentFolderId === null) return;
-      const folder = state.folders.find(f => f.id === state.currentFolderId);
-      if (folder) {
-        navigateTo(folder.parentId);
+      try {
+        let cleanToken = state.ghToken.replace(/^(token|Bearer)\s+/i, '').trim();
+        const authHeader = `token ${cleanToken}`;
+        const headers = {
+          'Authorization': authHeader,
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        };
+
+        const metaUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/aiden_meta.json`;
+
+        if (forcePull) {
+          const getRes = await fetch(metaUrl, { headers });
+          if (getRes.ok) {
+            const getJson = await getRes.json();
+            const manifest = JSON.parse(decodeURIComponent(escape(atob(getJson.content))));
+
+            let allFolders = [];
+            let allFiles = [];
+            let allBubbles = [];
+
+            for (let chunkFileName of manifest.chunks) {
+              const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
+              const chunkRes = await fetch(chunkUrl, { headers });
+              if (chunkRes.ok) {
+                const chunkJson = await chunkRes.json();
+                const chunkData = JSON.parse(decodeURIComponent(escape(atob(chunkJson.content))));
+                if (chunkData.folders) allFolders.push(...chunkData.folders);
+                if (chunkData.files) allFiles.push(...chunkData.files);
+                if (chunkData.textBubbles) allBubbles.push(...chunkData.textBubbles);
+              }
+            }
+
+            state.folders = allFolders.length > 0 ? allFolders : state.folders;
+            state.files = allFiles.length > 0 ? allFiles : state.files;
+            state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
+
+            for (let f of state.folders) await saveFolder(f);
+            for (let fi of state.files) await saveFile(fi);
+            for (let b of state.textBubbles) await saveTextBubble(b);
+            alert('Synced chunks down from Cloud successfully!');
+            state.isSyncing = false;
+            render();
+            return;
+          }
+        }
+
+        const sanitizedFiles = state.files.map(file => {
+          const copy = { ...file };
+          delete copy.blobUrl;
+          delete copy.rawBlob;
+          return copy;
+        });
+
+        const CHUNK_SIZE = 15;
+        const fileChunks = [];
+        for (let i = 0; i < sanitizedFiles.length; i += CHUNK_SIZE) {
+          fileChunks.push(sanitizedFiles.slice(i, i + CHUNK_SIZE));
+        }
+        if (fileChunks.length === 0) fileChunks.push([]);
+
+        const chunkFileNames = [];
+
+        for (let index = 0; index < fileChunks.length; index++) {
+          const chunkFileName = `chunk_${index}.json`;
+          chunkFileNames.push(chunkFileName);
+          const chunkUrl = `https://api.github.com/repos/${CONFIG.ghRepo}/contents/chunks/${chunkFileName}`;
+
+          let chunkSha = null;
+          const existingChunkRes = await fetch(chunkUrl, { headers });
+          if (existingChunkRes.ok) {
+            const existingData = await existingChunkRes.json();
+            chunkSha = existingData.sha;
+          }
+
+          const chunkPayloadData = {
+            folders: index === 0 ? state.folders : [],
+            files: fileChunks[index],
+            textBubbles: index === 0 ? state.textBubbles : []
+          };
+
+          const chunkPutPayload = {
+            message: `Sync Aiden Files Chunk ${index}`,
+            content: btoa(unescape(encodeURIComponent(JSON.stringify(chunkPayloadData)))),
+            ...(chunkSha && { sha: chunkSha })
+          };
+
+          let putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
+          if (putRes.status === 500) {
+            await new Promise(r => setTimeout(r, 1500));
+            putRes = await fetch(chunkUrl, { method: 'PUT', headers, body: JSON.stringify(chunkPutPayload) });
+          }
+          if (!putRes.ok) {
+            throw new Error(`Failed to upload chunk ${index} (status ${putRes.status})`);
+          }
+        }
+
+        let metaSha = null;
+        const existingMetaRes = await fetch(metaUrl, { headers });
+        if (existingMetaRes.ok) {
+          const metaJson = await existingMetaRes.json();
+          metaSha = metaJson.sha;
+        }
+
+        const metaManifest = { chunks: chunkFileNames, updatedAt: new Date().toISOString() };
+        const metaPutPayload = {
+          message: 'Update Aiden Files Manifest',
+          content: btoa(unescape(encodeURIComponent(JSON.stringify(metaManifest)))),
+          ...(metaSha && { sha: metaSha })
+        };
+
+        const metaPutRes = await fetch(metaUrl, { method: 'PUT', headers, body: JSON.stringify(metaPutPayload) });
+        if (!metaPutRes.ok) {
+          throw new Error('Failed to update manifest file on GitHub.');
+        }
+
+        alert('Chunked Sync Successful! Cloud backup updated safely without server errors.');
+      } catch (err) {
+        alert('Sync error: ' + err.message);
+      } finally {
+        state.isSyncing = false;
+        render();
       }
     }
 
@@ -262,6 +376,7 @@
       const childrenFiles = state.files.filter(f => f.parentId === state.currentFolderId);
       const childrenBubbles = state.textBubbles.filter(b => b.parentId === state.currentFolderId);
       const items = [...childrenFolders, ...childrenFiles, ...childrenBubbles];
+      const allChildrenSelected = items.length > 0 && items.every(item => state.selectedIds.includes(item.id));
 
       if (state.editMode) {
         document.body.classList.add('edit-mode');
@@ -288,6 +403,10 @@
               <button onclick="toggleEditMode()" class="px-3 py-2 rounded-xl text-xs font-bold border ${state.editMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'bg-zinc-900 border-zinc-800 text-zinc-400'} shrink-0">
                 ${state.editMode ? 'Edit Mode On' : 'Edit Mode Locked'}
               </button>
+              <button onclick="openTextEditorModal()" class="px-3 py-2 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center gap-1.5 shrink-0" title="Add Text Bubble">
+                <i data-lucide="message-square" class="w-4 h-4"></i>
+                <span>Text Bubble</span>
+              </button>
             </div>
           </div>
 
@@ -299,57 +418,83 @@
           </div>
 
           ${state.hamburgerMenuOpen ? `
-            <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-72 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-2 px-2">
-              
-              <!-- Horizontally Scrollable Quick Menu Rows -->
-              <div class="flex flex-col gap-1.5 pb-2 border-b border-zinc-800">
-                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                  <button onclick="toggleEditMode(); closeHamburgerMenu();" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-700 rounded-xl whitespace-nowrap font-bold flex items-center gap-1.5 shrink-0">
-                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit Mode
-                  </button>
-                  <button onclick="closeHamburgerMenu();" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-700 rounded-xl whitespace-nowrap font-bold flex items-center gap-1.5 shrink-0">
-                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Item
-                  </button>
-                </div>
-                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                  <button onclick="window.location.href='lyrics.html'; closeHamburgerMenu();" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-700 rounded-xl whitespace-nowrap font-bold flex items-center gap-1.5 shrink-0">
-                    <i data-lucide="music" class="w-3.5 h-3.5"></i> Lyrics
-                  </button>
-                  <button onclick="closeHamburgerMenu();" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-700 rounded-xl whitespace-nowrap font-bold flex items-center gap-1.5 shrink-0">
-                    <i data-lucide="percent" class="w-3.5 h-3.5"></i> %
-                  </button>
-                </div>
-              </div>
-
-              <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+            <div onclick="event.stopPropagation()" class="absolute top-14 left-3 w-64 bg-black border border-zinc-700/90 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden text-xs py-2 flex flex-col gap-1 px-2">
+              <button onclick="navigateTo(null); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="home" class="w-4 h-4 text-amber-400"></i> Home
+              </button>
+              <button onclick="openNewFolderModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder
+              </button>
+              <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
+              </button>
+              <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
+              </button>
+              <button onclick="openWebVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video
+              </button>
+              <button onclick="openAppModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App
+              </button>
+              <button onclick="openChecklistModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Add Checklist
+              </button>
+              <div class="h-px bg-zinc-800 my-1"></div>
+              
+              <!-- Two empty horizontally scrollable menu rows -->
+              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+              </div>
+              <div class="flex overflow-x-auto no-scrollbar gap-2 py-1 px-1 w-full shrink-0">
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+                <div class="min-w-[120px] h-8 bg-zinc-900 border border-zinc-800 rounded-lg shrink-0"></div>
+              </div>
+              <div class="h-px bg-zinc-800 my-1"></div>
+
+              <button onclick="syncWithGitHub(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
+                <span>${state.isSyncing ? 'Syncing...' : 'Sync'}</span>
+              </button>
+              <button onclick="resetToken(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-300 font-bold cursor-pointer">
+                <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i> Update GitHub token
+              </button>
+              <button onclick="forcePullCloudData(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-amber-400 font-bold cursor-pointer">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Pull Cloud
               </button>
             </div>
           ` : ''}
         </header>
 
-        <main onclick="closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
+        <main onclick="closeMenu(); closeHamburgerMenu();" class="flex-1 relative w-full h-full overflow-auto ${state.editMode ? 'edit-grid-bg' : ''}" id="main-scroll-container">
           ${state.hamburgerMenuOpen ? `<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onclick="closeHamburgerMenu()"></div>` : ''}
           
-          ${items.length === 0 ? `
+          ${state.activeUploads.length > 0 ? `
+            <div class="sticky top-3 left-3 right-3 mx-4 z-30 bg-zinc-900/95 border border-zinc-800 backdrop-blur-xl p-3.5 rounded-2xl shadow-2xl flex flex-col gap-2.5">
+              <div class="flex items-center justify-between text-xs text-zinc-300 font-semibold">
+                <span class="flex items-center gap-2"><i data-lucide="upload-cloud" class="w-4 h-4 text-amber-400 animate-pulse"></i> Uploading Files in Background (${state.activeUploads.length})</span>
+                <span class="text-[10px] text-zinc-500">Keep app open until complete</span>
+              </div>
+              <div class="flex flex-col gap-2">
+                ${state.activeUploads.map(up => `
+                  <div class="flex flex-col gap-1 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800/80">
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="truncate font-medium text-white max-w-[70%]" title="${up.name}">${up.name}</span>
+                      <span class="text-amber-400 font-bold">${up.progress}%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div class="h-full bg-amber-500 transition-all duration-150" style="width: ${up.progress}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${items.length === 0 && state.activeUploads.length === 0 ? `
             <div class="flex flex-col items-center justify-center h-full text-center p-6 text-zinc-500 text-sm gap-3">
               <span>Folder is empty</span>
-            </div>
-          ` : `
-            <div class="relative min-w-[1200px] min-h-[1200px] p-4 select-none" id="canvas-container">
-              <div class="text-zinc-400 p-4">Items loaded: ${items.length}</div>
-            </div>
-          `}
-        </main>
-      `;
-
-      if (window.lucide) window.lucide.createIcons();
-    }
-
-    // Initialize application storage & state on load
-    window.addEventListener('DOMContentLoaded', () => {
-      loadData();
-    });
-  </script>
-</body>
-</html>
+              <button onclick="forcePullCloudData()" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl
