@@ -456,23 +456,27 @@
               <i data-lucide="check-square" class="w-4 h-4"></i>
               <span>CHECKLIST</span>
             </button>
-          </div>
-          <div class="flex items-center gap-2">
-            <button onclick="toggleEditMode()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
-              <i data-lucide="${state.editMode ? 'unlock' : 'lock'}" class="w-4 h-4"></i>
-              <span>${state.editMode ? 'Edit Mode: Enabled' : 'Edit Mode'}</span>
-            </button>
             <button onclick="toggleSelectMode()" class="py-2 px-3 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'} flex items-center justify-center gap-2 cursor-pointer shrink-0">
               <i data-lucide="check-square" class="w-4 h-4"></i>
-              <span>${state.selectMode ? 'Cancel' : 'Select'}</span>
+              <span>${state.selectMode ? 'Cancel' : 'SELECT'}</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="openNewFolderModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
+              <i data-lucide="folder-plus" class="w-4 h-4"></i>
+              <span>NEW FOLDER</span>
+            </button>
+            <button onclick="toggleEditMode()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
+              <i data-lucide="${state.editMode ? 'unlock' : 'lock'}" class="w-4 h-4"></i>
+              <span>${state.editMode ? 'Edit Mode: Enabled' : 'EDIT MODE'}</span>
             </button>
             <button onclick="openTextEditorModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center gap-1.5 cursor-pointer shrink-0" title="Add Text Bubble">
               <i data-lucide="message-square" class="w-4 h-4"></i>
-              <span>Text Bubble</span>
+              <span>TEXT BUBBLE</span>
             </button>
             <button onclick="openUploadModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center gap-1.5 cursor-pointer shrink-0" title="Add Item">
               <i data-lucide="plus" class="w-4 h-4"></i>
-              <span>Add Item</span>
+              <span>ADD ITEM</span>
             </button>
           </div>
         </div>
