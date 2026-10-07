@@ -96,6 +96,9 @@
       textEditorModal: null,
       checklistModal: false,
       checklistDraftItems: [''],
+      percentageModal: false,
+      percentageValue: '20',
+      percentageAmount: '',
       linkModal: false,
       linkModalThumbData: null,
       webVideoModal: false,
@@ -445,38 +448,34 @@
           ` : ''}
         </header>
 
-        <!-- Two menu rows underneath the header/hamburger menu icon area -->
+        <!-- Two compact menu rows with symbols optimized for iPhone -->
         <div class="shrink-0 bg-zinc-950/80 border-b border-zinc-900 px-4 py-2 flex flex-col gap-1.5 z-30">
           <div class="flex items-center gap-2">
-            <button onclick="window.location.href='lyrics.html'" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
-              <i data-lucide="mic" class="w-4 h-4"></i>
-              <span>Lyrics</span>
+            <button onclick="window.location.href='lyrics.html'" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Lyrics">
+              <span class="text-base leading-none">𝄞</span>
             </button>
-            <button onclick="openChecklistModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
-              <i data-lucide="check-square" class="w-4 h-4"></i>
-              <span>CHECKLIST</span>
+            <button onclick="openPercentageModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Percentage Calculator">
+              <span class="text-sm font-extrabold leading-none">%</span>
             </button>
-            <button onclick="toggleSelectMode()" class="py-2 px-3 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'} flex items-center justify-center gap-2 cursor-pointer shrink-0">
+            <button onclick="openChecklistModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Checklist">
               <i data-lucide="check-square" class="w-4 h-4"></i>
-              <span>${state.selectMode ? 'Cancel' : 'SELECT'}</span>
+            </button>
+            <button onclick="toggleSelectMode()" class="py-2 px-3.5 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'} flex items-center justify-center cursor-pointer shrink-0" title="Select">
+              <span class="text-sm font-bold leading-none">✔</span>
             </button>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="openNewFolderModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
+            <button onclick="openNewFolderModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="New Folder">
               <i data-lucide="folder-plus" class="w-4 h-4"></i>
-              <span>NEW FOLDER</span>
             </button>
-            <button onclick="toggleEditMode()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center gap-2 cursor-pointer shrink-0">
+            <button onclick="toggleEditMode()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Edit Mode">
               <i data-lucide="${state.editMode ? 'unlock' : 'lock'}" class="w-4 h-4"></i>
-              <span>${state.editMode ? 'Edit Mode: Enabled' : 'EDIT MODE'}</span>
             </button>
-            <button onclick="openTextEditorModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center gap-1.5 cursor-pointer shrink-0" title="Add Text Bubble">
+            <button onclick="openTextEditorModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Text Bubble">
               <i data-lucide="message-square" class="w-4 h-4"></i>
-              <span>TEXT BUBBLE</span>
             </button>
-            <button onclick="openUploadModal()" class="py-2 px-3 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center gap-1.5 cursor-pointer shrink-0" title="Add Item">
+            <button onclick="openUploadModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Add Item">
               <i data-lucide="plus" class="w-4 h-4"></i>
-              <span>ADD ITEM</span>
             </button>
           </div>
         </div>
@@ -538,6 +537,7 @@
           </div>
         ` : ''}
 
+        ${state.percentageModal ? renderPercentageModal() : ''}
         ${state.showUploadModal ? renderUploadModal() : ''}
         ${state.linkModal ? renderLinkModal() : ''}
         ${state.webVideoModal ? renderWebVideoModal() : ''}
@@ -584,10 +584,8 @@
       const bubble = state.textBubbles.find(b => b.id === bubbleId);
       if (!bubble || !bubble.checklist) return;
       
-      // When the task is ticked, it deletes from the checklist
       bubble.checklist.splice(index, 1);
       
-      // If the checklist is now empty, delete the whole bubble, otherwise update it
       if (bubble.checklist.length === 0) {
         state.textBubbles = state.textBubbles.filter(b => b.id !== bubbleId);
         deleteFromDB('textBubbles', bubbleId);
@@ -727,6 +725,63 @@
           `}
         </div>
       `;
+    }
+
+    function renderPercentageModal() {
+      const pVal = parseFloat(state.percentageValue) || 0;
+      const aVal = parseFloat(state.percentageAmount) || 0;
+      const calculatedResult = isNaN(pVal) || isNaN(aVal) ? '0.00' : ((pVal / 100) * aVal).toFixed(2);
+      const addedResult = isNaN(pVal) || isNaN(aVal) ? '0.00' : (aVal + (pVal / 100) * aVal).toFixed(2);
+      const subtractedResult = isNaN(pVal) || isNaN(aVal) ? '0.00' : (aVal - (pVal / 100) * aVal).toFixed(2);
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closePercentageModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2"><span class="text-amber-400 text-base">%</span> Percentage Calculator</h3>
+              <button onclick="closePercentageModal()" class="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            
+            <div class="flex flex-col gap-3 text-left">
+              <div class="flex flex-col gap-1">
+                <label class="text-[11px] font-semibold text-zinc-400">Percentage (%)</label>
+                <input id="calc-percentage-input" type="number" value="${state.percentageValue}" oninput="state.percentageValue = this.value; render();" placeholder="20" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-amber-400 font-bold text-sm outline-none focus:border-amber-500" />
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <label class="text-[11px] font-semibold text-zinc-400">Amount / Number</label>
+                <input id="calc-amount-input" type="number" value="${state.percentageAmount}" oninput="state.percentageAmount = this.value; render();" placeholder="Enter amount..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-sm outline-none focus:border-amber-500" />
+              </div>
+
+              <div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-2 mt-1">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-zinc-400">Result value:</span>
+                  <span class="text-white font-bold text-sm">${calculatedResult}</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-zinc-400">Total (+ %):</span>
+                  <span class="text-amber-400 font-bold text-sm">${addedResult}</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-zinc-400">Total (- %):</span>
+                  <span class="text-zinc-200 font-bold text-sm">${subtractedResult}</span>
+                </div>
+              </div>
+            </div>
+
+            <button onclick="closePercentageModal()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-2xl text-xs shadow-lg shadow-amber-500/20 mt-1">Done</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function openPercentageModal() {
+      state.percentageModal = true;
+      render();
+    }
+    function closePercentageModal() {
+      state.percentageModal = false;
+      render();
     }
 
     function renderUploadModal() {
