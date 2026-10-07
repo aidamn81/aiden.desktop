@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Aiden Files</title>
+  <title>Aiden’s Desktop</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -103,6 +103,7 @@
       linkModalThumbData: null,
       webVideoModal: false,
       webVideoModalThumbData: null,
+      addVideoModal: false,
       appModal: false,
       appModalThumbData: null,
       activeUploads: [],
@@ -421,6 +422,9 @@
               <button onclick="openUploadModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i> Add Item
               </button>
+              <button onclick="openAddVideoModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
+                <span class="text-sm">▶️</span> Add Video
+              </button>
               <button onclick="openLinkModal(); closeHamburgerMenu();" class="w-full px-3 py-2.5 text-left hover:bg-zinc-900 rounded-xl flex items-center gap-2.5 text-zinc-200 font-bold cursor-pointer">
                 <i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link
               </button>
@@ -476,6 +480,9 @@
             </button>
             <button onclick="openUploadModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Add Item">
               <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+            <button onclick="openAddVideoModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Add Video">
+              <span class="text-sm leading-none">▶️</span>
             </button>
           </div>
         </div>
@@ -541,6 +548,7 @@
         ${state.showUploadModal ? renderUploadModal() : ''}
         ${state.linkModal ? renderLinkModal() : ''}
         ${state.webVideoModal ? renderWebVideoModal() : ''}
+        ${state.addVideoModal ? renderAddVideoModal() : ''}
         ${state.appModal ? renderAppModal() : ''}
         ${state.checklistModal ? renderChecklistModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
@@ -793,6 +801,7 @@
             <div class="flex flex-col gap-2.5 mt-2">
               <button onclick="document.getElementById('file-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="file" class="w-4 h-4 text-amber-400"></i> Files App</button>
               <button onclick="document.getElementById('photo-input').click(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Photos, Audio & Videos</button>
+              <button onclick="openAddVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><span class="text-base">▶️</span> Add Video</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="link" class="w-4 h-4 text-amber-400"></i> Add Link</button>
               <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video / Embed</button>
               <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
@@ -804,6 +813,82 @@
           </div>
         </div>
       `;
+    }
+
+    function renderAddVideoModal() {
+      return `
+        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAddVideoModal()">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold text-white flex items-center justify-center gap-2"><span class="text-base">▶️</span> Add Video</h3>
+            <p class="text-xs text-zinc-400">Enter the video title and video link to generate your thumbnail.</p>
+            <div class="flex flex-col gap-3 mt-1 text-left">
+              <div class="flex flex-col gap-1">
+                <label class="text-[11px] font-semibold text-zinc-400">Video Title</label>
+                <input id="add-video-title-input" type="text" placeholder="e.g. My Favorite Video" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-[11px] font-semibold text-zinc-400">Video Link</label>
+                <input id="add-video-url-input" type="text" placeholder="https://youtube.com/watch?v=..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button onclick="closeAddVideoModal()" class="w-1/2 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-2xl text-xs">Cancel</button>
+              <button onclick="saveAddVideoModal()" class="w-1/2 py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-2xl text-xs shadow-lg shadow-amber-500/20">ADD</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openAddVideoModal() {
+      state.addVideoModal = true;
+      render();
+    }
+
+    function closeAddVideoModal() {
+      state.addVideoModal = false;
+      render();
+    }
+
+    async function saveAddVideoModal() {
+      const titleInp = document.getElementById('add-video-title-input');
+      const urlInp = document.getElementById('add-video-url-input');
+
+      if (!urlInp || !urlInp.value.trim()) {
+        alert('Please enter a valid video link.');
+        return;
+      }
+
+      let videoUrl = urlInp.value.trim();
+      if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
+        videoUrl = 'https://' + videoUrl;
+      }
+
+      const title = titleInp && titleInp.value.trim() ? titleInp.value.trim() : 'Video';
+
+      // Attempt to automatically extract YouTube thumbnail if it's a YouTube link
+      let thumbnailData = null;
+      let ytMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      if (ytMatch && ytMatch[1]) {
+        thumbnailData = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+      }
+
+      const newFile = {
+        id: uid(),
+        parentId: state.currentFolderId,
+        name: title,
+        fileType: 'web-video',
+        videoUrl: videoUrl,
+        thumbnailData: thumbnailData,
+        width: 112,
+        height: 144,
+        x: 20,
+        y: 20
+      };
+
+      state.files.push(newFile);
+      await saveFile(newFile);
+      closeAddVideoModal();
     }
 
     function renderChecklistModal() {
@@ -1468,7 +1553,7 @@
         } else if ((file.fileType === 'app' || file.fileType === 'ios-app') && file.appScheme) {
           window.location.href = file.appScheme;
         } else {
-          openQuickView(id);
+          playPopupVideo(file.videoUrl || file.url);
         }
       }
     }
