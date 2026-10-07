@@ -426,12 +426,6 @@
             <button onclick="toggleSelectMode()" class="py-2 px-3.5 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'} flex items-center justify-center cursor-pointer shrink-0" title="Select">
               <span class="text-sm font-bold leading-none">✔</span>
             </button>
-            <button onclick="openWebVideoModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Add Web Video">
-              <i data-lucide="video" class="w-4 h-4"></i>
-            </button>
-            <button onclick="openAppModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Add App">
-              <i data-lucide="smartphone" class="w-4 h-4"></i>
-            </button>
             <button onclick="syncWithGitHub()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Sync">
               <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
             </button>
@@ -440,9 +434,6 @@
             </button>
             <button onclick="forcePullCloudData()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Pull Cloud">
               <i data-lucide="download-cloud" class="w-4 h-4"></i>
-            </button>
-            <button onclick="navigateTo(null)" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Home">
-              <i data-lucide="home" class="w-4 h-4"></i>
             </button>
           </div>
           <div class="flex items-center gap-2">
@@ -460,6 +451,9 @@
             </button>
             <button onclick="openAddVideoModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Add Video">
               <span class="text-sm leading-none">▶</span>
+            </button>
+            <button onclick="navigateTo(null)" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Home">
+              <i data-lucide="home" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
@@ -524,7 +518,6 @@
         ${state.linkModal ? renderLinkModal() : ''}
         ${state.webVideoModal ? renderWebVideoModal() : ''}
         ${state.addVideoModal ? renderAddVideoModal() : ''}
-        ${state.appModal ? renderAppModal() : ''}
         ${state.checklistModal ? renderChecklistModal() : ''}
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
@@ -538,7 +531,6 @@
     function getFileIcon(type, name) {
       if (type === 'link' || name.startsWith('http')) return 'link';
       if (type === 'web-video') return 'video';
-      if (type === 'app' || type === 'ios-app') return 'smartphone';
       if (type.startsWith('video/') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v') || name.endsWith('.mkv')) return 'video';
       if (type.startsWith('audio/')) return 'music';
       if (type === 'application/pdf' || name.endsWith('.pdf')) return 'file-text';
@@ -638,7 +630,6 @@
         const isVideo = isVideoFile(item);
         const isWebVideo = type === 'web-video';
         const isLink = type === 'link';
-        const isApp = type === 'app' || type === 'ios-app';
         const imgSrc = item.thumbnailData || item.dataUrl;
         const icon = getFileIcon(type, item.name);
 
@@ -646,12 +637,11 @@
           <div id="item-${item.id}" data-id="${item.id}" style="left: ${posX}px; top: ${posY}px; width: ${itemWidth}px; height: ${itemHeight}px;" class="absolute flex flex-col items-center cursor-pointer touch-none" onclick="handleItemClick(event, '${item.id}', false)">
             <div class="w-full h-full shrink-0 bg-zinc-900 border ${isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/50' : (state.editMode ? 'border-yellow-500/60' : 'border-zinc-800')} rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg relative">
               <div class="w-full h-full bg-zinc-950 relative overflow-hidden flex items-center justify-center rounded-2xl">
-                ${(isImage || ((isApp || isLink || isWebVideo) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
+                ${(isImage || ((isLink || isWebVideo) && item.thumbnailData)) && imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover rounded-xl pointer-events-none" alt="${item.name}" />` : `
                   <div class="flex flex-col items-center gap-1 text-zinc-400">
                     <i data-lucide="${icon}" class="w-8 h-8 text-amber-400 pointer-events-none"></i>
                     ${isLink ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Link</span>' : ''}
                     ${isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">Web Video</span>' : ''}
-                    ${isApp ? '<span class="text-[9px] uppercase font-bold tracking-wider text-amber-400">iOS App</span>' : ''}
                     ${isVideo && !isWebVideo ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Video</span>' : ''}
                     ${type.startsWith('audio/') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-zinc-500">Audio</span>' : ''}
                     ${type === 'application/pdf' || item.name.endsWith('.pdf') ? '<span class="text-[9px] uppercase font-bold tracking-wider text-red-400">PDF</span>' : ''}
@@ -779,7 +769,6 @@
               <button onclick="openAddVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><span class="text-base">▶️</span> Add Video</button>
               <button onclick="openLinkModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><span class="text-base">🔗</span> Add Link</button>
               <button onclick="openWebVideoModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="video" class="w-4 h-4 text-amber-400"></i> Add Web Video / Embed</button>
-              <button onclick="openAppModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i> Add App</button>
               <button onclick="openChecklistModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="check-square" class="w-4 h-4 text-amber-400"></i> Checklist</button>
               <button onclick="openTextEditorModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-amber-400"></i> Text Bubble</button>
               <button onclick="openNewFolderModal(); closeUploadModal();" class="w-full py-3 bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 border border-zinc-700/50"><i data-lucide="folder-plus" class="w-4 h-4 text-amber-400"></i> New Folder</button>
@@ -1105,32 +1094,6 @@
       } catch (e) {
         alert('PiP mode could not be activated: ' + e.message);
       }
-    }
-
-    function renderAppModal() {
-      return `
-        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeAppModal()">
-          <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl" onclick="event.stopPropagation()">
-            <h3 class="text-lg font-bold text-white">Add iOS Device App</h3>
-            <p class="text-xs text-zinc-400">Enter the custom iOS URL scheme or App Store deep link (e.g., <code class="text-amber-400">photos-redirect://</code> or <code class="text-amber-400">shortcuts://</code>).</p>
-            <div class="flex flex-col gap-3 mt-2">
-              <input id="app-scheme-input" type="text" placeholder="myapp:// or https://..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
-              <input id="app-name-input" type="text" placeholder="App Name (e.g., Camera, Messages)" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-500" />
-              <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
-                <span class="text-xs text-zinc-300 font-medium">App Thumbnail</span>
-                <button type="button" onclick="document.getElementById('app-thumbnail-input').click()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded-lg text-xs font-bold">
-                  ${state.appModalThumbData ? 'Change Image' : 'Upload Image'}
-                </button>
-              </div>
-              ${state.appModalThumbData ? `<div class="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 mx-auto"><img src="${state.appModalThumbData}" class="w-full h-full object-cover" /></div>` : ''}
-            </div>
-            <div class="flex items-center gap-2 mt-2">
-              <button onclick="closeAppModal()" class="w-1/2 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs">Cancel</button>
-              <button onclick="saveAppModal()" class="w-1/2 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-amber-500/20">Add App</button>
-            </div>
-          </div>
-        </div>
-      `;
     }
 
     function renderTextEditorModal() {
@@ -1564,8 +1527,6 @@
           window.open(file.url, '_blank');
         } else if (file.fileType === 'web-video' && file.videoUrl) {
           playPopupVideo(file.videoUrl);
-        } else if ((file.fileType === 'app' || file.fileType === 'ios-app') && file.appScheme) {
-          window.location.href = file.appScheme;
         } else {
           playPopupVideo(file.videoUrl || file.url);
         }
@@ -1599,9 +1560,6 @@
 
     function openWebVideoModal() { state.webVideoModal = true; state.webVideoModalThumbData = null; render(); }
     function closeWebVideoModal() { state.webVideoModal = false; state.webVideoModalThumbData = null; render(); }
-
-    function openAppModal() { state.appModal = true; state.appModalThumbData = null; render(); }
-    function closeAppModal() { state.appModal = false; state.appModalThumbData = null; render(); }
 
     function openNewFolderModal() {
       const name = prompt('Enter new folder name:');
@@ -2112,18 +2070,6 @@
           render();
         }
         state.targetFolderCoverId = null;
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    });
-
-    document.getElementById('app-thumbnail-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        state.appModalThumbData = reader.result;
-        render();
       };
       reader.readAsDataURL(file);
       e.target.value = '';
