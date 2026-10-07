@@ -388,11 +388,11 @@
       }
 
       app.innerHTML = `
-        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2 flex items-center justify-between gap-2 relative">
+        <header class="shrink-0 z-50 bg-black/95 backdrop-blur-lg border-b border-zinc-900 px-3 py-2.5 flex items-center justify-between gap-2 relative">
           <div class="flex items-center gap-2">
             <div class="flex items-center gap-1.5 shrink-0">
               ${state.currentFolderId !== null ? `
-                <button onclick="navigateBack()" class="px-3 py-2 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
+                <button onclick="navigateBack()" class="px-3.5 py-2.5 bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-amber-400 rounded-xl flex items-center gap-1.5 text-xs font-bold shadow-md cursor-pointer shrink-0" title="Back">
                   <i data-lucide="arrow-left" class="w-4 h-4"></i>
                   <span>Back</span>
                 </button>
@@ -408,52 +408,52 @@
           </div>
         </header>
 
-        <!-- Two compact menu rows with symbols optimized for iPhone -->
-        <div class="shrink-0 bg-zinc-950/80 border-b border-zinc-900 px-4 py-2 flex flex-col gap-1.5 z-30 overflow-x-auto no-scrollbar">
-          <div class="flex items-center gap-2">
-            <button onclick="window.location.href='lyrics.html'" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Lyrics">
-              <span class="text-base leading-none">𝄞</span>
+        <!-- Two compact menu rows with slightly bigger buttons optimized for easier tapping -->
+        <div class="shrink-0 bg-zinc-950/80 border-b border-zinc-900 px-4 py-2.5 flex flex-col gap-2 z-30 overflow-x-auto no-scrollbar">
+          <div class="flex items-center gap-2.5">
+            <button onclick="window.location.href='lyrics.html'" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Lyrics">
+              <span class="text-lg leading-none">𝄞</span>
             </button>
-            <button onclick="openPercentageModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Percentage Calculator">
-              <span class="text-sm font-extrabold leading-none">%</span>
+            <button onclick="openPercentageModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Percentage Calculator">
+              <span class="text-base font-extrabold leading-none">%</span>
             </button>
-            <button onclick="openChecklistModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Checklist">
-              <i data-lucide="check-square" class="w-4 h-4"></i>
+            <button onclick="openChecklistModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Checklist">
+              <i data-lucide="check-square" class="w-4.5 h-4.5"></i>
             </button>
-            <button onclick="openLinkModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Add Link">
-              <span class="text-sm leading-none">🔗</span>
+            <button onclick="openLinkModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Add Link">
+              <span class="text-base leading-none">🔗</span>
             </button>
-            <button onclick="toggleSelectMode()" class="py-2 px-3.5 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'} flex items-center justify-center cursor-pointer shrink-0" title="Select">
-              <span class="text-sm font-bold leading-none">✔</span>
+            <button onclick="toggleSelectMode()" class="py-2.5 px-4 rounded-xl text-xs font-bold border ${state.selectMode ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'} flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Select">
+              <span class="text-base font-bold leading-none">✔</span>
             </button>
-            <button onclick="syncWithGitHub()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Sync">
-              <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4 h-4 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
+            <button onclick="syncWithGitHub()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Sync">
+              <i data-lucide="${state.isSyncing ? 'refresh-cw' : 'cloud'}" class="w-4.5 h-4.5 ${state.isSyncing ? 'animate-spin text-amber-400' : 'text-zinc-400'}"></i>
             </button>
-            <button onclick="resetToken()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Update GitHub token">
-              <i data-lucide="key" class="w-4 h-4 text-zinc-400"></i>
+            <button onclick="resetToken()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Update GitHub token">
+              <i data-lucide="key" class="w-4.5 h-4.5 text-zinc-400"></i>
             </button>
-            <button onclick="forcePullCloudData()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Pull Cloud">
-              <i data-lucide="download-cloud" class="w-4 h-4"></i>
+            <button onclick="forcePullCloudData()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Pull Cloud">
+              <i data-lucide="download-cloud" class="w-4.5 h-4.5"></i>
             </button>
           </div>
-          <div class="flex items-center gap-2">
-            <button onclick="openNewFolderModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="New Folder">
-              <i data-lucide="folder-plus" class="w-4 h-4"></i>
+          <div class="flex items-center gap-2.5">
+            <button onclick="openNewFolderModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="New Folder">
+              <i data-lucide="folder-plus" class="w-4.5 h-4.5"></i>
             </button>
-            <button onclick="toggleEditMode()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Edit Mode">
-              <i data-lucide="${state.editMode ? 'unlock' : 'lock'}" class="w-4 h-4"></i>
+            <button onclick="toggleEditMode()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Edit Mode">
+              <i data-lucide="${state.editMode ? 'unlock' : 'lock'}" class="w-4.5 h-4.5"></i>
             </button>
-            <button onclick="openTextEditorModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Text Bubble">
-              <i data-lucide="message-square" class="w-4 h-4"></i>
+            <button onclick="openTextEditorModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Text Bubble">
+              <i data-lucide="message-square" class="w-4.5 h-4.5"></i>
             </button>
-            <button onclick="openUploadModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Add Item">
-              <i data-lucide="plus" class="w-4 h-4"></i>
+            <button onclick="openUploadModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Add Item">
+              <i data-lucide="plus" class="w-4.5 h-4.5"></i>
             </button>
-            <button onclick="openAddVideoModal()" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0" title="Add Video">
-              <span class="text-sm leading-none">▶</span>
+            <button onclick="openAddVideoModal()" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-amber-400 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Add Video">
+              <span class="text-base leading-none">▶</span>
             </button>
-            <button onclick="navigateTo(null)" class="py-2 px-3.5 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0" title="Home">
-              <i data-lucide="home" class="w-4 h-4"></i>
+            <button onclick="navigateTo(null)" class="py-2.5 px-4 rounded-xl text-xs font-bold border bg-zinc-900 border-zinc-800 text-amber-400 hover:bg-zinc-800 flex items-center justify-center cursor-pointer shrink-0 shadow-sm" title="Home">
+              <i data-lucide="home" class="w-4.5 h-4.5"></i>
             </button>
           </div>
         </div>
