@@ -106,7 +106,8 @@
       appModal: false,
       appModalThumbData: null,
       activeUploads: [],
-      popupVideoUrl: null
+      popupVideoUrl: null,
+      browserImageViewUrl: null
     };
 
     const uid = () => Math.random().toString(36).substring(2, 9);
@@ -181,7 +182,7 @@
       }
 
       for (let file of state.files) {
-        if ((isVideoFile(file) || isAudioFile(file)) && file.fileType !== 'web-video') {
+        if ((isVideoFile(file) || isAudioFile(file))) {
           await getOrCreateBlobUrl(file);
         }
       }
@@ -285,7 +286,10 @@
             state.textBubbles = allBubbles.length > 0 ? allBubbles : state.textBubbles;
 
             for (let f of state.folders) await saveFolder(f);
-            for (let fi of state.files) await saveFile(fi);
+            for (let fi of state.files) {
+              if (isVideoFile(fi) || isAudioFile(fi)) await getOrCreateBlobUrl(fi);
+              await saveFile(fi);
+            }
             for (let b of state.textBubbles) await saveTextBubble(b);
             alert('Synced chunks down from Cloud successfully!');
             state.isSyncing = false;
@@ -522,6 +526,7 @@
         ${state.quickViewFileId ? renderQuickViewModal() : ''}
         ${state.textEditorModal ? renderTextEditorModal() : ''}
         ${state.popupVideoUrl ? renderPopupVideoModal() : ''}
+        ${state.browserImageViewUrl ? renderBrowserImageViewModal() : ''}
       `;
 
       if (window.lucide) window.lucide.createIcons();
@@ -698,6 +703,27 @@
           `}
         </div>
       `;
+    }
+
+    function renderBrowserImageViewModal() {
+      if (!state.browserImageViewUrl) return '';
+      return `
+        <div class="fixed inset-0 z-50 bg-black flex items-center justify-center p-0" onclick="closeBrowserImageView()">
+          <button onclick="closeBrowserImageView()" class="absolute top-4 right-4 z-50 p-2.5 bg-black/70 hover:bg-black rounded-full text-white shadow-xl border border-zinc-700">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+          <img src="${state.browserImageViewUrl}" class="w-screen h-screen object-contain pointer-events-auto" onclick="event.stopPropagation()" />
+        </div>
+      `;
+    }
+
+    function openBrowserImageView(url) {
+      state.browserImageViewUrl = url;
+      render();
+    }
+    function closeBrowserImageView() {
+      state.browserImageViewUrl = null;
+      render();
     }
 
     function renderPercentageModal() {
@@ -1392,7 +1418,7 @@
 
       let contentHtml = '';
       if (isImg) {
-        contentHtml = `<img src="${file.dataUrl}" class="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl" />`;
+        contentHtml = `<img src="${file.dataUrl}" class="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl cursor-pointer" onclick="openBrowserImageView('${file.dataUrl}')" />`;
       } else if (isVid && !isWebVideo) {
         const src = file.blobUrl || file.dataUrl;
         contentHtml = `<video src="${src}" controls autoplay playsinline webkit-playsinline class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl bg-black"></video>`;
@@ -1499,7 +1525,7 @@
       }
     }
 
-    function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
+    async function handleItemClick(e, id, isFolderItem, isBubbleItem = false) {
       if (e.target.closest('button')) return;
 
       if (state.selectMode) {
@@ -1523,12 +1549,18 @@
         const file = state.files.find(f => f.id === id);
         if (!file) return;
 
-        if (file.fileType === 'link' && file.url) {
+        const type = file.fileType || '';
+        if (type.startsWith('image/')) {
+          openBrowserImageView(file.dataUrl);
+        } else if (file.fileType === 'link' && file.url) {
           window.open(file.url, '_blank');
         } else if (file.fileType === 'web-video' && file.videoUrl) {
           playPopupVideo(file.videoUrl);
+        } else if (isVideoFile(file)) {
+          const videoSrc = await getOrCreateBlobUrl(file);
+          playPopupVideo(videoSrc);
         } else {
-          playPopupVideo(file.videoUrl || file.url);
+          playPopupVideo(file.videoUrl || file.url || file.dataUrl);
         }
       }
     }
